@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cds/cds_tokens.dart';
 import '../../core/icons/craft_icons.dart';
+import '../console/console_page.dart';
 import '../empty/empty_tabs.dart';
+import '../../state/app_settings.dart';
 import '../../l10n/app_localizations.dart';
 
 /// پوسته ناوبری پرتره — ۵ تب (سند ۰۶ بخش ۵.۱).
@@ -77,7 +79,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       ),
       body: AnimatedSwitcher(
         duration: CdsMotion.tabSwitch,
-        curve: Curves.easeOutCubic,
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeIn,
         transitionBuilder: (child, animation) {

@@ -130,7 +130,7 @@ A\b:
 ```rust
 pub enum PlotSpec {
     Line2D { series: Vec<Series2D>, axes: Axes2D, legend: Option<Legend> },
-    Scatter2D { .. }, Bar2D { .. }, Histogram { bins: Vec<f64>, counts: Vec<u64>, .. },
+    Scatter2D { .. }, Bar2D { .. }, Histogram { bins: Vec<f64>, counts: Vec<u32>, .. },
     Polar { .. }, Quiver { .. },
     Surface { x: Vec<f64>, y: Vec<f64>, z: Vec<Vec<f64>>, shading: Shading, colormap: Colormap },
     Mesh { .. }, Contour { levels: Vec<f64>, .. }, Plot3 { .. },
@@ -138,6 +138,7 @@ pub enum PlotSpec {
 }
 pub struct Series2D { pub x: Vec<f64>, pub y: Vec<f64>, pub style: LineStyle /* color, dash, marker, width */ }
 ```
+- **فهرست `u64` در PlotSpec ممنوع (درس P0.2.4):** FRB ۲.۱۳.۰ برای `Vec<u64>` کدک `dcoDecodeUint64List` تولید می‌کند که با تحلیل‌گر Dart 3.13 خطای type می‌دهد؛ فهرست‌های `u32`/`f64` کدک مستقیم دارند و سالم‌اند — `counts` هیستوگرام `u32` شد (سقف ~۴.۲۹ میلیارد، بیش از هر هیستوگرام واقعی با بودجه‌های سند ۰۱).
 - **رنگ‌ها:** پالت ۸ رنگی دسته‌بندی پلات (سند ۰۶ بخش ۳) — `plot(x,y)` بدون رنگ، به ترتیب پالت پیش می‌رود (رفتار MATLAB با پیش‌فرض ما).
 - **LineSpec پارس می‌شود:** `'r--o'` → color red, dashed, circle marker — جدول تبدیل کامل در doc تابع `plot`.
 - محورها: title/labels/grid/limits/equal/log scale + **تیک‌های زیبا** (الگوریتم 1-2-5 با nice-step) در Rust تولید می‌شوند تا Dart فقط بکشد.

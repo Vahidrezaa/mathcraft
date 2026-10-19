@@ -76,19 +76,19 @@ mathcraft/
    - **cancel:** هر job یک `jobId` دارد؛ `cancel(jobId)` — کاربر نباید در برابر حل‌ بی‌پایان بی‌دفاع باشد. همه حلگرها هر N تکرار یک cooperative check انجام می‌دهند.
 3. **همه APIها async هستند:** Rust روی thread pool خودش اجرا می‌شود؛ UI isolate هرگز بلاک نمی‌شود (NFR عملکرد سند ۰۱).
 4. **نسخه‌بندی قرارداد:** `api_version()` در زمان startup چک می‌شود؛ ناسازگاری = پیام واضح، نه کرش.
-5. **وابستگی‌های Dartِ تولیدشده:** کد Dart تولیدی FRB از `freezed` استفاده می‌کند — `pubspec.yaml` باید `freezed_annotation` (در dependencies) و `freezed` + `build_runner` (در dev_dependencies) داشته باشد؛ نبودشان = خطای `MissingDep` در مرحله codegen (اولین ران CI — درس P0.2.2). تولید فایل‌های `.freezed.dart` بعد از codegen با `dart run build_runner build --delete-conflicting-outputs` کامل می‌شود — گامی اجباری در هر دو مسیر CI و بوت‌استرپ محلی.
+5. **وابستگی‌های Dartِ تولیدشده:** کد Dart تولیدی FRB از `freezed` استفاده می‌کند — `pubspec.yaml` باید `freezed_annotation` (در dependencies) و `freezed` + `build_runner` (در dev_dependencies) داشته باشد؛ نبودشان = خطای `MissingDep` در مرحله codegen (اولین ران CI — درس P0.2.2). تولید فایل‌های `.freezed.dart` بعد از codegen با `dart run build_runner build` کامل می‌شود — گامی اجباری در هر دو مسیر CI و بوت‌استرپ محلی. نسخهٔ پکیج Dart `flutter_rust_bridge` دقیقاً برابر نسخهٔ codegen پین می‌شود (۲.۱۳.۰) تا جفت تولیدکننده/مصرف‌کننده همیشه هم‌خوان باشند (درس P0.2.4).
 
 ### قرارداد داده اصلی (خلاصه)
 
 ```rust
 // mc-ffi — نمای ساده‌شده
 pub struct EvalResult {
-    pub job_id: u64,
+    pub job_id: u32,                          // u64 → u32 (v2): u64 در Dart می‌شود BigInt؛ شناسه job هرگز به سقف نمی‌رسد
     pub console_events: Vec<ConsoleEvent>,   // متن، خطا، warning
     pub plots: Vec<PlotSpec>,                 // مدل داده رسم (سند ۰۴ بخش ۸)
     pub workspace_delta: WorkspaceDelta,      // فقط متغیرهای تغییرکرده (نه کل workspace!)
     pub status: JobStatus,                    // Done | Cancelled | Failed
-    pub duration_ms: u64,
+    pub duration_ms: u32,                     // u64 → u32 (v2) — همان دلیل
 }
 
 pub enum ConsoleEvent {
@@ -105,6 +105,10 @@ pub struct McError {
     pub suggestion: Option<String>,           // did-you-mean
 }
 ```
+
+**قاعدهٔ نگاشت عددی (درس P0.2.4):** FRB برای `u64` در Dart `BigInt` تولید می‌کند و برای `Vec<u64>` تایپ‌های تخصصی — برای فیلدهای قراردادی که هرگز به سقف نمی‌رسند (شناسه job، مدت اجرا) از `u32` استفاده می‌شود تا Dart سمت UI با `int` ساده کار کند؛ `u64` فقط جایی می‌ماند که واقعاً لازم است (مثل counts هیستوگرام).
+
+**نسخهٔ قرارداد:** v2 — تغییر نوع فیلدهای `EvalResult` (u64→u32) طبق قاعدهٔ بند ۴ همین بخش، `API_CONTRACT_VERSION = 2`. UI در startup با `api_version()` مقایسه می‌کند.
 
 **WorkspaceDelta:** بعد از هر اجرا فقط متغیرهای تغییرکرده serialize می‌شوند (نام، کلاس، اندازه، پیش‌نمایش ≤ ۲۵۶ مقدار اول، دسترسی lazy برای نمای کامل). این تصمیم، بازرس متغیرها را با ماتریس‌های بزرگ هم روان نگه می‌دارد.
 

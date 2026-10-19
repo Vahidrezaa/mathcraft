@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cds/cds_theme.dart';
@@ -77,8 +78,6 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
             newEntries.add(ErrorEntry(err));
           case ConsoleEvent_Warning():
             break; // هشدارهای ساختاریافته در P2 (سند ۰۲ بخش ۳)
-          default:
-            break;
         }
       }
       if (result.status == JobStatus.done) {
@@ -385,7 +384,9 @@ class _ErrorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final isFa = Directionality.of(context) == TextDirection.rtl;
+    // زبان پیام خطا = زبان UI (D-06) — نه جهت متن؛ کنسول جزیرهٔ LTR همیشگی است
+    // (سند ۰۶ بخش ۴) و Directionality همیشه ltr برمی‌گرداند (درس P0.2.4 — تست گرفت).
+    final isFa = l10n.localeName == 'fa';
     final message = isFa ? error.messageFa : error.messageEn;
 
     return Container(
@@ -397,46 +398,45 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(CdsDimens.radiusSmall),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(width: 3, color: scheme.error),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.errorTitle(error.id),
-                      style: CdsTheme.monoStyle(
-                        color: scheme.error,
-                        size: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      message,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurface,
-                            height: 1.6,
-                          ),
-                    ),
-                    if (error.suggestion != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        l10n.suggestionLabel(error.suggestion!),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ],
+        // نوار قرمز ۳dp به‌صورت border چپ — Row با stretch در ارتفاع بی‌کران
+        // ListView می‌شکند (درس P0.2.4 — تست ویجت گرفت).
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: scheme.error, width: 3)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.errorTitle(error.id),
+                  style: CdsTheme.monoStyle(
+                    color: scheme.error,
+                    size: 11,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface,
+                        height: 1.6,
+                      ),
+                ),
+                if (error.suggestion != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.suggestionLabel(error.suggestion!),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

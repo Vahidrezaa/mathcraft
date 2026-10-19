@@ -11,6 +11,8 @@ command -v cargo-ndk >/dev/null || {
 
 # NDK بومی aarch64 (سند ۰۹) — مسیر پیش‌فرض نصب setup-termux-flutter.sh
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$HOME/android/sdk/ndk/29.0.14206865}"
+# برخی ابزارها ROOT می‌خوانند — هم‌قد می‌کنیم تا mismatch-warning نمی‌گیریم (درس P0.2.4)
+export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
 
 # روی Termux فقط arm64 بیلد می‌شود (سرعت/حافظه — سند ۰۹ بخش ۵)؛ armv7 اختیاری:
 #   bash scripts/build_rust_android.sh --armv7   (روی رایانه هر دو پیش‌فرض است)
@@ -28,7 +30,9 @@ OUT="app/android/app/src/main/jniLibs"
 mkdir -p "$OUT/arm64-v8a" "$OUT/armeabi-v7a"
 
 echo "== build (release) =="
-cargo ndk "${NDK_ARGS[@]}" -p mc-ffi build --release
+# ⚠ -p در cargo-ndk یعنی platform (API level) نه package — درس P0.2.4؛ انتخاب پکیج
+# با --manifest-path انجام می‌شود تا فقط زنجیرهٔ mc-ffi بیلد شود.
+cargo ndk "${NDK_ARGS[@]}" --manifest-path crates/mc-ffi/Cargo.toml build --release
 
 for t in "${TARGETS[@]}"; do
   case "$t" in

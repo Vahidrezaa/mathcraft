@@ -64,8 +64,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install flutter_rust_bridge_codegen
-        run: cargo install flutter_rust_bridge_codegen --locked
+      - name: Install flutter_rust_bridge_codegen (pinned — doc 02 s3.5)
+        run: cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
 
       - uses: subosito/flutter-action@v2
         with:

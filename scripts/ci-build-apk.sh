@@ -39,7 +39,7 @@ echo "== 2/6 pub get =="
 flutter pub get
 
 echo "== 3/6 FRB codegen (قرارداد mc-ffi -- سند ۰۲ بخش ۳) =="
-command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_bridge_codegen --locked
+command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
 flutter_rust_bridge_codegen generate
 
 echo "== 4/6 build_runner (.freezed.dart — سند ۰۲ بخش ۳ بند ۵) =="

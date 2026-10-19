@@ -3,6 +3,7 @@
 //!
 //! این فایل «قرارداد نسخه‌دار» بین UI و موتور است؛ تغییر شکانده در هر نوع =
 //! افزایش `API_CONTRACT_VERSION` و پیام واضح در startup (سند ۰۲ بخش ۳ بند ۴).
+//! تاریخچه: v1 = P0 اولیه؛ v2 = فیلدهای u64 شناسه/مدت → u32 (نگاشت BigInt در Dart — سند ۰۲ بخش ۳).
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -13,7 +14,7 @@ use mc_interp::{eval_program, Environment};
 use mc_parser::parse;
 
 /// نسخه قرارداد API — UI در startup با `api_version()` مقایسه می‌کند.
-pub const API_CONTRACT_VERSION: u32 = 1;
+pub const API_CONTRACT_VERSION: u32 = 2;
 
 /// نسخه قرارداد رسم (DTO) رسم‌ها — سند ۰۴ بخش ۸، سند ۰۷ بخش ۳ بند ۲.
 pub const PLOT_CONTRACT_VERSION: u32 = 1;
@@ -23,9 +24,10 @@ pub const PLOT_CONTRACT_VERSION: u32 = 1;
 // ---------------------------------------------------------------------------
 
 /// نتیجه یک اجرا — ساختار کامل سند ۰۲ بخش ۳.
+/// `u32` (نه u64): FRB برای u64 در Dart `BigInt` می‌سازد — شناسه/مدت به سقف نمی‌رسند.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EvalResult {
-    pub job_id: u64,
+    pub job_id: u32,
     /// متن، خطا، warning — در P0 دسته‌ای؛ streaming کامل با `runScript` در P2.
     pub console_events: Vec<ConsoleEvent>,
     /// مدل داده رسم (سند ۰۴ بخش ۸) — در P0 همیشه خالی.
@@ -33,7 +35,7 @@ pub struct EvalResult {
     /// فقط متغیرهای تغییرکرده — نه کل workspace (سند ۰۲ بخش ۳).
     pub workspace_delta: WorkspaceDelta,
     pub status: JobStatus,
-    pub duration_ms: u64,
+    pub duration_ms: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,7 +132,8 @@ pub enum PlotSpec {
     },
     Histogram {
         bin_edges: Vec<f64>,
-        counts: Vec<u64>,
+        /// u32 (نه u64): کدک فهرست u64 در FRB 2.13.0 با تحلیل‌گر Dart 3.13 ناسازگار است (سند ۰۴ §8.1).
+        counts: Vec<u32>,
         axes: Axes2D,
     },
     Polar {
@@ -339,7 +342,6 @@ pub fn evaluate_line(code: String) -> EvalResult {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     engine.jobs += 1;
-    let job_id = engine.jobs;
     let before: HashMap<String, Value> = engine.env.snapshot();
 
     let (mut events, status) = match parse(&code) {
@@ -374,12 +376,12 @@ pub fn evaluate_line(code: String) -> EvalResult {
 
     let workspace_delta = build_delta(&before, &engine.env);
     EvalResult {
-        job_id,
+        job_id: u32::try_from(engine.jobs).unwrap_or(u32::MAX),
         console_events: events,
         plots: Vec::new(),
         workspace_delta,
         status,
-        duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
+        duration_ms: u32::try_from(t0.elapsed().as_millis()).unwrap_or(u32::MAX),
     }
 }
 
@@ -480,8 +482,8 @@ mod tests {
         let r = evaluate_line("matrixish = ans * 1".to_owned());
         assert!(r.workspace_delta.changed[0].preview.len() <= 256);
 
-        // -- ثبات نسخه‌های قرارداد
-        assert_eq!(api_version(), 1);
+        // -- ثبات نسخه‌های قرارداد (v2 — سند ۰۲ بخش ۳)
+        assert_eq!(api_version(), 2);
         assert_eq!(plot_contract_version(), 1);
 
         // -- بازرسی نشست (P0.1): workspace_vars مرتب و clear_workspace سمانتیک clear

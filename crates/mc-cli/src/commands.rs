@@ -177,7 +177,7 @@ mod tests {
     fn banner_contains_version_and_contract() {
         let b = banner(Lang::En);
         assert!(b.contains(crate::VERSION));
-        assert!(b.contains("contract v1"));
+        assert!(b.contains(&format!("contract v{}", crate::API_VERSION)));
     }
 
     #[test]

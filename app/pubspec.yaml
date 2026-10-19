@@ -12,8 +12,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
-  # قرارداد موتور (سند ۰۲ بخش ۳) — فقط نسخه ۲
-  flutter_rust_bridge: ">=2.6.0 <3.0.0"
+  # قرارداد موتور (سند ۰۲ بخش ۳) — دقیقاً هم‌نسخه با codegen (درس P0.2.4)
+  flutter_rust_bridge: "2.13.0"
   # State (سند ۰۲ بخش ۱: Riverpod)
   flutter_riverpod: ">=2.5.0 <3.0.0"
   # رندر Craft Icons (SVG اختصاصی — سند ۰۶ بخش ۲.۵؛ ایموجی ممنوع)
