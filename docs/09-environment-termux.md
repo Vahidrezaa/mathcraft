@@ -132,13 +132,18 @@ bash scripts/gh-apk.sh download    # APK در dist/
 - `app/android/` و `app/lib/src/rust/` در ریپو ذخیره نمی‌شوند (gitignore) — CI هر بار از flutter create و codegen تولیدشان می‌کند؛ هیچ تناقضی با نسخهٔ محلی پیش نمی‌آید.
 - Toolchain Rust پین 1.99.1 است (rust-toolchain.toml، سند ۰۸ §7)؛ Flutter موقتاً channel stable — قبل از اولین release عمومی، نسخهٔ دقیق پین می‌شود تا بیلد تکرارپذیر F-Droid کامل شود.
 - امضا: تا وقتی keystore انتشار در CI secrets قرار نگیرد (سند ۰۲ بخش ۸)، APKهای release با امضای debug بسته می‌شوند — برای تست نصب کافی‌اند، برای انتشار نه.
+- پوشهٔ `dist/` (خروجی دانلود `gh-apk.sh`) در `.gitignore` است — APK دانلودشده هرگز کامیت نمی‌شود؛ قبل از اولین کامیت، خط `/dist/` باید در `.gitignore` باشد.
+- وابستگی‌های codegen FRB (درس اولین ران CI، اکتبر ۲۰۲۶): FRB کد Dart را با `freezed` تولید می‌کند — نبود `freezed_annotation`/`freezed`/`build_runner` در pubspec = خطای `MissingDep` و شکست هر دو وورک‌فلو؛ بعد از codegen هم گام `dart run build_runner build` اجباری است (سند ۰۲ بخش ۳ بند ۵).
 
 رابط ترمینالی روی گوشی (پیش‌نیاز: `pkg install gh jq`، یک‌بار `gh auth login`):
 
 ```bash
-# یک‌بار — ساخت ریپو و پوش از داخل پوشهٔ پروژه:
+# یک‌بار — کامیت اولیه سپس ساخت ریپو و پوش (gh --push با ریپوی بدون کامیت شکست می‌خورد):
 cd ~/mathcraft
-gh repo create mathcraft --private --source=. --remote=origin --push
+git add -A && git commit -m "MathCraft P0.2 — initial import"
+git branch -m main                 # وورک‌فلوها روی push به main تریگر می‌شوند
+gh repo create mathcraft --public --source=. --remote=origin --push
+# عمومی = Actions رایگان نامحدود (خصوصی: سهمیهٔ ~۲۰۰۰ دقیقه/ماه)؛ پروژه GPL-3.0 است و انتشار عمومی طراحی شده — تغییر بعدی: Settings > Danger Zone
 
 # چرخهٔ روزمره:
 bash scripts/gh-apk.sh trigger     # اجرای دستی وورک‌فلو android (یا فقط push کن)

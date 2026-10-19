@@ -25,4 +25,6 @@
 *.iml
 .idea/
 .vscode/
+
+# APK download output of scripts/gh-apk.sh (doc 09 s8) — never commit
 /dist/

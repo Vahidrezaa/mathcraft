@@ -76,6 +76,7 @@ mathcraft/
    - **cancel:** هر job یک `jobId` دارد؛ `cancel(jobId)` — کاربر نباید در برابر حل‌ بی‌پایان بی‌دفاع باشد. همه حلگرها هر N تکرار یک cooperative check انجام می‌دهند.
 3. **همه APIها async هستند:** Rust روی thread pool خودش اجرا می‌شود؛ UI isolate هرگز بلاک نمی‌شود (NFR عملکرد سند ۰۱).
 4. **نسخه‌بندی قرارداد:** `api_version()` در زمان startup چک می‌شود؛ ناسازگاری = پیام واضح، نه کرش.
+5. **وابستگی‌های Dartِ تولیدشده:** کد Dart تولیدی FRB از `freezed` استفاده می‌کند — `pubspec.yaml` باید `freezed_annotation` (در dependencies) و `freezed` + `build_runner` (در dev_dependencies) داشته باشد؛ نبودشان = خطای `MissingDep` در مرحله codegen (اولین ران CI — درس P0.2.2). تولید فایل‌های `.freezed.dart` بعد از codegen با `dart run build_runner build --delete-conflicting-outputs` کامل می‌شود — گامی اجباری در هر دو مسیر CI و بوت‌استرپ محلی.
 
 ### قرارداد داده اصلی (خلاصه)
 

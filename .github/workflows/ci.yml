@@ -80,6 +80,10 @@ jobs:
         working-directory: app
         run: flutter_rust_bridge_codegen generate
 
+      - name: build_runner (.freezed.dart for FRB DTOs — doc 02 s3.5)
+        working-directory: app
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Analyze
         run: |
           cd app

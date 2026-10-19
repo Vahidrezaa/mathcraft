@@ -2,7 +2,7 @@
 # MathCraft -- full Android APK pipeline for CI and desktop Linux (doc 09 s8).
 # Mirrors the developer bootstrap flow, in CI order:
 #   platform skeleton (flutter create) -> minSdk/ndkVersion patches -> pub get
-#   -> FRB codegen -> cargo-ndk .so -> flutter build apk
+#   -> FRB codegen -> build_runner (.freezed.dart) -> cargo-ndk .so -> flutter build apk
 # Usage:  APK_MODE=debug|release bash scripts/ci-build-apk.sh    (default: debug)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -11,7 +11,7 @@ APK_MODE="${APK_MODE:-${1:-debug}}"
 case "$APK_MODE" in debug|release) ;; *) echo "APK_MODE must be debug|release"; exit 1 ;; esac
 command -v flutter >/dev/null || { echo "flutter in PATH نیست"; exit 1; }
 
-echo "== 1/5 platform skeleton (app/android) =="
+echo "== 1/6 platform skeleton (app/android) =="
 cd app
 if [ ! -d android ]; then
     flutter create --platforms=android --org io.mathcraft --project-name mathcraft .
@@ -35,18 +35,21 @@ if [ -n "${ANDROID_NDK_HOME:-}" ]; then
     fi
 fi
 
-echo "== 2/5 pub get =="
+echo "== 2/6 pub get =="
 flutter pub get
 
-echo "== 3/5 FRB codegen (قرارداد mc-ffi -- سند ۰۲ بخش ۳) =="
+echo "== 3/6 FRB codegen (قرارداد mc-ffi -- سند ۰۲ بخش ۳) =="
 command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_bridge_codegen --locked
 flutter_rust_bridge_codegen generate
 
-echo "== 4/5 engine .so (cargo-ndk -> libmathcraft.so -- سند ۰۲ بخش ۸) =="
+echo "== 4/6 build_runner (.freezed.dart — سند ۰۲ بخش ۳ بند ۵) =="
+dart run build_runner build --delete-conflicting-outputs
+
+echo "== 5/6 engine .so (cargo-ndk -> libmathcraft.so -- سند ۰۲ بخش ۸) =="
 cd ..
 bash scripts/build_rust_android.sh
 
-echo "== 5/5 flutter build apk ($APK_MODE) =="
+echo "== 6/6 flutter build apk ($APK_MODE) =="
 cd app
 if [ "$APK_MODE" = release ]; then
     flutter build apk --release --split-per-abi
