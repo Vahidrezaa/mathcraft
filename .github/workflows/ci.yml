@@ -82,7 +82,7 @@ jobs:
 
       - name: build_runner (.freezed.dart for FRB DTOs — doc 02 s3.5)
         working-directory: app
-        run: dart run build_runner build --delete-conflicting-outputs
+        run: dart run build_runner build
 
       - name: Analyze
         run: |

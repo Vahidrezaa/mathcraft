@@ -1,6 +1,17 @@
 import '../../src/rust/api.dart' as api;
 import '../../src/rust/frb_generated.dart' show RustLib;
 
+/// Types بازتاب‌یافته از قرارداد mc-ffi (سند ۰۲ بخش ۳) — برای راحتی UI.
+/// (export باید قبل از declarations باشد — قاعدهٔ گرامر Dart؛ درس P0.2.3)
+export '../../src/rust/api.dart'
+    show
+        EvalResult,
+        ConsoleEvent,
+        JobStatus,
+        McError,
+        WorkspaceDelta,
+        VarSummary;
+
 /// لایه سرویس موتور — UI هرگز مستقیم به کد generated دست نمی‌زند تا
 /// تست‌پذیری با Fake ممکن باشد (سند ۰۸ بخش ۶).
 abstract class EngineClient {
@@ -30,13 +41,3 @@ class RustEngineClient implements EngineClient {
     return api.evaluateLine(code: code);
   }
 }
-
-/// Types بازتاب‌یافته از قرارداد mc-ffi (سند ۰۲ بخش ۳) — برای راحتی UI.
-export '../../src/rust/api.dart'
-    show
-        EvalResult,
-        ConsoleEvent,
-        JobStatus,
-        McError,
-        WorkspaceDelta,
-        VarSummary;

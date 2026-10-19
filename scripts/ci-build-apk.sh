@@ -43,7 +43,7 @@ command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_
 flutter_rust_bridge_codegen generate
 
 echo "== 4/6 build_runner (.freezed.dart — سند ۰۲ بخش ۳ بند ۵) =="
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 
 echo "== 5/6 engine .so (cargo-ndk -> libmathcraft.so -- سند ۰۲ بخش ۸) =="
 cd ..

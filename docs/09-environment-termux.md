@@ -134,6 +134,7 @@ bash scripts/gh-apk.sh download    # APK در dist/
 - امضا: تا وقتی keystore انتشار در CI secrets قرار نگیرد (سند ۰۲ بخش ۸)، APKهای release با امضای debug بسته می‌شوند — برای تست نصب کافی‌اند، برای انتشار نه.
 - پوشهٔ `dist/` (خروجی دانلود `gh-apk.sh`) در `.gitignore` است — APK دانلودشده هرگز کامیت نمی‌شود؛ قبل از اولین کامیت، خط `/dist/` باید در `.gitignore` باشد.
 - وابستگی‌های codegen FRB (درس اولین ران CI، اکتبر ۲۰۲۶): FRB کد Dart را با `freezed` تولید می‌کند — نبود `freezed_annotation`/`freezed`/`build_runner` در pubspec = خطای `MissingDep` و شکست هر دو وورک‌فلو؛ بعد از codegen هم گام `dart run build_runner build` اجباری است (سند ۰۲ بخش ۳ بند ۵).
+- دو درس ران دوم (P0.2.3): (۱) `build_runner` همهٔ فایل‌های Dart پکیج را parse می‌کند — هر خطای گرامری حتی در فایل‌های دست‌نویس (مثل export بعد از declarations در engine_client.dart) کل بیلد را می‌شکند؛ فایل‌های Dart در پوش قبل از push باید حداقل یک‌بار analyze شده باشند. (۲) فلگ `--delete-conflicting-outputs` در build_runnerهای جدید حذف شده (فقط warning) — استفاده نمی‌شود.
 
 رابط ترمینالی روی گوشی (پیش‌نیاز: `pkg install gh jq`، یک‌بار `gh auth login`):
 
