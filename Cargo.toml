@@ -1,0 +1,44 @@
+# MathCraft — monorepo workspace (doc 02 §2)
+# Dependency rules (enforced by cargo-deny in CI):
+#   mc-core depends on nothing (workspace-wise);
+#   mc-parser -> core; mc-interp -> core+parser; mc-ffi -> everything;
+#   mc-cli -> mc-ffi only (no external deps — std alone, doc 02 §2).
+[workspace]
+resolver = "2"
+members = [
+    "crates/mc-core",
+    "crates/mc-parser",
+    "crates/mc-interp",
+    "crates/mc-num",
+    "crates/mc-cas",
+    "crates/mc-plot",
+    "crates/mc-ffi",
+    "crates/mc-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["MathCraft contributors"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+thin-vec = "0.2"
+flutter_rust_bridge = "2"
+mc-core = { path = "crates/mc-core" }
+mc-parser = { path = "crates/mc-parser" }
+mc-interp = { path = "crates/mc-interp" }
+mc-num = { path = "crates/mc-num" }
+mc-cas = { path = "crates/mc-cas" }
+mc-plot = { path = "crates/mc-plot" }
+mc-ffi = { path = "crates/mc-ffi" }
+
+# doc 02 §8: release budget — stripped, LTO, panic=abort (last line of defense;
+# product path returns Result<_, McError> everywhere, doc 02 §9).
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

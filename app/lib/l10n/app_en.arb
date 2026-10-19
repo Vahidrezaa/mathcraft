@@ -1,0 +1,37 @@
+{
+  "@@locale": "en",
+  "appTitle": "MathCraft",
+  "navConsole": "Console",
+  "navEditor": "Editor",
+  "navPlots": "Plots",
+  "navVars": "Variables",
+  "navLearn": "Learn",
+  "themeTooltip": "Switch between Modern and Familiar",
+  "themeModern": "Modern",
+  "themeFamiliar": "Familiar",
+  "languageTooltip": "Switch language",
+  "consoleInputHint": "type an expression…",
+  "consoleEmptyTitle": "Try your first command",
+  "consoleEmptyHint": "Tap a sample — it really runs on the Rust engine",
+  "runTooltip": "Run",
+  "suggestionLabel": "Did you mean “{name}”?",
+  "@suggestionLabel": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "errorTitle": "Error {code}",
+  "@errorTitle": {
+    "placeholders": {
+      "code": { "type": "String" }
+    }
+  },
+  "emptyEditorTitle": "Editor ships in milestone P1",
+  "emptyEditorHint": "Syntax highlighting, cell execution and .m files — the engine already runs today in the Console tab.",
+  "emptyPlotsTitle": "Plots ship in milestone P3",
+  "emptyPlotsHint": "First plot idea: fxplot(sin, [0 6])",
+  "emptyVarsTitle": "Variable inspector ships in milestone P5",
+  "emptyVarsHint": "Meanwhile the engine reports workspace changes after every command.",
+  "emptyLearnTitle": "Docs and lessons ship in milestone P5",
+  "emptyLearnHint": "Bilingual, offline, with runnable examples."
+}

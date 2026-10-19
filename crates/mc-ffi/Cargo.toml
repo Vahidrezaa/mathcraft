@@ -1,0 +1,18 @@
+[package]
+name = "mc-ffi"
+description = "flutter_rust_bridge contract layer (doc 02 §3) — the ONLY crate allowed platform concerns"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+# → libmathcraft.so روی اندروید (سند ۰۲ بخش ۸)
+name = "mathcraft"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mc-core.workspace = true
+mc-parser.workspace = true
+mc-interp.workspace = true
+flutter_rust_bridge.workspace = true

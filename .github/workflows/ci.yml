@@ -1,0 +1,91 @@
+# CI پایه P0 — سند ۰۷: fmt/clippy/test/deny + Flutter analyze/test
+# بیلد APK اندروید از P6 به release workflow منتقل می‌شود (بودجه CI پایه).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt + clippy + test + deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # پین هماهنگ با rust-toolchain.toml — جلوگیری از دانلود دوباره toolchain (سند ۰۸ §7)
+      - name: Install pinned toolchain (rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (strict)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: No todo!/unimplemented! in product path (doc 08 §2)
+        run: |
+          if grep -rn -E "todo!|unimplemented!" crates/*/src; then
+            echo "::error::todo!/unimplemented! is forbidden"
+            exit 1
+          fi
+
+      - name: cargo-deny (licenses + advisories — doc 02 §8)
+        run: |
+          cargo install cargo-deny --locked
+          cargo deny check licenses advisories
+
+  flutter:
+    name: Flutter (analyze + test, with FRB codegen)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (needed by flutter_rust_bridge_codegen)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.1'
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --locked
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Pub get
+        run: |
+          cd app
+          flutter pub get
+
+      - name: FRB codegen (generates lib/src/rust/)
+        working-directory: app
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Analyze
+        run: |
+          cd app
+          flutter analyze --fatal-infos
+
+      - name: Widget tests (FakeEngineClient — no .so needed, doc 08 §6)
+        run: |
+          cd app
+          flutter test

@@ -1,0 +1,101 @@
+# Android APK line via GitHub Actions — doc 09 s8 (path D = main APK line).
+# push to main + manual dispatch -> debug APK artifact (download with `gh run download`).
+# tag v* -> release APKs attached to a GitHub Release (debug-signed until keystore, doc 02 s8).
+name: android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'crates/**'
+      - 'app/**'
+      - 'scripts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  apk:
+    name: APK build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # پین هماهنگ با rust-toolchain.toml (سند ۰۸ §7 — بیلد تکرارپذیر؛ جلوگیری از دانلود دوباره)
+      - name: Pinned Rust toolchain + Android targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.1'
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-ndk (prebuilt — doc 02 s8)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare Android SDK/NDK
+        run: |
+          NDK_VER=27.0.12077973
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          [ -d "$ANDROID_HOME/ndk/$NDK_VER" ] || \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VER" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> "$GITHUB_ENV"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build mode (tag v* -> release, else debug)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "APK_MODE=release" >> "$GITHUB_ENV"
+          else
+            echo "APK_MODE=debug" >> "$GITHUB_ENV"
+          fi
+
+      # flutter create + پچ‌ها + pub get + FRB codegen + cargo-ndk .so + flutter build apk
+      - name: Full pipeline (scripts/ci-build-apk.sh — doc 09 s8)
+        run: bash scripts/ci-build-apk.sh
+
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          find app/build/app/outputs -name '*.apk' -exec cp {} dist/ \;
+          ls -la dist
+
+      - name: Upload debug artifact
+        if: env.APK_MODE == 'debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathcraft-apk-debug
+          path: dist/*.apk
+
+      - name: Upload release artifact
+        if: env.APK_MODE == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mathcraft-apk-release
+          path: dist/*.apk
+
+      - name: Attach APKs to GitHub Release (tag v*)
+        if: env.APK_MODE == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk

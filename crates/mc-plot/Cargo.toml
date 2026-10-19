@@ -1,0 +1,9 @@
+[package]
+name = "mc-plot"
+description = "MathCraft plot data model: PlotSpec pipeline + LTTB decimation (doc 04 §8) — data only, no drawing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]

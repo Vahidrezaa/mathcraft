@@ -1,0 +1,10 @@
+[package]
+name = "mc-core"
+description = "MathCraft base types: Value, column-major Matrix with COW (doc 02 §5)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+thin-vec.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "mc-cli"
+description = "MathCraft native terminal console (REPL `mc`) — second front-end on the mc-ffi contract (doc 02 §2, P0.1)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "mc"
+path = "src/main.rs"
+
+# Doc 02 §2 rule: mc-cli depends on mc-ffi only, and on NO external crates
+# (std alone) — keeps native Termux/desktop builds instant and dependency-free.
+# NOTE: mc-ffi's *library* is named `mathcraft` (→ libmathcraft.so for FRB,
+# doc 02 §8), so the dependency is renamed to `mc_ffi` in code.
+[dependencies]
+mc_ffi = { package = "mc-ffi", path = "../../crates/mc-ffi" }

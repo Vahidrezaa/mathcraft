@@ -1,0 +1,37 @@
+{
+  "@@locale": "fa",
+  "appTitle": "MathCraft",
+  "navConsole": "کنسول",
+  "navEditor": "ادیتور",
+  "navPlots": "نمودار",
+  "navVars": "متغیرها",
+  "navLearn": "آموزش",
+  "themeTooltip": "جابه‌جایی بین حالت مدرن و آشنا",
+  "themeModern": "حالت مدرن",
+  "themeFamiliar": "حالت آشنا",
+  "languageTooltip": "تغییر زبان",
+  "consoleInputHint": "یک عبارت بنویسید…",
+  "consoleEmptyTitle": "اولین دستورت را امتحان کن",
+  "consoleEmptyHint": "یک نمونه را لمس کن — واقعاً روی موتور Rust اجرا می‌شود",
+  "runTooltip": "اجرا",
+  "suggestionLabel": "منظورتان «{name}» بود؟",
+  "@suggestionLabel": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "errorTitle": "خطای {code}",
+  "@errorTitle": {
+    "placeholders": {
+      "code": { "type": "String" }
+    }
+  },
+  "emptyEditorTitle": "ادیتور با مایل‌استون P1 می‌آید",
+  "emptyEditorHint": "هایلایت سینتکس، اجرای سلولی و فایل‌های m. — موتور همین حالا در تب کنسول کار می‌کند.",
+  "emptyPlotsTitle": "نمودار با مایل‌استون P3 می‌آید",
+  "emptyPlotsHint": "ایده اولین نمودار: fxplot(sin, [0 6])",
+  "emptyVarsTitle": "بازرس متغیرها با مایل‌استون P5 می‌آید",
+  "emptyVarsHint": "تا آن موقع، موتور بعد از هر دستور تغییرات فضای کاری را گزارش می‌کند.",
+  "emptyLearnTitle": "مستندات و درس‌ها با مایل‌استون P5 می‌آیند",
+  "emptyLearnHint": "دوزبانه، آفلاین، با مثال‌های قابل اجرا."
+}

@@ -1,0 +1,17 @@
+# CDS craft rules (doc 06 §12): no hardcoded strings in UI, no Material icon
+# mixing, strict casts for layout safety.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    - always_declare_return_types
+    - prefer_single_quotes
+    - unnecessary_const
+    - unnecessary_new
+    - use_key_in_widget_constructors

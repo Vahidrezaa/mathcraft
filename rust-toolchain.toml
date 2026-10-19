@@ -1,0 +1,5 @@
+# Pinned toolchain for reproducible builds (doc 08 §7 — F-Droid requirement).
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

@@ -1,0 +1,8 @@
+# flutter_rust_bridge v2 codegen (doc 02 §3).
+# Run: flutter_rust_bridge_codegen generate
+rust_root: ../crates/mc-ffi/
+rust_input: crate::api
+dart_output: lib/src/rust
+# The engine .so is built by cargo-ndk as `libmathcraft.so` (doc 02 §8);
+# the generated loader stem follows the crate lib name below.
+full_dep: false

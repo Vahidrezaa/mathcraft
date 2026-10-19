@@ -1,0 +1,9 @@
+[package]
+name = "mc-cas"
+description = "MathCraft symbolic engine: exact arithmetic (rug/GMP), simplification, diff/int/limit/taylor/solve/dsolve (doc 05)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
