@@ -26,9 +26,26 @@ for MINSDK_F in android/app/build.gradle android/app/build.gradle.kts; do
     sed -i -e 's/minSdk = flutter.minSdkVersion/minSdk = 24/' \
            -e 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' "$MINSDK_F" || true
 done
-grep -h 'minSdk' android/app/build.gradle android/app/build.gradle.kts 2>/dev/null | grep -q 24 || {
-    echo "::error::minSdk 24 patch failed — template syntax changed? Inspect android/app/build.gradle*"; exit 1
-}
+# guard (pipefail-proof): NO pipes, and only inspects files that exist.
+# (A previous pipe version false-failed under `set -o pipefail`: grep exits 2
+#  when build.gradle.kts is absent, even with matches from build.gradle.)
+MINSDK_PATCHED=0
+for MINSDK_F in android/app/build.gradle android/app/build.gradle.kts; do
+    [ -f "$MINSDK_F" ] || continue
+    if grep -qE 'minSdk(Version)?[[:space:]]*=[[:space:]]*24|minSdkVersion[[:space:]]+24' "$MINSDK_F"; then
+        MINSDK_PATCHED=1
+    fi
+done
+if [ "$MINSDK_PATCHED" -eq 0 ]; then
+    echo "::error::minSdk 24 patch failed - template syntax changed? Evidence:"
+    echo "::error::flutter: $(flutter --version 2>/dev/null | head -1 || echo unknown)"
+    for MINSDK_F in android/app/build.gradle android/app/build.gradle.kts; do
+        [ -f "$MINSDK_F" ] || continue
+        echo "::error::--- $MINSDK_F ---"
+        grep -n 'minSdk' "$MINSDK_F" || true
+    done
+    exit 1
+fi
 # ndkVersion -> NDK نصب‌شده (CI/Termux)؛ روی دسکتاپ بدون متغیر، پیش‌فرض قالب می‌ماند
 if [ -n "${ANDROID_NDK_HOME:-}" ]; then
     NDKV="$(basename "$ANDROID_NDK_HOME")"
