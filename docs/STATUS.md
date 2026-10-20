@@ -72,7 +72,9 @@ v1.0 انتشار       ⬜
 - آینه worklog → `upload/worklog-mirror.md`
 - کاربر ترغیب به دانلود بسته آخر شود.
 
-**بازیابی جلسه جدید:** ترتیب خواندن = upload/ (جدیدترین tar) → STATUS.md → worklog.md → git log → docs/07-roadmap.md. سپس بازسازی محیط: `rustup` (بیلد اول ~2-3 دقیقه). فایل‌های تولیدی FRB regenerate می‌شوند؛ در گیت نیستند و نباید باشند.
+**بازیابی جلسه جدید:** ترتیب خواندن = upload/ (جدیدترین tar) → STATUS.md → worklog.md → git log → docs/07-roadmap.md. سپس بازسازی محیط: `rustup` (بیلد اول ~2-3 دقیقه).
+
+**به‌روزرسانی سیاست glue (2026-10-20، جلسه سخت‌سازی CI):** کد تولیدی FRB حالا **کامیت می‌شود** (frb_generated.rs + app/lib/src/rust/)؛ waivers قلپی به‌صورت attribute ماژول در mc-ffi/src/lib.rs است (نه هدر دستی داخل فایل تولیدی) تا خروجی codegen بایت‌پایدار باشد؛ gite «Glue is up to date» در CI بعد از codegen با git diff تازگی را گارانتی می‌کند.
 
 ## ۵. لاگ رویدادهای محیطی
 
@@ -82,3 +84,4 @@ v1.0 انتشار       ⬜
 | 2026-10-20 (حادثه ۲) | بازنشانی دوباره بین دو پیام کاربر؛ کامیت‌ها (ac8417b، 7188788)، worklog Task 7، بسته download و STATUS.md همگی rollback شدند؛ فقط upload/ ماند | بازیابی مجدد از همان اسنپ‌شات + 93 تست سبز دوباره + پروتکل ارتقا یافت (نسخه ۲: کپی اجباری در upload/) |
 | 2026-10-20 (جلسه جاری) | کورپوس ۶۰ اسکریپتی + اوراکل numpy + job Octave CI + COMPATIBILITY.md؛ کشف و رفع ۵ باگ سازگاری مهم: وارونگی تقسیم ماتریسی (8/2=0.25!)، قانون ابهام علامت براکت، بعدِ اولِ غیرتک‌عضوی (sort/cumsum/cumprod/diff)، آرگومان dim جمع/میانگین، شکل خروجی کاهشی‌ها؛ P1 → 14/17 | کامیت + بسته MathCraft-P1-v0.4-corpus60 در upload و download |
 | 2026-10-20 (حادثه ۳ + جلسه SAF) | بازنشانی sandbox (چهارم) — Rust/Flutter/کامیت‌ها rollback؛ کاربر بسته v0.4 را دوباره آپلود کرد و بازیابی از آن انجام شد | P1 تکمیل شد: توابع .m/SAF کامل (پارسر + FuncStore + FFI + CLI) + ادیتور با هایلایت + ۴۹ تست جدید؛ اولین analyze واقعی Flutter → ۷ باگ نهفته P0 رفع شد (ConsolePage import، engine_provider path، ترتیب export، app_settings، default سوییچ sealed، BigInt تست‌ها، زبان کارت خطا)؛ سیاست جدید: کد تولیدی FRB کامیت می‌شود (هدر lint-waiver + exclude تحلیل)؛ FRB codegen/runtime پین 2.12.0 | ۱۸۲ تست Rust + ۱۱ تست ویجت سبز؛ P1 → 17/17 کد-کامل |
+| 2026-10-20 (جلسه سخت‌سازی CI) | کاربر مخزن را به GitHub پوش کرد؛ ۴ جاب CI شکست خورد (cargo-deny advisory، FRB codegen بدون rust_input، octave_regen خراب، cargo-ndk `-p`) — تمام فیکس‌ها این‌بار **محلی و واقعی** اعتبارسنجی شد: cargo-deny 0.20.2، FRB codegen 2.12.0 + cargo-expand، Octave 9.4 بومی (بدون root، از دبیان)، NDK r27c + cargo-ndk 4.1.2، Flutter 3.24.5 | فیکس‌ها: deny.toml (ignore RUSTSEC-2024-0436 + لیست لایسنس واقعی)، ci.yml (cd app + پین‌ها + گیت تازگی glue + پین cargo-deny)، octave_regen.m بازنویسی (workspace ایزوله helpers/ + num2cell) و **کشف باگ واقعی موتور: chol باید بالامثلثی باشد (قرارداد متلب) — فیکس + تست property تقویت‌شده**؛ انحرافات مستند Octave (ans-on-suppressed، 1-output-qr) در whitelist با دلیل؛ android.yml جدید؛ پین‌ها: cargo-ndk 4.1.2 / cargo-deny 0.20.2 / codegen 2.12.0 / Flutter 3.24.5 | ۱۸۲ تست Rust سبز + ۱۱ ویجت سبز + deny سبز + Octave 60/60 تطبیق + libmathcraft.so دو ABI (Android 24) — بسته v0.6 |

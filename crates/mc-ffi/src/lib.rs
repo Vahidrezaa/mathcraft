@@ -17,6 +17,11 @@
     )
 )]
 
+// Lint waivers for the GENERATED glue live here (module-level), NOT inside the
+// generated file itself — so `flutter_rust_bridge_codegen generate` output stays
+// byte-stable and the CI "glue is up to date" gate can verify it with git diff.
+// (Supersedes the old "re-apply the manual header after regeneration" ritual.)
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::unimplemented)]
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 
 pub mod api;

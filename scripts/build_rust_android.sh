@@ -5,24 +5,28 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 command -v cargo-ndk >/dev/null || {
-  echo "cargo-ndk نصب نیست — نصب می‌کنم…"
-  cargo install cargo-ndk --locked
+  echo "cargo-ndk نصب نیست — نصب می‌کنم (پین 4.1.2 — سمانتیک v4 در پایین)…"
+  cargo install cargo-ndk --version 4.1.2 --locked
 }
 
 rustup target add aarch64-linux-android armv7-linux-androideabi
 
 OUT="app/android/app/src/main/jniLibs"
-mkdir -p "$OUT/arm64-v8a" "$OUT/armeabi-v7a"
 
 echo "== build (release) =="
+# cargo-ndk >= 4 semantics (was the CI breakage: `-p` no longer exists for
+# cargo-ndk and -t takes Android ABI names, not Rust triples):
+#   -t arm64-v8a / armeabi-v7a   Android ABIs
+#   -P 24                        Android API level (minSdk 24 — doc 02 §8)
+#   -o OUT                       copies lib*.so into OUT/<abi>/ itself
+#   everything after -- goes to cargo: -p mc-ffi is CARGO's package selector
+# Version pinned at install time; see .github/workflows/android.yml.
 cargo ndk \
-  -t aarch64-linux-android \
-  -t armv7-linux-androideabi \
-  -p mc-ffi \
-  build --release
-
-cp target/aarch64-linux-android/release/libmathcraft.so "$OUT/arm64-v8a/"
-cp target/armv7-linux-androideabi/release/libmathcraft.so "$OUT/armeabi-v7a/"
+  -t arm64-v8a \
+  -t armeabi-v7a \
+  -P 24 \
+  -o "$OUT" \
+  -- build --release -p mc-ffi --lib
 
 echo "libmathcraft.so برای arm64-v8a و armeabi-v7a ساخته شد → $OUT"
 echo

@@ -126,7 +126,10 @@ fn corpus_08_eig_symmetric() {
 #[test]
 fn corpus_09_chol_and_norm() {
     let src = src!("p1_09_chol_and_norm.m");
-    assert!(run(src, "err") < 1e-9);
+    // MATLAB chol is UPPER (R'*R = A), so R*R' - A has max-abs exactly 1.0 —
+    // orientation proof: a lower-triangular chol would give err = 0 here.
+    // Matches Octave 9.4/10.3 (differential job) and expected/p1_09 (err = 1.0).
+    assert!(approx(run(src, "err"), 1.0));
     assert!(approx(run(src, "n"), 5.0));
 }
 
@@ -495,7 +498,9 @@ fn corpus_54_triangular_solve() {
 #[test]
 fn corpus_55_chol_reconstruction() {
     let s = src!("p1_55_chol_reconstruction.m");
-    assert!(run(s, "err") < 1e-9);
+    // err = 1.0 proves the UPPER-triangular MATLAB convention (see corpus_09);
+    // l11 = R(1,1) = 2 (same for both orientations, err is the discriminator).
+    assert!(approx(run(s, "err"), 1.0));
     assert!(approx(run(s, "l11"), 2.0));
 }
 

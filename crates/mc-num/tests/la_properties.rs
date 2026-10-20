@@ -137,9 +137,12 @@ proptest! {
         }}
         for i in 0..n { d.set(i, i, d.get(i, i) + 0.5); } // قطر ناصفر
         let a = matmul(&d, &transpose(&d));
-        let l = mc_num::chol(&a).unwrap();
-        let back = matmul(&l, &transpose(&l));
-        prop_assert!(max_diff(&back, &a) < 1e-9);
+        let r = mc_num::chol(&a).unwrap();
+        // MATLAB convention: chol is UPPER triangular with R'·R = A.
+        prop_assert!(max_diff(&matmul(&transpose(&r), &r), &a) < 1e-9);
+        for c in 0..n { for row in (c + 1)..n {
+            prop_assert_eq!(r.get(row, c), 0.0, "chol must be upper triangular");
+        }}
     }
 
     #[test]

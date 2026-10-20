@@ -62,7 +62,15 @@ O["p1_05_underdetermined_min_norm.m"] = {"x": [[1.0], [2.0], [0.0]]}
 O["p1_06_rref_free_variable.m"] = {"r": [[1, 2, 3], [0, 0, 0]]}
 O["p1_07_det_and_inv.m"] = {"d": 8.0, "I": np.linalg.inv([[4, 2], [2, 3]])}
 O["p1_08_eig_symmetric.m"] = {"v": [[1.0], [3.0]]}
-O["p1_09_chol_and_norm.m"] = {"err": 0.0, "n": 5.0}
+# MATLAB/Octave chol returns the UPPER triangular R with R'*R = A.
+# The script computes err = max(abs(R*R' - A)) which is 1.0 for upper chol
+# (R*R' != A) — the value Octave gives; numpy's lower cholesky gave 0.0 and
+# was an oracle orientation bug caught by the Octave differential job.
+_R9 = np.linalg.cholesky(np.array([[4, 2], [2, 3.0]])).T  # upper, MATLAB convention
+O["p1_09_chol_and_norm.m"] = {
+    "err": float(np.abs(_R9 @ _R9.T - np.array([[4, 2], [2, 3.0]])).max()),
+    "n": 5.0,
+}
 O["p1_10_transpose_identity.m"] = {"err": 0.0}
 O["p1_11_for_sum_squares.m"] = {"s": 55.0}
 O["p1_12_for_matrix_columns.m"] = {"t": 6.0}
@@ -108,11 +116,15 @@ O["p1_51_solve_exact_2x2.m"] = {"x": [[2.0], [3.0]], "res": 0.0}
 O["p1_52_solve_overdetermined.m"] = {"x": [[1.0], [2.0]], "r": 0.0}
 O["p1_53_least_squares_general.m"] = {"x": [[5.0], [-3.0]], "rn": math.sqrt(6.0)}
 O["p1_54_triangular_solve.m"] = {"x": [[1.0], [2.0]], "chk": 0.0}
-O["p1_55_chol_reconstruction.m"] = {"err": 0.0, "l11": 2.0}
+_R55 = np.linalg.cholesky(np.array([[4, 2], [2, 3.0]])).T  # upper, MATLAB convention
+O["p1_55_chol_reconstruction.m"] = {
+    "err": float(np.abs(_R55 @ _R55.T - np.array([[4, 2], [2, 3.0]])).max()),
+    "l11": float(_R55[0, 0]),
+}
 O["p1_56_eig_properties.m"] = {"v": [[1.0], [3.0]], "sumv": 4.0}
 sv = np.linalg.svd(np.array([[4, 11, 14], [8, 7, -2.0]]), compute_uv=False)
 O["p1_57_svd_values.m"] = {"s": [[3.0], [2.0]], "s1": float(sv[0]), "s2": float(sv[1])}
-R = np.linalg.qr(np.array([[1, 2], [3, 4.0]]))[1]
+R = np.linalg.qr(np.array([[1, 2], [3, 4.0]]))[1]  # 2-output form: upper R (script updated accordingly)
 O["p1_58_qr_upper_factor.m"] = {"r11": float(R[0, 0]), "r21": float(R[1, 0]), "r22": float(R[1, 1])}
 O["p1_59_dot_cross_kron.m"] = {"d": 32.0, "c": [[0.0], [0.0], [1.0]], "k": [[10, 100, 20, 200]]}
 O["p1_60_cond_and_norms.m"] = {"c1": 4.0, "ci": 1.0, "n1": 7.0, "ni": 4.0, "nf": math.sqrt(30.0)}

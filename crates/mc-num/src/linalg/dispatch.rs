@@ -132,16 +132,17 @@ pub fn mldivide(
         // شاخه ۵ — مربعی متقارن: chol → LDLᵀ (سند ۰۴ §3.2 Hermitian).
         if convert::is_exactly_symmetric(a) {
             match crate::linalg::chol(a) {
-                Ok(l) => {
+                Ok(r) => {
                     steps.push(DispatchStep::new(
                         "CHOL",
                         "متقارن مثبت معین — حل با Cholesky (دو حل مثلثی)",
                         "symmetric positive definite — Cholesky solve (two triangular solves)",
                     ));
-                    // L·Lᵀ·x = b  ⟹  y = حل L·y = b (پایین)؛ x = حل Lᵀ·x = y (بالا).
-                    let lt = convert::transpose(&l);
-                    let y = crate::linalg::trisolve_lower(&l, b)?;
-                    let x = crate::linalg::trisolve_upper(&lt, &y)?;
+                    // chol بالامثلثی است (قرارداد متلب): R'·R·x = b
+                    // ⟹ y = حل R'·y = b (پایین، چون R' پایین‌مثلثی است)؛ x = حل R·x = y (بالا).
+                    let rt = convert::transpose(&r);
+                    let y = crate::linalg::trisolve_lower(&rt, b)?;
+                    let x = crate::linalg::trisolve_upper(&r, &y)?;
                     return Ok((x, steps));
                 }
                 Err(_) => {

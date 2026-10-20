@@ -1,5 +1,5 @@
-# CI پایه P0 — سند ۰۷: fmt/clippy/test/deny + Flutter analyze/test
-# بیلد APK اندروید از P6 به release workflow منتقل می‌شود (بودجه CI پایه).
+# CI — MathCraft (doc 07): fmt/clippy/test/deny + Octave differential + Flutter analyze/test
+# APK build moves to the release workflow at P6 (base CI budget).
 name: CI
 
 on:
@@ -39,7 +39,7 @@ jobs:
 
       - name: No todo!/unimplemented! in hand-written product code (doc 08 §1)
         run: |
-          # frb_generated.rs خروجی اتوژنریت FRB است و مستثناست (سند ۰۸ §1)
+          # frb_generated.rs is FRB-generated output and is exempt (doc 08 §1)
           if grep -rn -E "todo!|unimplemented!" crates/*/src --exclude='frb_generated*.rs'; then
             echo "::error::todo!/unimplemented! is forbidden in hand-written code"
             exit 1
@@ -47,7 +47,7 @@ jobs:
 
       - name: cargo-deny (licenses + advisories — doc 02 §8)
         run: |
-          cargo install cargo-deny --locked
+          cargo install cargo-deny --version 0.20.2 --locked
           cargo deny check licenses advisories
 
   flutter:
@@ -61,12 +61,16 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install flutter_rust_bridge_codegen
-        run: cargo install flutter_rust_bridge_codegen --locked
+      - name: Install flutter_rust_bridge_codegen (pinned = runtime version)
+        # codegen must equal the runtime version in Cargo.lock/pubspec (2.12.0).
+        # Unpinned, a newer codegen (e.g. 2.13.0) silently runs `flutter pub add`
+        # during generate and produces mismatched glue.
+        run: cargo install flutter_rust_bridge_codegen --version 2.12.0 --locked
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.24.5  # pinned = locally-validated version (deliberate bump later, P6)
 
       - name: Pub get
         run: |
@@ -74,7 +78,18 @@ jobs:
           flutter pub get
 
       - name: FRB codegen (generates lib/src/rust/)
-        run: flutter_rust_bridge_codegen generate
+        # app/flutter_rust_bridge.yaml is only found from CWD=app;
+        # running from repo root => "Please provide rust_input" panic.
+        run: |
+          cd app
+          flutter_rust_bridge_codegen generate
+
+      - name: Glue is up to date (no diff after codegen)
+        run: |
+          if ! git diff --exit-code -- app/lib/src/rust crates/mc-ffi/src/frb_generated.rs; then
+            echo "::error::FRB glue is stale - regenerate and commit"
+            exit 1
+          fi
 
       - name: Analyze
         run: |

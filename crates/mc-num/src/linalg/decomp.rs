@@ -172,7 +172,10 @@ pub fn chol(a: &Matrix) -> Result<Matrix, mc_core::error::McError> {
     }
     let af = convert::to_faer(a);
     match af.llt(faer::Side::Lower) {
-        Ok(llt) => Ok(convert::from_faer(&llt.L().to_owned())),
+        // MATLAB/Octave convention: chol returns the UPPER triangular R with R'·R = A
+        // (caught by the Octave differential job — numpy's cholesky is lower and the
+        // first oracle draft silently followed it). faer llt gives L; return Lᵀ = R.
+        Ok(llt) => Ok(convert::transpose(&convert::from_faer(&llt.L().to_owned()))),
         Err(_) => Err(not_spd()),
     }
 }
