@@ -1,0 +1,8 @@
+{
+ "script": "p1_14_anon_capture.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "y": 15.0
+ }
+}

@@ -9,6 +9,7 @@ import '../../core/rust/engine_client.dart';
 import '../../core/rust/engine_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../shell/app_shell.dart';
+import 'console_widgets.dart';
 
 /// کنسول REPL — مشخصات سند ۰۶ بخش ۷.۱:
 /// - prompt `>>` با رنگ muted؛ ورودی inline ادیت‌پذیر
@@ -109,6 +110,28 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
     });
   }
 
+  /// متن قابل کپی هر سطر — سمانتیک بازخورد P0.2:
+  /// - ورودی: فقط کد، بدون پرامپت تزئینی «>>»
+  /// - نتیجه: همان متن رندرشده
+  /// - خطا: پیام خام موتور (متغیر messageEn، متن LTR کنسول) — نه عنوان/پیشنهاد
+  String _copyTextOf(ConsoleEntry entry) => switch (entry) {
+        InputEntry(:final code) => code,
+        OutputEntry(:final text) => text,
+        ErrorEntry(:final error) => error.messageEn,
+      };
+
+  /// کپی در حافظه + تأیید کوتاه SnackBar (بازخورد P0.2).
+  /// متن کپی‌شده همیشه رشته LTR است و دست‌نخورده می‌ماند (RTL-safe)؛
+  /// فقط اعلان UI با زبان فعال ساخته می‌شود.
+  Future<void> _copyToClipboard(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.copiedToClipboard)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -132,11 +155,23 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
                     itemCount: _entries.length,
                     itemBuilder: (context, i) {
                       final entry = _entries[i];
-                      return switch (entry) {
-                        InputEntry e => _InputLine(code: e.code),
-                        OutputEntry e => _OutputLine(text: e.text),
-                        ErrorEntry e => _ErrorCard(error: e.error),
-                      };
+                      // کپی هر سطر با long-press (بازخورد P0.2) — متن همیشه
+                      // همان رشته LTR کنسول است، بدون عناصر تزئینی.
+                      return GestureDetector(
+                        onLongPress: () =>
+                            _copyToClipboard(_copyTextOf(entry)),
+                        child: switch (entry) {
+                          InputEntry e => _InputLine(code: e.code),
+                          OutputEntry e => _OutputLine(
+                              text: e.text,
+                              onCopy: () => _copyToClipboard(_copyTextOf(e)),
+                            ),
+                          ErrorEntry e => ErrorCard(
+                              error: e.error,
+                              onCopy: () => _copyToClipboard(_copyTextOf(e)),
+                            ),
+                        },
+                      );
                     },
                   ),
           ),
@@ -317,10 +352,13 @@ class _InputLine extends StatelessWidget {
 }
 
 /// خط خروجی — fade + slide 8dp از بالا، ۱۵۰ms easeOut (سند ۰۶ بخش ۸).
+/// آیکون کپی محو ولی همیشه دیده‌شونده (بازخورد P0.2) — رنگ muted،
+/// هدف لمسی ۴۰dp هماهنگ با دکمه run (۴۴dp، سند ۰۶ اصل ۳).
 class _OutputLine extends StatefulWidget {
-  const _OutputLine({required this.text});
+  const _OutputLine({required this.text, required this.onCopy});
 
   final String text;
+  final VoidCallback onCopy;
 
   @override
   State<_OutputLine> createState() => _OutputLineState();
@@ -351,6 +389,7 @@ class _OutputLineState extends State<_OutputLine>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return FadeTransition(
       opacity: _fade,
       child: SlideTransition(
@@ -360,12 +399,20 @@ class _OutputLineState extends State<_OutputLine>
         ).animate(_fade),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: SizedBox(
-            width: double.infinity,
-            child: Text(
-              widget.text,
-              style: CdsTheme.codeStyle(context, color: scheme.onSurface),
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    widget.text,
+                    style: CdsTheme.codeStyle(context, color: scheme.onSurface),
+                  ),
+                ),
+              ),
+              CopyButton(onCopy: widget.onCopy, tooltip: l10n.copyTooltip),
+            ],
           ),
         ),
       ),
@@ -373,72 +420,5 @@ class _OutputLineState extends State<_OutputLine>
   }
 }
 
-/// کارت خطا — نوار قرمز ۳dp سمت چپ + کد + پیام زبان فعال + did-you-mean
-/// (سند ۰۶ §7.1، قرارداد سند ۰۲ بخش ۹).
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.error});
-
-  final McError error;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    // زبان پیام خطا = زبان UI (D-06) — نه جهت متن؛ کنسول جزیرهٔ LTR همیشگی است
-    // (سند ۰۶ بخش ۴) و Directionality همیشه ltr برمی‌گرداند (درس P0.2.4 — تست گرفت).
-    final isFa = l10n.localeName == 'fa';
-    final message = isFa ? error.messageFa : error.messageEn;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(CdsDimens.radiusSmall),
-        border: Border.all(color: scheme.outline),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(CdsDimens.radiusSmall),
-        // نوار قرمز ۳dp به‌صورت border چپ — Row با stretch در ارتفاع بی‌کران
-        // ListView می‌شکند (درس P0.2.4 — تست ویجت گرفت).
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: scheme.error, width: 3)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.errorTitle(error.id),
-                  style: CdsTheme.monoStyle(
-                    color: scheme.error,
-                    size: 11,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurface,
-                        height: 1.6,
-                      ),
-                ),
-                if (error.suggestion != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    l10n.suggestionLabel(error.suggestion!),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// کارت خطا — ویجت مشترک ErrorCard از console_widgets.dart
+/// (نوار قرمز ۳dp + پیام زبان فعال + did-you-mean + کپی پیام خام).

@@ -1,0 +1,8 @@
+{
+ "script": "p1_15_nested_anon_closure.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "y": 12.0
+ }
+}

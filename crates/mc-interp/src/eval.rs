@@ -1,17 +1,21 @@
-//! ارزیابی — سمانتیک سند ۰۳ (بخش‌های ۵، ۱۱ و ۱۴).
+//! ارزیابی — سمانتیک سند ۰۳ (بخش‌های ۴ تا ۱۱، نسخه P1).
 //!
-//! - `ans`: فقط دستورهای عبارتیِ «نمایش‌دار» در `ans` می‌نشینند (رفتار متلب؛
-//!   `1;` نه نمایش دارد نه `ans` را عوض می‌کند — سند ۰۳ بخش ۱۱ بند ۳).
-//! - خطا یک مقدار است: ارزیابی در اولین خطا متوقف و `McError` برمی‌گردد؛
+//! - `ans`: فقط دستورهای عبارتیِ «نمایش‌دار» در `ans` می‌نشینند (رفتار متلب).
+//! - خطا یک مقدار است: ارزیابی در اولین خطا متوقف و `McError` برمی‌گرداند؛
 //!   خروجی‌های قبلی همان خط حفظ می‌شوند (سند ۰۲ بخش ۹).
-//! - محاسبات عددی IEEE؛ `1/0 = Inf`، `0/0 = NaN` (سند ۰۳ بخش ۱۱ بند ۵).
-//! - ماتریس تهی: نتیجه هر عمل با `[]` بازهم `[]` است (سند ۰۳ بخش ۴).
+//! - محاسبات IEEE؛ `1/0 = Inf`، `0/0 = NaN` (سند ۰۳ بخش ۱۱ بند ۵).
+//! - COW: انتساب کپی نمی‌کند؛ Matrix خودش Arc+COW است (سند ۰۳ §11 بند 1).
+//! - `for` روی ماتریس = پیمایش ستون‌ها (سند ۰۳ §8).
+//! - `end` فقط در زمینهٔ اندیس معتبر است؛ کولن سمانتیک دقیق سند ۰۳ §7.
 
-use mc_core::{ids, Matrix, McError, Value};
-use mc_parser::{BinOp, Expr, Program, Stmt, UnOp};
+use std::sync::Arc;
 
-use crate::env::Environment;
+use mc_core::{ids, AnonFn, Matrix, McError, Value};
+use mc_parser::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
+
+use crate::env::{Environment, StoredItem, UserFnDef};
 use crate::format::format_value;
+use crate::registry::{self, broadcast2};
 
 /// خروجی یک دستور برای کنسول — متن زبان‌خنثی (نمایش متلب؛ خطاها جداگانه FA/EN می‌آیند).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,72 +30,875 @@ pub struct EvalOutcome {
     pub error: Option<McError>,
 }
 
+/// سیگنال جریان کنترل — break/continue فقط در حلقه جاری (سند ۰۳ §8)؛
+/// return از تابع/اسکریپت جاری خارج می‌شود (سمانتیک متلب).
+enum Flow {
+    Normal,
+    Break,
+    Continue,
+    Return,
+}
+
+/// عمق مجاز فراخوانی توابع بی‌نام (جلوگیری از بی‌نهایت — سند ۰۳ §9:
+/// recursive anonymous ممنوع است؛ خطای آموزشی).
+const MAX_CALL_DEPTH: usize = 128;
+
 pub fn eval_program(program: &Program, env: &mut Environment) -> EvalOutcome {
+    eval_program_depth(program, env, 0)
+}
+
+fn eval_program_depth(program: &Program, env: &mut Environment, depth: usize) -> EvalOutcome {
     let mut out = EvalOutcome::default();
-    for stmt in &program.stmts {
-        match stmt {
-            Stmt::Expr { expr, suppress } => {
-                let value = match eval_expr(expr, env) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        out.error = Some(e);
-                        return out;
-                    }
-                };
-                if !suppress {
-                    env.set("ans", value.clone());
-                    out.outputs.push(StmtOutput {
-                        text: format!("ans = {}", format_value(&value)),
-                    });
-                }
-            }
-            Stmt::Assign {
-                name,
-                expr,
-                suppress,
-                ..
-            } => {
-                let value = match eval_expr(expr, env) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        out.error = Some(e);
-                        return out;
-                    }
-                };
-                env.set(name.clone(), value.clone());
-                if !suppress {
-                    out.outputs.push(StmtOutput {
-                        text: format!("{name} = {}", format_value(&value)),
-                    });
-                }
-            }
+    let mut texts = Vec::new();
+    let result = exec_stmts(&program.stmts, env, depth, &mut texts);
+    out.outputs = texts.into_iter().map(|t| StmtOutput { text: t }).collect();
+    match result {
+        Ok(Flow::Break | Flow::Continue) => {
+            // break/continue خارج حلقه — خطای صریح (سند ۰۳ §8)
+            out.error = Some(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "break/continue outside a loop.",
+                "break/continue خارج از حلقه.",
+            ));
+        }
+        Ok(_) => {}
+        Err(e) => {
+            out.error = Some(e);
         }
     }
     out
 }
 
-fn eval_expr(expr: &Expr, env: &mut Environment) -> Result<Value, McError> {
-    match expr {
-        Expr::Num(n) => Ok(Value::Double(Matrix::scalar(*n))),
-        Expr::Var { name, line, col } => env.get(name).cloned().ok_or_else(|| {
-            let e = McError::new(
-                ids::UNDEFINED_VARIABLE,
-                *line,
-                *col,
-                format!("Undefined variable '{name}'."),
-                format!("متغیر '{name}' تعریف نشده."),
-            );
-            match env.suggest_name(name) {
-                Some(s) => e.with_suggestion(s),
-                None => e,
+/// اجرای دنباله‌ای گزاره‌ها؛ خروجی‌های نمایش‌دار در `texts` جمع می‌شوند؛
+/// جریان غیرعادی (break/continue/return) جریان را به بالا می‌فرستد.
+fn exec_stmts(
+    stmts: &[Stmt],
+    env: &mut Environment,
+    depth: usize,
+    texts: &mut Vec<String>,
+) -> Result<Flow, McError> {
+    for stmt in stmts {
+        let (flow, mut t) = exec_stmt(stmt, env, depth)?;
+        texts.append(&mut t);
+        if !matches!(flow, Flow::Normal) {
+            return Ok(flow);
+        }
+    }
+    Ok(Flow::Normal)
+}
+
+// ---------- گزاره‌ها ----------
+
+fn exec_stmt(
+    stmt: &Stmt,
+    env: &mut Environment,
+    depth: usize,
+) -> Result<(Flow, Vec<String>), McError> {
+    match stmt {
+        Stmt::Expr { expr, suppress } => {
+            // اسکریپت/تابع فایلی ثبت‌شده — تقدم متلب: متغیر بر هر دو مقدم است.
+            // - اسکریپت: اجرا در فضای کاری فراخوان، بدون مقدار و بدون ans (سمانتیک متلب §9)
+            // - تابع به‌صورت گزاره: nargout = 1 اگر خروجی تعریف کرده، وگرنه 0
+            //   (`show(5)` در پرامپت متلب کار می‌کند ولی `x = show(5)` خطا می‌دهد)
+            if let Expr::Call { name, args, .. } = expr {
+                if args.is_empty() && env.get(name).is_none() {
+                    if let Some(StoredItem::Script(prog)) = env.lookup_item(name) {
+                        let mut texts = Vec::new();
+                        let flow = exec_stmts(&prog.stmts, env, depth, &mut texts)?;
+                        match flow {
+                            Flow::Break | Flow::Continue => {
+                                return Err(McError::new(
+                                    ids::PARSE_ERROR,
+                                    0,
+                                    0,
+                                    "break/continue outside a loop.",
+                                    "break/continue خارج از حلقه.",
+                                ))
+                            }
+                            // return داخل اسکریپت = پایان اسکریپت، ادامه فراخوان
+                            Flow::Normal | Flow::Return => {}
+                        }
+                        return Ok((Flow::Normal, texts));
+                    }
+                }
             }
-        }),
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if env.get(name).is_none() {
+                    if let Some(StoredItem::Fn(def)) = env.lookup_item(name) {
+                        let vals: Vec<Value> = args
+                            .iter()
+                            .map(|a| eval_expr(a, env, depth))
+                            .collect::<Result<_, _>>()?;
+                        let nout = usize::from(!def.outputs.is_empty());
+                        let outs =
+                            call_user_fn(&def, &vals, nout, env.funcs_clone(), depth, *line, *col)?;
+                        let value = match outs.into_iter().next() {
+                            Some(v) => v,
+                            None => return Ok((Flow::Normal, Vec::new())),
+                        };
+                        if !*suppress {
+                            let text = match &value {
+                                v @ (Value::Double(_) | Value::Char(_)) => {
+                                    format!("ans = {}", format_value(v))
+                                }
+                                Value::Anon(_) => "ans = function_handle".to_owned(),
+                            };
+                            env.set("ans", value);
+                            return Ok((Flow::Normal, vec![text]));
+                        }
+                        return Ok((Flow::Normal, Vec::new()));
+                    }
+                }
+            }
+            // نام برهنهٔ ثبت‌شده — سمانتیک متلب §9:
+            // - اسکریپت: با نام برهنه اجرا می‌شود (در فضای کاری فراخوان)
+            // - تابع بدون پارامتر: فراخوانی می‌شود
+            // - تابع پارامتردار: خطای «آرگومان کم است» (رفتار متلب)
+            if let Expr::Var { name, line, col } = expr {
+                if env.get(name).is_none() {
+                    if let Some(StoredItem::Script(prog)) = env.lookup_item(name) {
+                        let mut texts = Vec::new();
+                        let flow = exec_stmts(&prog.stmts, env, depth, &mut texts)?;
+                        match flow {
+                            Flow::Break | Flow::Continue => {
+                                return Err(McError::new(
+                                    ids::PARSE_ERROR,
+                                    0,
+                                    0,
+                                    "break/continue outside a loop.",
+                                    "break/continue خارج از حلقه.",
+                                ))
+                            }
+                            Flow::Normal | Flow::Return => {}
+                        }
+                        return Ok((Flow::Normal, texts));
+                    }
+                    if let Some(StoredItem::Fn(def)) = env.lookup_item(name) {
+                        if def.params.is_empty() {
+                            let nout = usize::from(!def.outputs.is_empty());
+                            let outs = call_user_fn(
+                                &def,
+                                &[],
+                                nout,
+                                env.funcs_clone(),
+                                depth,
+                                *line,
+                                *col,
+                            )?;
+                            if let Some(v) = outs.into_iter().next() {
+                                if !*suppress {
+                                    let text = "ans = ".to_owned() + &format_value(&v);
+                                    env.set("ans", v);
+                                    return Ok((Flow::Normal, vec![text]));
+                                }
+                            }
+                            return Ok((Flow::Normal, Vec::new()));
+                        }
+                        return Err(not_enough_inputs(name, def.params.len(), *line, *col));
+                    }
+                }
+            }
+            let value = eval_expr(expr, env, depth)?;
+            if !*suppress {
+                let text = match &value {
+                    v @ (Value::Double(_) | Value::Char(_)) => {
+                        format!("ans = {}", format_value(v))
+                    }
+                    Value::Anon(_) => "ans = function_handle".to_owned(),
+                };
+                env.set("ans", value);
+                return Ok((Flow::Normal, vec![text]));
+            }
+            Ok((Flow::Normal, Vec::new()))
+        }
+        Stmt::Assign {
+            target,
+            expr,
+            suppress,
+        } => {
+            let value = eval_expr(expr, env, depth)?;
+            match target {
+                AssignTarget::Var { name, .. } => {
+                    env.set(name.clone(), value);
+                    if !*suppress {
+                        let text = format!(
+                            "{name} = {}",
+                            format_value(
+                                env.get(name)
+                                    .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0)))
+                            )
+                        );
+                        Ok((Flow::Normal, vec![text]))
+                    } else {
+                        Ok((Flow::Normal, Vec::new()))
+                    }
+                }
+                AssignTarget::Indexed {
+                    name,
+                    subs,
+                    line,
+                    col,
+                } => {
+                    indexed_assign(env, name, subs, value, *line, *col)?;
+                    Ok((Flow::Normal, Vec::new()))
+                }
+            }
+        }
+        // انتساب چندخروجی `[a,b] = f(...)` — سمانتیک متلب §9
+        Stmt::MultiAssign {
+            targets,
+            expr,
+            suppress,
+        } => {
+            let texts = eval_multi_assign(targets, expr, env, depth, *suppress)?;
+            Ok((Flow::Normal, texts))
+        }
+        // تعریف تابع فایلی — ثبت در مخزن نشست؛ هیچ اجرا/خروجی ندارد
+        Stmt::FnDef {
+            name,
+            outputs,
+            params,
+            body,
+            line,
+            col,
+        } => {
+            env.register_function(UserFnDef {
+                name: name.clone(),
+                outputs: outputs.clone(),
+                params: params.clone(),
+                body: Program {
+                    stmts: body.clone(),
+                },
+                line: *line,
+                col: *col,
+            });
+            Ok((Flow::Normal, Vec::new()))
+        }
+        // `return` — خروج از تابع/اسکریپت جاری (سمانتیک متلب)
+        Stmt::Return { .. } => Ok((Flow::Return, Vec::new())),
+        Stmt::If {
+            branches,
+            else_body,
+            ..
+        } => {
+            for (cond, body) in branches {
+                let c = eval_expr(cond, env, depth)?;
+                if truthy_scalar(&c)? {
+                    return exec_block(body, env, depth).map(|f| (f, Vec::new()));
+                }
+            }
+            if let Some(body) = else_body {
+                return exec_block(body, env, depth).map(|f| (f, Vec::new()));
+            }
+            Ok((Flow::Normal, Vec::new()))
+        }
+        Stmt::For {
+            var,
+            iter_expr,
+            body,
+            ..
+        } => {
+            let iter_val = eval_expr(iter_expr, env, depth)?;
+            let columns: Vec<Value> = match &iter_val {
+                Value::Double(m) => {
+                    if m.is_scalar() {
+                        vec![iter_val.clone()]
+                    } else {
+                        (0..m.cols())
+                            .map(|c| {
+                                let mut col = Matrix::full(m.rows(), 1, 0.0);
+                                for r in 0..m.rows() {
+                                    col.set(r, 0, m.get(r, c));
+                                }
+                                Value::Double(col)
+                            })
+                            .collect()
+                    }
+                }
+                Value::Char(s) => s.chars().map(|ch| Value::Char(ch.to_string())).collect(),
+                Value::Anon(_) => {
+                    return Err(McError::new(
+                        ids::PARSE_ERROR,
+                        0,
+                        0,
+                        "Cannot iterate over a function handle.",
+                        "پیمایش روی function_handle ممکن نیست.",
+                    ))
+                }
+            };
+            for col in columns {
+                env.set(var.clone(), col);
+                if matches!(exec_block(body, env, depth)?, Flow::Break) {
+                    break;
+                }
+            }
+            Ok((Flow::Normal, Vec::new()))
+        }
+        Stmt::While { cond, body, .. } => {
+            loop {
+                let c = eval_expr(cond, env, depth)?;
+                if !truthy_scalar(&c)? {
+                    break;
+                }
+                if matches!(exec_block(body, env, depth)?, Flow::Break) {
+                    break;
+                }
+            }
+            Ok((Flow::Normal, Vec::new()))
+        }
+        Stmt::Break { .. } => Ok((Flow::Break, Vec::new())),
+        Stmt::Continue { .. } => Ok((Flow::Continue, Vec::new())),
+    }
+}
+
+fn exec_block(body: &[Stmt], env: &mut Environment, depth: usize) -> Result<Flow, McError> {
+    let mut sink = Vec::new();
+    exec_stmts(body, env, depth, &mut sink)
+}
+
+/// شرط if/while — فقط اسکالر غیرصفر (سند ۰۳ §8: ماتریس = خطای آموزشی).
+fn truthy_scalar(v: &Value) -> Result<bool, McError> {
+    match v.as_scalar() {
+        Some(x) if x.is_nan() => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "Condition is NaN — cannot decide.",
+            "شرط NaN است — تصمیم‌گیری ممکن نیست.",
+        )),
+        Some(x) => Ok(x != 0.0),
+        None => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "Condition must be a scalar. For matrices use all(...) or any(...).",
+            "شرط باید اسکالر باشد؛ برای ماتریس از all(...) یا any(...) استفاده کنید.",
+        )),
+    }
+}
+
+// ---------- انتساب اندیس‌دار ----------
+
+/// `A(subs...) = v` — با رشد خودکار ماتریس مثل متلب (پرکردن با صفر).
+fn indexed_assign(
+    env: &mut Environment,
+    name: &str,
+    subs: &[Expr],
+    value: Value,
+    line: u32,
+    col: u32,
+) -> Result<(), McError> {
+    let vmat = match &value {
+        Value::Double(m) => m.clone(),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "Only numeric assignment to indexed targets is supported.",
+                "انتساب اندیس‌دار فقط عددی پشتیبانی می‌شود.",
+            ))
+        }
+    };
+    // اندیس‌ها را ارزیابی کن (زمینهٔ end بر اساس شکل فعلی/هدف)
+    let current = env
+        .get(name)
+        .cloned()
+        .unwrap_or(Value::Double(Matrix::full(0, 0, 0.0)));
+    let cur = match current {
+        Value::Double(m) => m,
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!("'{name}' is not numeric; indexed assignment needs a numeric array."),
+                format!("«{name}» عددی نیست؛ انتساب اندیس‌دار نیاز به آرایه عددی دارد."),
+            ))
+        }
+    };
+    let resolved = resolve_subs(&cur, subs, env, depth_of(line))?;
+    let mut out = cur.clone();
+    match resolved.len() {
+        1 => linear_assign(&mut out, &resolved[0], &vmat)?,
+        2 => matrix_assign(&mut out, &resolved[0], &resolved[1], &vmat, line, col)?,
+        n => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!("Indexed assignment with {n} subscripts is not supported (max 2)."),
+                format!("انتساب اندیس‌دار با {n} زیرنویس پشتیبانی نمی‌شود (حداکثر 2)."),
+            ))
+        }
+    }
+    env.set(name.to_string(), Value::Double(out));
+    Ok(())
+}
+
+fn depth_of(_line: u32) -> usize {
+    0 // اندیس‌ها بدون تو در توی خاص ارزیابی می‌شوند
+}
+
+/// IndexKind: اسکالر 1-پایه یا تمام-بعد (:)
+#[derive(Clone)]
+enum Idx {
+    Scalar(usize),
+    All,
+    Vector(Vec<usize>),
+}
+
+/// ارزیابی زیرنویس‌ها با پشتیبانی `end` و `:` (سند ۰۳ §6).
+fn resolve_subs(
+    target: &Matrix,
+    subs: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+) -> Result<Vec<Idx>, McError> {
+    let _ = target; // dims فقط برای خوانایی امضا؛ end در eval_expr_end حل می‌شود
+    subs.iter()
+        .enumerate()
+        .map(|(si, e)| {
+            if let Expr::Var { name, .. } = e {
+                if name == ":" {
+                    return Ok(Idx::All);
+                }
+            }
+            let v = eval_expr_end(e, env, depth, target, si)?;
+            match &v {
+                Value::Double(m) if m.is_scalar() => {
+                    let idx = m.get(0, 0);
+                    if idx <= 0.0 || idx.fract() != 0.0 {
+                        return Err(McError::new(
+                            ids::PARSE_ERROR,
+                            0,
+                            0,
+                            "Indices must be positive integers (1-based).",
+                            "اندیس‌ها باید عدد صحیح مثبت باشند (1-پایه).",
+                        ));
+                    }
+                    Ok(Idx::Scalar(idx as usize))
+                }
+                Value::Double(m) => {
+                    let mut list = Vec::new();
+                    for i in 0..m.numel() {
+                        let idx = m.get_linear(i);
+                        if idx <= 0.0 || idx.fract() != 0.0 {
+                            return Err(McError::new(
+                                ids::PARSE_ERROR,
+                                0,
+                                0,
+                                "Indices must be positive integers (1-based).",
+                                "اندیس‌ها باید عدد صحیح مثبت باشند (1-پایه).",
+                            ));
+                        }
+                        list.push(idx as usize);
+                    }
+                    Ok(Idx::Vector(list))
+                }
+                _ => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    0,
+                    0,
+                    "Unsupported subscript type.",
+                    "نوع زیرنویس پشتیبانی نمی‌شود.",
+                )),
+            }
+        })
+        .collect()
+}
+
+/// اندازه بعد برای `end` — بعد 1: rows، بعد 2: cols؛ خطی: numel.
+fn end_size(target: &Matrix, sub_i: usize) -> usize {
+    if target.rows() == 1 || target.cols() == 1 {
+        target.numel()
+    } else if sub_i == 0 {
+        target.rows()
+    } else {
+        target.cols()
+    }
+}
+
+// ---------- خواندن اندیس‌دار در عبارت: از Call استفاده می‌کنیم ----------
+
+fn index_read(
+    name: &str,
+    args: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    let target = match env.get(name) {
+        Some(Value::Double(m)) => m.clone(),
+        Some(_) => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!("'{name}' is not numeric; indexing needs a numeric array."),
+                format!("«{name}» عددی نیست؛ اندیس‌گذاری نیاز به آرایه عددی دارد."),
+            ))
+        }
+        None => {
+            return Err(undefined_var(name, line, col));
+        }
+    };
+    let resolved = resolve_subs(&target, args, env, depth)?;
+    let m = &target;
+    match resolved.len() {
+        1 => match &resolved[0] {
+            Idx::All => {
+                if m.rows() == 1 || m.cols() == 1 {
+                    Ok(Value::Double(m.clone()))
+                } else {
+                    // A(:) = ستون‌بندی همه عناصر (سند ۰۴ §2)
+                    let data: Vec<f64> = (0..m.numel()).map(|i| m.get_linear(i)).collect();
+                    Ok(Value::Double(Matrix::from_columns(m.numel(), 1, data)))
+                }
+            }
+            Idx::Scalar(i) => {
+                linear_read(m, *i, line, col).map(|v| Value::Double(Matrix::scalar(v)))
+            }
+            Idx::Vector(list) => {
+                let mut out = Matrix::full(list.len(), 1, 0.0);
+                for (k, i) in list.iter().enumerate() {
+                    out.set(k, 0, linear_read(m, *i, line, col)?);
+                }
+                Ok(Value::Double(out))
+            }
+        },
+        2 => match (&resolved[0], &resolved[1]) {
+            (Idx::All, Idx::All) => Ok(Value::Double(m.clone())),
+            (ri, ci) => {
+                let rows = idx_list(ri, m.rows());
+                let cols = idx_list(ci, m.cols());
+                let mut out = Matrix::full(rows.len(), cols.len(), 0.0);
+                for (k, r) in rows.iter().enumerate() {
+                    for (l, c) in cols.iter().enumerate() {
+                        if r >= &m.rows() || c >= &m.cols() {
+                            return Err(index_out_of_bounds(line, col, *r, *c));
+                        }
+                        out.set(k, l, m.get(*r, *c));
+                    }
+                }
+                Ok(Value::Double(out))
+            }
+        },
+        n => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!("Indexing with {n} subscripts is not supported (max 2)."),
+            format!("اندیس‌گذاری با {n} زیرنویس پشتیبانی نمی‌شود (حداکثر 2)."),
+        )),
+    }
+}
+
+fn idx_list(kind: &Idx, size: usize) -> Vec<usize> {
+    match kind {
+        Idx::All => (0..size).collect(),
+        Idx::Scalar(i) => vec![i.saturating_sub(1)],
+        Idx::Vector(v) => v.iter().map(|i| i.saturating_sub(1)).collect(),
+    }
+}
+
+fn linear_read(m: &Matrix, i: usize, line: u32, col: u32) -> Result<f64, McError> {
+    if i == 0 || i > m.numel() {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!("Linear index {i} is out of bounds (numel = {}).", m.numel()),
+            format!("اندیس خطی {i} خارج از محدوده است (numel = {}).", m.numel()),
+        ));
+    }
+    Ok(m.get_linear(i - 1))
+}
+
+fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
+    match idx {
+        Idx::Scalar(i) => {
+            if *i > m.numel() {
+                grow_linear(m, *i);
+            }
+            m.set_linear(i - 1, v.get(0, 0));
+            Ok(())
+        }
+        Idx::All => {
+            for k in 0..m.numel().max(v.numel()) {
+                if k < v.numel() {
+                    if k >= m.numel() {
+                        grow_linear(m, k + 1);
+                    }
+                    m.set_linear(k, v.get_linear(k));
+                }
+            }
+            Ok(())
+        }
+        Idx::Vector(list) => {
+            for (k, i) in list.iter().enumerate() {
+                if *i > m.numel() {
+                    grow_linear(m, *i);
+                }
+                let val = if v.is_scalar() {
+                    v.get(0, 0)
+                } else {
+                    v.get_linear(k)
+                };
+                m.set_linear(i - 1, val);
+            }
+            Ok(())
+        }
+    }
+}
+
+fn grow_linear(m: &mut Matrix, new_len: usize) {
+    let mut data: Vec<f64> = (0..m.numel()).map(|i| m.get_linear(i)).collect();
+    data.resize(new_len, 0.0);
+    // رشد به ستونی بلند (رفتار متلب برای اندیس خطی)
+    *m = Matrix::from_columns(new_len, 1, data);
+}
+
+fn matrix_assign(
+    m: &mut Matrix,
+    ri: &Idx,
+    ci: &Idx,
+    v: &Matrix,
+    line: u32,
+    col: u32,
+) -> Result<(), McError> {
+    let rows = idx_list(ri, m.rows());
+    let cols = idx_list(ci, m.cols());
+    // رشد شکل اگر لازم باشد (فقط اندیس‌های اسکالر)
+    if let (Idx::Scalar(r), Idx::Scalar(c)) = (ri, ci) {
+        let new_rows = m.rows().max(*r);
+        let new_cols = m.cols().max(*c);
+        if (new_rows, new_cols) != (m.rows(), m.cols()) {
+            let mut nd = Matrix::full(new_rows, new_cols, 0.0);
+            for cc in 0..m.cols() {
+                for rr in 0..m.rows() {
+                    nd.set(rr, cc, m.get(rr, cc));
+                }
+            }
+            *m = nd;
+        }
+        m.set(r - 1, c - 1, v.get(0, 0));
+        return Ok(());
+    }
+    if (rows.len(), cols.len()) != (v.rows(), v.cols()) {
+        return Err(McError::new(
+            ids::SIZE_MISMATCH,
+            line,
+            col,
+            format!(
+                "Assignment size mismatch: target {r}x{c}, value {vr}x{vc}.",
+                r = rows.len(),
+                c = cols.len(),
+                vr = v.rows(),
+                vc = v.cols()
+            ),
+            format!(
+                "ناکامی ابعاد انتساب: هدف {r}×{c}، مقدار {vr}×{vc}.",
+                r = rows.len(),
+                c = cols.len(),
+                vr = v.rows(),
+                vc = v.cols()
+            ),
+        ));
+    }
+    for (k, r) in rows.iter().enumerate() {
+        for (l, c) in cols.iter().enumerate() {
+            if r >= &m.rows() || c >= &m.cols() {
+                return Err(index_out_of_bounds(line, col, *r, *c));
+            }
+            m.set(*r, *c, v.get(k, l));
+        }
+    }
+    Ok(())
+}
+
+fn index_out_of_bounds(line: u32, col: u32, r: usize, c: usize) -> McError {
+    McError::new(
+        ids::PARSE_ERROR,
+        line,
+        col,
+        format!("Index ({r},{c}) out of bounds."),
+        format!("اندیس ({r},{c}) خارج از محدوده است."),
+    )
+}
+
+fn undefined_var(name: &str, line: u32, col: u32) -> McError {
+    McError::new(
+        ids::UNDEFINED_VARIABLE,
+        line,
+        col,
+        format!("'{name}' is undefined."),
+        format!("«{name}» تعریف نشده است."),
+    )
+    // did-you-mean برای builtinها (سند ۰۸ DoD P1: `lenght` → `length`)
+    .with_suggestion(registry::suggest_builtin(name).unwrap_or_default())
+}
+
+/// خطای undefined با did-you-mean کامل: builtin، متغیرهای workspace و
+/// توابع/اسکریپت‌های ثبت‌شده (سند ۰۲ بخش ۹) — نزدیک‌ترین در کل دامنه‌ها.
+fn undefined_var_in(name: &str, line: u32, col: u32, env: &Environment) -> McError {
+    // هر دامنه نزدیک‌ترین خودش را می‌دهد؛ کمینهٔ کل = کمینهٔ این سه
+    let candidates = [
+        registry::suggest_builtin(name),
+        env.suggest_name(name),
+        env.suggest_function(name),
+    ];
+    let suggestion = candidates
+        .into_iter()
+        .flatten()
+        .min_by_key(|c| (crate::env::levenshtein(name, c), c.clone()));
+    McError::new(
+        ids::UNDEFINED_VARIABLE,
+        line,
+        col,
+        format!("'{name}' is undefined."),
+        format!("«{name}» تعریف نشده است."),
+    )
+    .with_suggestion(suggestion.unwrap_or_default())
+}
+
+/// «آرگومان ورودی کم است» — رفتار متلب برای نام برهنهٔ تابع پارامتردار.
+fn not_enough_inputs(name: &str, expected: usize, line: u32, col: u32) -> McError {
+    McError::new(
+        ids::PARSE_ERROR,
+        line,
+        col,
+        format!("Not enough input arguments. Function '{name}' expects {expected} argument(s)."),
+        format!("آرگومان ورودی کم است. تابع «{name}» {expected} آرگومان می‌خواهد."),
+    )
+}
+
+// ---------- عبارت‌ها ----------
+
+fn eval_expr(expr: &Expr, env: &mut Environment, depth: usize) -> Result<Value, McError> {
+    eval_expr_end(expr, env, depth, &Matrix::full(0, 0, 0.0), 0)
+}
+
+/// ارزیابی با زمینهٔ `end` — داخل اندیس‌گذاری، `end` به اندازهٔ بعد ترجمه می‌شود.
+fn eval_expr_end(
+    expr: &Expr,
+    env: &mut Environment,
+    depth: usize,
+    target: &Matrix,
+    sub_i: usize,
+) -> Result<Value, McError> {
+    match expr {
+        Expr::Num(v) => Ok(Value::Double(Matrix::scalar(*v))),
+        Expr::Str(s) => Ok(Value::Char(s.clone())),
+        Expr::End { line, col } => {
+            if target.is_empty() {
+                return Err(McError::new(
+                    ids::PARSE_ERROR,
+                    *line,
+                    *col,
+                    "'end' is only valid inside indexing.",
+                    "«end» فقط داخل اندیس‌گذاری معتبر است.",
+                ));
+            }
+            Ok(Value::Double(
+                Matrix::scalar(end_size(target, sub_i) as f64),
+            ))
+        }
+        Expr::Var { name, line, col } => match env.get(name) {
+            Some(v) => Ok(v.clone()),
+            None => {
+                // سمانتیک دستوری متلب: true/false بدون پرانتز (سند ۰۳ §12) —
+                // فقط صفر-آرگومان‌های بولی؛ بقیه نام‌ها خطا با did-you-mean
+                match name.as_str() {
+                    "true" => Ok(Value::Double(Matrix::scalar(1.0))),
+                    "false" => Ok(Value::Double(Matrix::scalar(0.0))),
+                    // ثابت‌های IEEE متلب — فقط وقتی کاربر همان نام را سایه نکرده (سند ۰۳ §3):
+                    // pi/eps فقط حروف کوچک؛ Inf/inf و NaN/nan هر دو نگارش (رفتار متلب)
+                    "pi" => Ok(Value::Double(Matrix::scalar(std::f64::consts::PI))),
+                    "eps" => Ok(Value::Double(Matrix::scalar(f64::EPSILON))),
+                    "Inf" | "inf" => Ok(Value::Double(Matrix::scalar(f64::INFINITY))),
+                    "NaN" | "nan" => Ok(Value::Double(Matrix::scalar(f64::NAN))),
+                    _ => {
+                        // نام ثبت‌شده بدون فراخوانی؟ — سمانتیک متلب §9
+                        match env.lookup_item(name) {
+                            Some(StoredItem::Script(_)) => Err(McError::new(
+                                ids::PARSE_ERROR,
+                                *line,
+                                *col,
+                                format!(
+                                    "Script '{name}' cannot be used inside an expression. Call it as a statement: {name}"
+                                ),
+                                format!(
+                                    "اسکریپت «{name}» داخل عبارت قابل استفاده نیست؛ به‌صورت گزاره فراخوانی کنید: {name}"
+                                ),
+                            )),
+                            Some(StoredItem::Fn(def)) => {
+                                if def.params.is_empty() {
+                                    let outs = call_user_fn(
+                                        &def,
+                                        &[],
+                                        1,
+                                        env.funcs_clone(),
+                                        depth,
+                                        *line,
+                                        *col,
+                                    )?;
+                                    if let Some(v) = outs.into_iter().next() {
+                                        return Ok(v);
+                                    }
+                                    Err(McError::new(
+                                        ids::PARSE_ERROR,
+                                        *line,
+                                        *col,
+                                        format!("Function '{name}' did not return a value."),
+                                        format!("تابع «{name}» مقداری برنگرداند."),
+                                    ))
+                                } else {
+                                    Err(not_enough_inputs(
+                                        name,
+                                        def.params.len(),
+                                        *line,
+                                        *col,
+                                    ))
+                                }
+                            }
+                            None => match registry::lookup(name) {
+                                // builtin برهنه = فراخوانی بدون آرگومان؛
+                                // پیام خطا از خود builtin می‌آید (رفتار متلب)
+                                Some(f) => f(&[], 1),
+                                None => Err(undefined_var_in(name, *line, *col, env)),
+                            },
+                        }
+                    }
+                }
+            }
+        },
         Expr::Unary { op, operand } => {
-            let v = eval_expr(operand, env)?;
-            Ok(apply_scalarwise(&v, |x| match op {
-                UnOp::Neg => -x,
-                UnOp::Pos => x,
-            }))
+            let v = eval_expr_end(operand, env, depth, target, sub_i)?;
+            match op {
+                UnOp::Pos => Ok(v),
+                UnOp::Neg => negate(&v),
+                UnOp::Not => match v.as_scalar() {
+                    Some(x) => Ok(Value::Double(Matrix::scalar((x == 0.0) as i32 as f64))),
+                    None => Err(McError::new(
+                        ids::PARSE_ERROR,
+                        0,
+                        0,
+                        "Logical NOT needs a scalar operand.",
+                        "NOT منطقی به عملوند اسکالر نیاز دارد.",
+                    )),
+                },
+            }
         }
         Expr::Binary {
             op,
@@ -100,266 +907,784 @@ fn eval_expr(expr: &Expr, env: &mut Environment) -> Result<Value, McError> {
             line,
             col,
         } => {
-            let a = eval_expr(lhs, env)?;
-            let b = eval_expr(rhs, env)?;
-            binary(*op, a, b, *line, *col)
+            let l = eval_expr_end(lhs, env, depth, target, sub_i)?;
+            let r = eval_expr_end(rhs, env, depth, target, sub_i)?;
+            apply_binary(*op, &l, &r, *line, *col)
+        }
+        Expr::Compare {
+            op,
+            lhs,
+            rhs,
+            line,
+            col,
+        } => {
+            let l = eval_expr_end(lhs, env, depth, target, sub_i)?;
+            let r = eval_expr_end(rhs, env, depth, target, sub_i)?;
+            apply_compare(*op, &l, &r, *line, *col)
+        }
+        Expr::Logic { op, lhs, rhs } => {
+            // short-circuit — سمانتیک متلب (سند ۰۳ §8)
+            let l = eval_expr_end(lhs, env, depth, target, sub_i)?;
+            let lb = truthy_scalar(&l)?;
+            let result = match op {
+                LogicOp::And => {
+                    if !lb {
+                        false
+                    } else {
+                        truthy_scalar(&eval_expr_end(rhs, env, depth, target, sub_i)?)?
+                    }
+                }
+                LogicOp::Or => {
+                    if lb {
+                        true
+                    } else {
+                        truthy_scalar(&eval_expr_end(rhs, env, depth, target, sub_i)?)?
+                    }
+                }
+            };
+            Ok(Value::Double(Matrix::scalar(result as i32 as f64)))
+        }
+        Expr::Transpose {
+            operand,
+            conj: _,
+            line,
+            col,
+        } => {
+            let v = eval_expr_end(operand, env, depth, target, sub_i)?;
+            match v {
+                Value::Double(m) => {
+                    let mut out = Matrix::full(m.cols(), m.rows(), 0.0);
+                    for c in 0..m.cols() {
+                        for r in 0..m.rows() {
+                            let x = m.get(r, c);
+                            out.set(c, r, x); // حقیقی: مزدوج = همانی (سند ۰۳ §5)
+                        }
+                    }
+                    Ok(Value::Double(out))
+                }
+                Value::Char(s) => Ok(Value::Char(s.chars().rev().collect())),
+                Value::Anon(_) => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    *line,
+                    *col,
+                    "Cannot transpose a function handle.",
+                    "ترانهاده function_handle ممکن نیست.",
+                )),
+            }
+        }
+        Expr::Matrix { rows, line, col } => build_matrix(rows, env, depth, *line, *col),
+        Expr::Range { start, step, end } => {
+            let a = eval_expr_end(start, env, depth, target, sub_i)?;
+            let s = match step {
+                Some(e) => eval_expr_end(e, env, depth, target, sub_i)?,
+                None => Value::Double(Matrix::scalar(1.0)),
+            };
+            let b = eval_expr_end(end, env, depth, target, sub_i)?;
+            range_values(&a, &s, &b)
+        }
+        Expr::Call {
+            name,
+            args,
+            line,
+            col,
+            ..
+        } => call_named(name, args, env, depth, *line, *col, target),
+        Expr::AnonFn { params, body, .. } => {
+            // capture-by-value — snapshot فعلی env + مخزن توابع مشترک
+            // (بدنه تابع بی‌نام باید بتواند توابع فایلی ثبت‌شده را فراخوانی کند — سند ۰۳ §9)
+            let captured: std::collections::HashMap<String, Value> = env.snapshot();
+            let funcs_c = env.funcs_clone();
+            let params_c = params.clone();
+            let body_c = (**body).clone();
+            let depth_c = depth;
+            let call: mc_core::AnonCall = std::sync::Arc::new(move |args: &[Value]| {
+                if args.len() != params_c.len() {
+                    return Err(McError::new(
+                        ids::PARSE_ERROR,
+                        0,
+                        0,
+                        format!(
+                            "Anonymous function expects {} argument(s), got {}.",
+                            params_c.len(),
+                            args.len()
+                        ),
+                        format!(
+                            "تابع بی‌نام {} آرگومان می‌خواهد، {} دریافت شد.",
+                            params_c.len(),
+                            args.len()
+                        ),
+                    ));
+                }
+                let mut scoped = Environment::new_with_funcs(funcs_c.clone());
+                for (k, v) in &captured {
+                    scoped.set(k.clone(), v.clone());
+                }
+                for (p, a) in params_c.iter().zip(args.iter()) {
+                    scoped.set(p.clone(), a.clone());
+                }
+                let body = body_c.clone();
+                eval_expr_depth(&body, &mut scoped, depth_c + 1)
+            });
+            if depth >= MAX_CALL_DEPTH {
+                return Err(McError::new(
+                    ids::PARSE_ERROR,
+                    0,
+                    0,
+                    "Too many nested anonymous function calls.",
+                    "فراخوانی تو در توی توابع بی‌نام بیش از حد مجاز.",
+                ));
+            }
+            Ok(Value::Anon(AnonFn {
+                params: params.clone(),
+                call,
+            }))
+        }
+        // هندل نام‌دار `@f` — resolve در لحظهٔ ساخت (سمانتیک متلب §9):
+        // تابع فایلی ثبت‌شده یا builtin؛ اسکریپت قابل هندل‌شدن نیست.
+        Expr::FnHandle { name, line, col } => {
+            let funcs_c = env.funcs_clone();
+            if let Some(StoredItem::Fn(def)) = env.lookup_item(name) {
+                let def_c = Arc::clone(&def);
+                let call: mc_core::AnonCall = Arc::new(move |args: &[Value]| {
+                    // هر فراخوانی با ورک‌اسپیس تازه؛ بازگشتی درون بدنه از طریق
+                    // مخزن مشترک کار می‌کند
+                    let outs = call_user_fn(&def_c, args, 1, funcs_c.clone(), 0, 0, 0)?;
+                    if let Some(v) = outs.into_iter().next() {
+                        return Ok(v);
+                    }
+                    Err(McError::new(
+                        ids::PARSE_ERROR,
+                        0,
+                        0,
+                        "Function handle returned no value.",
+                        "function_handle مقداری برنگرداند.",
+                    ))
+                });
+                let params = def.params.clone();
+                return Ok(Value::Anon(AnonFn { params, call }));
+            }
+            if let Some(f) = registry::lookup(name) {
+                let call: mc_core::AnonCall = Arc::new(move |args: &[Value]| f(args, 1));
+                return Ok(Value::Anon(AnonFn {
+                    params: Vec::new(),
+                    call,
+                }));
+            }
+            Err(undefined_var_in(name, *line, *col, env))
         }
     }
 }
 
-/// اعمال تابع روی همه عناصر (اسکالر یا ماتریسی) — COW پس کپی فقط در صورت اشتراک.
-fn apply_scalarwise(v: &Value, f: impl Fn(f64) -> f64) -> Value {
+fn eval_expr_depth(expr: &Expr, env: &mut Environment, depth: usize) -> Result<Value, McError> {
+    eval_expr_end(expr, env, depth, &Matrix::full(0, 0, 0.0), 0)
+}
+
+/// فراخوانی نام‌دار — ترتیب resolve متلب (سند ۰۳ §9): متغیر (شامل هندل) >
+/// تابع فایلی/اسکریپت ثبت‌شده (سایه بر builtin) > builtin > خطا.
+fn call_named(
+    name: &str,
+    args: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+    target: &Matrix,
+) -> Result<Value, McError> {
+    // ۱) متغیر؟ — اگر هندل تابع باشد فراخوانی می‌شود؛ اگر ماتریس باشد اندیس است
+    match env.get(name).cloned() {
+        Some(Value::Anon(f)) => {
+            let vals: Vec<Value> = args
+                .iter()
+                .map(|a| eval_expr_end(a, env, depth, target, 0))
+                .collect::<Result<_, _>>()?;
+            return (f.call)(&vals);
+        }
+        Some(Value::Double(_)) if !args.is_empty() => {
+            return index_read(name, args, env, depth, line, col);
+        }
+        Some(_) if !args.is_empty() => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!("'{name}' is not indexable."),
+                format!("«{name}» اندیس‌پذیر نیست."),
+            ));
+        }
+        _ => {}
+    }
+    // ۲) تابع فایلی ثبت‌شده — تقدم بر builtin (سمانتیک متلب §9:
+    // فایل کاربر می‌تواند builtin هم‌نام را سایه کند)
+    if let Some(StoredItem::Fn(def)) = env.lookup_item(name) {
+        let vals: Vec<Value> = args
+            .iter()
+            .map(|a| eval_expr_end(a, env, depth, target, 0))
+            .collect::<Result<_, _>>()?;
+        let outs = call_user_fn(&def, &vals, 1, env.funcs_clone(), depth, line, col)?;
+        if let Some(v) = outs.into_iter().next() {
+            return Ok(v);
+        }
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!("Function '{name}' did not return a value."),
+            format!("تابع «{name}» مقداری برنگرداند."),
+        ));
+    }
+    if let Some(StoredItem::Script(_)) = env.lookup_item(name) {
+        // اسکریپت در عبارت/با آرگومان معنا ندارد (سمانتیک متلب)
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "Script '{name}' cannot be used inside an expression or take arguments. Call it as a statement: {name}",
+            ),
+            format!(
+                "اسکریپت «{name}» داخل عبارت یا با آرگومان قابل استفاده نیست؛ به‌صورت گزاره فراخوانی کنید: {name}"
+            ),
+        ));
+    }
+    // ۳) builtin؟
+    if let Some(f) = registry::lookup(name) {
+        let vals: Vec<Value> = args
+            .iter()
+            .map(|a| eval_expr_end(a, env, depth, target, 0))
+            .collect::<Result<_, _>>()?;
+        return f(&vals, 1);
+    }
+    // ۴) هیچ‌کدام — خطا با did-you-mean (builtin، متغیر، تعریف ثبت‌شده)
+    Err(undefined_var_in(name, line, col, env))
+}
+
+/// فراخوانی تابع فایلی ثبت‌شده — سمانتیک متلب §9:
+/// - ورک‌اسپیس تازه (متغیرهای فراخوان دیده نمی‌شوند؛ متغیرهای تابع نشت نمی‌کنند)
+/// - پارامترها با مقدار بسته می‌شوند؛ `nargin`/`nargout` داخل بدنه تعریف می‌شوند
+/// - پارامتر فراهم‌نشده مجاز است (الگوی `if nargin < 2` متلب) — خواندنش خطای undefined می‌دهد
+/// - خروجی‌ها به ترتیب تعریف از ورک‌اسپیس تابع برداشته می‌شوند؛ نخوانده = خطای آموزشی
+/// - بازگشت: `return` یا پایان بدنه؛ break/continue خارج حلقه = خطا
+fn call_user_fn(
+    def: &Arc<UserFnDef>,
+    args: &[Value],
+    nargout: usize,
+    funcs: Arc<crate::env::FuncStore>,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Vec<Value>, McError> {
+    if depth >= MAX_CALL_DEPTH {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "Maximum recursion depth ({MAX_CALL_DEPTH}) reached while calling '{}'.",
+                def.name
+            ),
+            format!(
+                "عمق بازگشتی حداکثر ({MAX_CALL_DEPTH}) هنگام فراخوانی «{}» پُر شد.",
+                def.name
+            ),
+        ));
+    }
+    if args.len() > def.params.len() {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "Too many input arguments: '{}' expects at most {} argument(s), got {}.",
+                def.name,
+                def.params.len(),
+                args.len()
+            ),
+            format!(
+                "آرگومان ورودی بیش از حد: «{}» حداکثر {} آرگومان می‌خواهد، {} دریافت شد.",
+                def.name,
+                def.params.len(),
+                args.len()
+            ),
+        ));
+    }
+    let mut child = Environment::new_with_funcs(funcs);
+    for (p, a) in def.params.iter().zip(args.iter()) {
+        child.set(p.clone(), a.clone());
+    }
+    // nargin/nargout — سمانتیک متلب (سایه‌پذیر مثل هر متغیر دیگر)
+    child.set("nargin", Value::Double(Matrix::scalar(args.len() as f64)));
+    child.set("nargout", Value::Double(Matrix::scalar(nargout as f64)));
+    let flow = exec_block(&def.body.stmts, &mut child, depth + 1)?;
+    match flow {
+        Flow::Break | Flow::Continue => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!("break/continue outside a loop inside '{}'.", def.name),
+                format!("break/continue خارج از حلقه، داخل «{}».", def.name),
+            ))
+        }
+        Flow::Normal | Flow::Return => {}
+    }
+    if nargout == 0 {
+        return Ok(Vec::new());
+    }
+    if nargout > def.outputs.len() {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "Too many output arguments: '{}' has {} output(s), {} requested.",
+                def.name,
+                def.outputs.len(),
+                nargout
+            ),
+            format!(
+                "خروجی بیش از حد: «{}» {} خروجی دارد، {} خواسته شد.",
+                def.name,
+                def.outputs.len(),
+                nargout
+            ),
+        ));
+    }
+    let mut outs = Vec::with_capacity(nargout);
+    for out in &def.outputs[..nargout] {
+        match child.get(out) {
+            Some(v) => outs.push(v.clone()),
+            None => {
+                return Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    format!(
+                    "Output argument '{}' (and maybe others) was not assigned during call to '{}'.",
+                    out, def.name
+                ),
+                    format!(
+                        "آرگومان خروجی «{}» (و شاید دیگران) هنگام فراخوانی «{}» مقدار نگرفت.",
+                        out, def.name
+                    ),
+                ))
+            }
+        }
+    }
+    Ok(outs)
+}
+
+/// انتساب چندخروجی `[a,b] = f(...)` — سمانتیک متلب §9:
+/// فقط فراخوانی تابع می‌تواند چند خروجی بدهد؛ هر هدف یکی از خروجی‌ها به ترتیب
+/// تعریف می‌گیرد؛ builtin هم فقط با یک هدف مجاز است (چندخروجی builtin در P2).
+fn eval_multi_assign(
+    targets: &[OutTarget],
+    expr: &Expr,
+    env: &mut Environment,
+    depth: usize,
+    suppress: bool,
+) -> Result<Vec<String>, McError> {
+    let (name, args, line, col) = match expr {
+        Expr::Call {
+            name,
+            args,
+            line,
+            col,
+            ..
+        } => (name, args, *line, *col),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "Only function calls can provide multiple outputs: [a,b] = f(...).",
+                "فقط فراخوانی تابع می‌تواند چند خروجی بدهد: [a,b] = f(...).",
+            ))
+        }
+    };
+    match env.lookup_item(name) {
+        Some(StoredItem::Fn(def)) => {
+            let vals: Vec<Value> = args
+                .iter()
+                .map(|a| eval_expr(a, env, depth))
+                .collect::<Result<_, _>>()?;
+            let outs = call_user_fn(
+                &def,
+                &vals,
+                targets.len(),
+                env.funcs_clone(),
+                depth,
+                line,
+                col,
+            )?;
+            let mut texts = Vec::new();
+            for (t, v) in targets.iter().zip(outs) {
+                env.set(t.name.clone(), v.clone());
+                if !suppress {
+                    texts.push(format!("{} = {}", t.name, format_value(&v)));
+                }
+            }
+            Ok(texts)
+        }
+        Some(StoredItem::Script(_)) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!("Script '{name}' cannot be used inside an expression or take arguments."),
+            format!("اسکریپت «{name}» داخل عبارت یا با آرگومان قابل استفاده نیست."),
+        )),
+        None => {
+            if let Some(f) = registry::lookup(name) {
+                if targets.len() > 1 {
+                    return Err(McError::new(
+                        ids::PARSE_ERROR,
+                        line,
+                        col,
+                        format!(
+                            "Multi-output builtins like [V,D] = eig are not available yet; '{name}' gets one output here."
+                        ),
+                        format!(
+                            "چندخروجی‌های builtin مثل [V,D] = eig هنوز در راه‌اندازه؛ «{name}» اینجا یک خروجی دارد."
+                        ),
+                    ));
+                }
+                let vals: Vec<Value> = args
+                    .iter()
+                    .map(|a| eval_expr(a, env, depth))
+                    .collect::<Result<_, _>>()?;
+                let v = f(&vals, targets.len())?;
+                let t = &targets[0];
+                env.set(t.name.clone(), v.clone());
+                if !suppress {
+                    return Ok(vec![format!("{} = {}", t.name, format_value(&v))]);
+                }
+                return Ok(Vec::new());
+            }
+            Err(undefined_var_in(name, line, col, env))
+        }
+    }
+}
+
+/// ساخت ماتریس از ردیف‌های AST (سند ۰۳ §4) — سمانتیک کامل تلفیق متلب:
+/// سلول‌ها می‌توانند خودشان ماتریس باشند؛ هم‌ردیف‌ها افقی می‌چسبند (تعداد ردیف برابر)
+/// و ردیف‌ها عمودی (تعداد ستون برابر). رشته = سطر کدهای کاراکتر (سند ۰۳ §10).
+fn build_matrix(
+    rows: &[Vec<Expr>],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    fn as_cell(v: Value, line: u32, col: u32) -> Result<Matrix, McError> {
+        match v {
+            Value::Double(m) => Ok(m),
+            Value::Char(s) => {
+                // 'abc' → سطر کدها (سمانتیک متلب ['ab' 'c'])
+                let codes: Vec<f64> = s.chars().map(|c| c as u32 as f64).collect();
+                Ok(Matrix::from_columns(1, codes.len(), codes))
+            }
+            Value::Anon(_) => Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "Cannot put a function handle inside a matrix.",
+                "function_handle داخل ماتریس قرار نمی‌گیرد.",
+            )),
+        }
+    }
+    fn hcat(parts: &[Matrix], line: u32, col: u32) -> Result<Matrix, McError> {
+        let r = parts.first().map(|m| m.rows()).unwrap_or(0);
+        if parts.iter().any(|m| m.rows() != r) {
+            return Err(McError::new(
+                ids::SIZE_MISMATCH,
+                line,
+                col,
+                "Horizontal concatenation needs equal row counts.",
+                "تلفیق افقی نیاز به تعداد ردیف برابر دارد.",
+            ));
+        }
+        let c: usize = parts.iter().map(|m| m.cols()).sum();
+        let mut out = Matrix::full(r, c, 0.0);
+        let mut off = 0usize;
+        for m in parts {
+            for cc in 0..m.cols() {
+                for rr in 0..m.rows() {
+                    out.set(rr, off + cc, m.get(rr, cc));
+                }
+            }
+            off += m.cols();
+        }
+        Ok(out)
+    }
+
+    let mut row_mats: Vec<Matrix> = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut parts: Vec<Matrix> = Vec::with_capacity(row.len());
+        for e in row {
+            let v = eval_expr_end(e, env, depth, &Matrix::full(0, 0, 0.0), 0)?;
+            parts.push(as_cell(v, line, col)?);
+        }
+        if parts.is_empty() {
+            continue;
+        }
+        row_mats.push(hcat(&parts, line, col)?);
+    }
+    if row_mats.is_empty() {
+        return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
+    }
+    // تلفیق عمودی ردیف‌ها
+    let c = row_mats[0].cols();
+    if row_mats.iter().any(|m| m.cols() != c) {
+        return Err(McError::new(
+            ids::SIZE_MISMATCH,
+            line,
+            col,
+            "Vertical concatenation needs equal column counts.",
+            "تلفیق عمودی نیاز به تعداد ستون برابر دارد.",
+        ));
+    }
+    let r: usize = row_mats.iter().map(|m| m.rows()).sum();
+    let mut out = Matrix::full(r, c, 0.0);
+    let mut off = 0usize;
+    for m in &row_mats {
+        for cc in 0..m.cols() {
+            for rr in 0..m.rows() {
+                out.set(off + rr, cc, m.get(rr, cc));
+            }
+        }
+        off += m.rows();
+    }
+    Ok(Value::Double(out))
+}
+
+/// سمانتیک دقیق کولن (سند ۰۳ §7): عناصر a, a+s, ... و تعداد
+/// n = floor((b-a)/s + eps_correction) + 1 — هرگز جمع تکراری.
+fn range_values(a: &Value, s: &Value, b: &Value) -> Result<Value, McError> {
+    let (av, sv, bv) = match (a.as_scalar(), s.as_scalar(), b.as_scalar()) {
+        (Some(a), Some(s), Some(b)) => (a, s, b),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "Colon operands must be scalars.",
+                "عملوندهای کولن باید اسکالر باشند.",
+            ))
+        }
+    };
+    if sv == 0.0 {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "Colon step cannot be zero.",
+            "گام کولن نمی‌تواند صفر باشد.",
+        ));
+    }
+    // الگوریتم مرجع متلب: محاسبه n، سپس a + (0:n-1)*s با اصلاح پایانی
+    let n_float = (bv - av) / sv;
+    let tol = f64::EPSILON * (av.abs().max(bv.abs()).max(1.0));
+    let n = if sv > 0.0 {
+        if bv < av - tol {
+            0
+        } else {
+            (n_float + tol).floor() as usize + 1
+        }
+    } else if bv > av + tol {
+        0
+    } else {
+        ((av - bv) / -sv + tol).floor() as usize + 1
+    };
+    if n == 0 {
+        return Ok(Value::Double(Matrix::full(1, 0, 0.0))); // ماتریس تهی 1×0 (سند ۰۳ §4)
+    }
+    let mut out = Matrix::full(1, n, 0.0);
+    for i in 0..n {
+        out.set(0, i, av + (i as f64) * sv);
+    }
+    // اصلاح عنصر آخر برای انطباق دقیق با b (رفتار مرجع — سند ۰۳ §7)
+    out.set(0, n - 1, bv);
+    Ok(Value::Double(out))
+}
+
+// ---------- عملگرها ----------
+
+fn negate(v: &Value) -> Result<Value, McError> {
     match v {
         Value::Double(m) => {
             let mut out = m.clone();
             for idx in 0..out.numel() {
-                out.set_linear(idx, f(out.get_linear(idx)));
+                out.set_linear(idx, -out.get_linear(idx));
             }
-            Value::Double(out)
+            Ok(Value::Double(out))
         }
+        _ => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "Unary minus needs a numeric operand.",
+            "منفی یگانی به عملوند عددی نیاز دارد.",
+        )),
     }
 }
 
-/// عنصر‌به‌عنصر روی دو ماتریس **هم‌شکل**.
-fn elementwise2(a: &Matrix, b: &Matrix, f: impl Fn(f64, f64) -> f64) -> Value {
-    let mut out = a.clone();
-    for c in 0..out.cols() {
-        for r in 0..out.rows() {
-            out.set(r, c, f(a.get(r, c), b.get(r, c)));
+fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    let (a, b) = (as_num(l, line, col)?, as_num(r, line, col)?);
+    let m = broadcast2(&a, &b, "comparison", |x, y| match op {
+        CmpOp::Eq => (x == y) as i32 as f64,
+        CmpOp::Ne => (x != y) as i32 as f64,
+        CmpOp::Lt => (x < y) as i32 as f64,
+        CmpOp::Le => (x <= y) as i32 as f64,
+        CmpOp::Gt => (x > y) as i32 as f64,
+        CmpOp::Ge => (x >= y) as i32 as f64,
+    })?;
+    Ok(Value::Double(m))
+}
+
+fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
+    match v {
+        Value::Double(m) => Ok(m.clone()),
+        Value::Char(s) => {
+            // رشته در مقایسه عددی — متلب کاراکترها را عدد می‌بیند؛ P1: تک‌کاراکتر
+            let mut ch = s.chars();
+            match (ch.next(), ch.next()) {
+                (Some(c), None) => Ok(Matrix::scalar(c as u32 as f64)),
+                _ => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    "Only single-character strings work in numeric comparison in this milestone.",
+                    "در مقایسه عددی این مایل‌استون فقط رشته تک‌کاراکتری کار می‌کند.",
+                )),
+            }
         }
+        Value::Anon(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "Function handle in numeric comparison.",
+            "function_handle در مقایسه عددی.",
+        )),
     }
-    Value::Double(out)
 }
 
-fn err_unsupported(line: u32, col: u32, what_en: &str, what_fa: &str) -> McError {
-    McError::new(
-        ids::UNSUPPORTED,
-        line,
-        col,
-        format!("{what_en} arrives in a later milestone (linear-algebra dispatch, doc 04 §3)."),
-        format!("{what_fa} در مایل‌استون‌های بعدی می‌آید (dispatch جبر خطی، سند ۰۴ بخش ۳)."),
-    )
-}
-
-fn binary(op: BinOp, a: Value, b: Value, line: u32, col: u32) -> Result<Value, McError> {
-    let fa = a.as_scalar();
-    let fb = b.as_scalar();
-
-    // اسکالر ↔ اسکالر: مستقیم
-    if let (Some(x), Some(y)) = (fa, fb) {
-        return Ok(Value::Double(Matrix::scalar(match op {
-            BinOp::Add => x + y,
-            BinOp::Sub => x - y,
-            BinOp::Mul => x * y,
-            BinOp::Div => x / y,
-            BinOp::Pow => x.powf(y),
-        })));
-    }
-
-    let a_empty = matches!(&a, Value::Double(m) if m.is_empty());
-    let b_empty = matches!(&b, Value::Double(m) if m.is_empty());
-    let (ar, ac) = a.shape();
-    let (br, bc) = b.shape();
-
-    match op {
+fn apply_binary(op: BinOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    let (a, b) = (as_num(l, line, col)?, as_num(r, line, col)?);
+    let m = match op {
         BinOp::Add | BinOp::Sub => {
-            if a_empty || b_empty {
-                return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
+            let (ar, ac, br, bc) = (a.rows(), a.cols(), b.rows(), b.cols());
+            let a_scalar = a.is_scalar();
+            let b_scalar = b.is_scalar();
+            // + و − متلب: ابعاد برابر، یا یکی اسکالر (بروزکست)
+            if !a_scalar && !b_scalar && (ar, ac) != (br, bc) {
+                return Err(McError::new(
+                    ids::SIZE_MISMATCH, line, col,
+                    format!("Plus/minus: sizes must agree or one scalar, got {ar}x{ac} and {br}x{bc}."),
+                    format!("جمع/تفریق: ابعاد باید هم‌خوان یا یکی اسکالر باشد؛ دریافت شد {ar}×{ac} و {br}×{bc}."),
+                ));
             }
-            let f = |x: f64, y: f64| match op {
-                BinOp::Add => x + y,
-                _ => x - y,
-            };
-            if a_scalar_shape(ar, ac) {
-                let x = fa.unwrap_or(0.0);
-                return Ok(apply_scalarwise(&b, |y| f(x, y)));
-            }
-            if a_scalar_shape(br, bc) {
-                let y = fb.unwrap_or(0.0);
-                return Ok(apply_scalarwise(&a, |x| f(x, y)));
-            }
-            if (ar, ac) == (br, bc) {
-                // Value در P0 فقط یک واریانت دارد — الگو بی‌شرط است.
-                let Value::Double(ma) = &a;
-                let Value::Double(mb) = &b;
-                return Ok(elementwise2(ma, mb, f));
-            }
-            Err(McError::new(
-                ids::SIZE_MISMATCH,
-                line,
-                col,
-                format!("Matrix dimensions must agree: ({ar}×{ac}) vs ({br}×{bc})."),
-                format!("ابعاد ماتریس‌ها نمی‌خواند: ({ar}×{ac}) با ({br}×{bc})."),
-            ))
+            broadcast2(&a, &b, "plus", |x, y| {
+                if matches!(op, BinOp::Add) {
+                    x + y
+                } else {
+                    x - y
+                }
+            })?
         }
         BinOp::Mul => {
-            if a_empty || b_empty {
-                return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
+            // ضرب ماتریسی؛ اسکالرها بروزکست (سند ۰۲ §5)
+            if a.is_scalar() || b.is_scalar() {
+                broadcast2(&a, &b, "mtimes", |x, y| x * y)?
+            } else {
+                if a.cols() != b.rows() {
+                    return Err(McError::new(
+                        ids::SIZE_MISMATCH, line, col,
+                        format!("mtimes: inner dimensions must agree, got {ar}x{ac} and {br}x{bc}.", ar = a.rows(), ac = a.cols(), br = b.rows(), bc = b.cols()),
+                        format!("ضرب ماتریسی: ابعاد داخلی باید هم‌خوان باشند؛ دریافت شد {ar}×{ac} و {br}×{bc}.", ar = a.rows(), ac = a.cols(), br = b.rows(), bc = b.cols()),
+                    ));
+                }
+                matmul(&a, &b)
             }
-            if a_scalar_shape(ar, ac) {
-                let x = fa.unwrap_or(0.0);
-                return Ok(apply_scalarwise(&b, |y| x * y));
-            }
-            if a_scalar_shape(br, bc) {
-                let y = fb.unwrap_or(0.0);
-                return Ok(apply_scalarwise(&a, |x| x * y));
-            }
-            // ضرب ماتریسی در P1 با dispatch سند ۰۴ بخش ۳ می‌آید — رد صادقانه.
-            Err(err_unsupported(
-                line,
-                col,
-                "Matrix product (*), shapes accepted",
-                "ضرب ماتریسی (*)",
-            ))
+        }
+        BinOp::ElemMul | BinOp::ElemDiv | BinOp::ElemPow => {
+            let f = match op {
+                BinOp::ElemMul => |x: f64, y: f64| x * y,
+                BinOp::ElemDiv => |x: f64, y: f64| x / y, // IEEE: 0/0 = NaN (سند ۰۳ §11)
+                _ => |x: f64, y: f64| x.powf(y),
+            };
+            broadcast2(&a, &b, "elementwise", f)?
         }
         BinOp::Div => {
-            if a_empty || b_empty {
-                return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
+            // سمانتیک mrdivide متلب: a/b = a*inv(b) = (b'\a')' — اسکالر↔اسکالر = تقسیم معمولی
+            // (باگ قبلی: عملوندها برعکس بودند — 8/2 می‌داد 0.25)
+            if a.is_scalar() && b.is_scalar() {
+                Matrix::scalar(a.get(0, 0) / b.get(0, 0))
+            } else {
+                let at = transpose(&a);
+                let bt = transpose(&b);
+                let (x, _) = mc_num::mldivide(&bt, &at)?;
+                transpose(&x)
             }
-            if a_scalar_shape(br, bc) {
-                let y = fb.unwrap_or(1.0);
-                return Ok(apply_scalarwise(&a, |x| x / y));
-            }
-            // A/s مجاز است (rdivide)؛ s/A و A/B ماتریسی = mrdivide → P1.
-            Err(err_unsupported(
-                line,
-                col,
-                "mrdivide (/) on matrices",
-                "تقسیم ماتریسی (/)",
-            ))
+        }
+        BinOp::Backslash => {
+            let (x, _) = mc_num::mldivide(&a, &b)?;
+            x
         }
         BinOp::Pow => {
-            // A^2 (توان ماتریسی) و A.^2 (عضوی) هر دو P1 — رد صادقانه.
-            Err(err_unsupported(
-                line,
-                col,
-                "Power operator on arrays",
-                "اپراتور توان روی آرایه‌ها",
-            ))
+            if a.is_scalar() && b.is_scalar() {
+                Matrix::scalar(a.get(0, 0).powf(b.get(0, 0)))
+            } else if b.is_scalar() && a.rows() == a.cols() {
+                // توان ماتریسی توان صحیح نامنفی: A^0=I، A^n = تکرار ضرب (سمانتیک متلب §5)
+                let p = b.get(0, 0);
+                if p < 0.0 || p.fract() != 0.0 {
+                    return Err(McError::new(
+                        ids::UNSUPPORTED,
+                        line,
+                        col,
+                        "Negative/fractional matrix power needs inv/expm — arrives in P2.",
+                        "توان منفی/اعشاری ماتریسی به inv/expm نیاز دارد — در P2 می‌آید.",
+                    ));
+                }
+                let n = p as usize;
+                let mut acc = Matrix::full(a.rows(), a.cols(), 0.0);
+                for i in 0..a.rows() {
+                    acc.set(i, i, 1.0);
+                }
+                for _ in 0..n {
+                    acc = matmul(&acc, &a);
+                }
+                acc
+            } else {
+                return Err(McError::new(
+                    ids::UNSUPPORTED, line, col,
+                    "Matrix power needs a square matrix and scalar exponent; use .^ for elementwise.",
+                    "توان ماتریسی به ماتریس مربع و توان اسکالر نیاز دارد؛ برای عنصری از .^ استفاده کنید.",
+                ));
+            }
+        }
+    };
+    Ok(Value::Double(m))
+}
+
+fn matmul(a: &Matrix, b: &Matrix) -> Matrix {
+    let mut out = Matrix::full(a.rows(), b.cols(), 0.0);
+    for c in 0..b.cols() {
+        for r in 0..a.rows() {
+            let mut acc = 0.0;
+            for k in 0..a.cols() {
+                acc += a.get(r, k) * b.get(k, c);
+            }
+            out.set(r, c, acc);
         }
     }
+    out
 }
 
-fn a_scalar_shape(r: usize, c: usize) -> bool {
-    r == 1 && c == 1
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::env::Environment;
-    use mc_parser::parse;
-
-    fn run(src: &str, env: &mut Environment) -> EvalOutcome {
-        let program = parse(src).unwrap_or_else(|e| panic!("parse {src:?}: {e}"));
-        eval_program(&program, env)
+fn transpose(m: &Matrix) -> Matrix {
+    let mut out = Matrix::full(m.cols(), m.rows(), 0.0);
+    for c in 0..m.cols() {
+        for r in 0..m.rows() {
+            out.set(c, r, m.get(r, c));
+        }
     }
-
-    fn last_text(out: &EvalOutcome) -> &str {
-        out.outputs
-            .last()
-            .map(|o| o.text.as_str())
-            .unwrap_or("<no output>")
-    }
-
-    #[test]
-    fn demo_one_plus_one() {
-        // دمو رسمی P0 (سند ۰۷): کنسول خالی که 1+1 = 2 را نشان می‌دهد.
-        let mut env = Environment::new();
-        let out = run("1+1", &mut env);
-        assert!(out.error.is_none());
-        assert_eq!(last_text(&out), "ans = 2");
-    }
-
-    #[test]
-    fn assignment_and_ans_chain() {
-        let mut env = Environment::new();
-        let out = run("x = 5", &mut env);
-        assert_eq!(last_text(&out), "x = 5");
-        let out = run("2^3^2", &mut env); // چپ‌گرا: 64
-        assert_eq!(last_text(&out), "ans = 64");
-        let out = run("x + ans", &mut env);
-        assert_eq!(last_text(&out), "ans = 69");
-    }
-
-    #[test]
-    fn suppression_semantics() {
-        let mut env = Environment::new();
-        let out = run("1; x = 2;", &mut env);
-        assert!(out.outputs.is_empty());
-        assert!(env.get("x").is_some());
-        // ans نباید عوض شده باشد — فقط دستور نمایش‌دار ans را می‌سازد.
-        assert!(env.get("ans").is_none());
-    }
-
-    #[test]
-    fn matlab_precedence_examples() {
-        let mut env = Environment::new();
-        assert_eq!(last_text(&run("-2^2", &mut env)), "ans = -4");
-        assert_eq!(last_text(&run("2^-2", &mut env)), "ans = 0.25");
-        assert_eq!(last_text(&run("6/2*3", &mut env)), "ans = 9");
-        assert_eq!(last_text(&run("1-2-3", &mut env)), "ans = -4");
-        assert_eq!(last_text(&run("(1+2)*3", &mut env)), "ans = 9");
-    }
-
-    #[test]
-    fn ieee_semantics() {
-        let mut env = Environment::new();
-        assert_eq!(last_text(&run("1/0", &mut env)), "ans = Inf");
-        assert_eq!(last_text(&run("0/0", &mut env)), "ans = NaN");
-        assert_eq!(last_text(&run("-1/0", &mut env)), "ans = -Inf");
-    }
-
-    #[test]
-    fn undefined_variable_with_did_you_mean() {
-        let mut env = Environment::new();
-        run("x1 = 7", &mut env);
-        let out = run("x2 + 1", &mut env);
-        let err = out.error.expect("error expected");
-        assert_eq!(err.id, ids::UNDEFINED_VARIABLE);
-        assert_eq!(err.suggestion.as_deref(), Some("x1"));
-        assert_eq!(err.line, 1);
-        assert_eq!(err.col, 1);
-    }
-
-    #[test]
-    fn size_mismatch_reports_both_shapes() {
-        let mut env = Environment::new();
-        env.set("A", Value::Double(Matrix::full(2, 3, 1.0)));
-        env.set("B", Value::Double(Matrix::full(4, 3, 1.0)));
-        let out = run("A + B", &mut env);
-        let err = out.error.expect("mismatch expected");
-        assert_eq!(err.id, ids::SIZE_MISMATCH);
-        assert!(err.message_en.contains("(2×3)"));
-        assert!(err.message_en.contains("(4×3)"));
-    }
-
-    #[test]
-    fn scalar_broadcast_and_same_shape_add() {
-        let mut env = Environment::new();
-        env.set(
-            "A",
-            Value::Double(Matrix::from_columns(2, 1, vec![1.0, 2.0])),
-        );
-        let out = run("A + 1", &mut env);
-        assert_eq!(last_text(&out), "ans = [2; 3]");
-        let out = run("A + A", &mut env);
-        assert_eq!(last_text(&out), "ans = [2; 4]");
-    }
-
-    #[test]
-    fn empty_matrix_semantics() {
-        let mut env = Environment::new();
-        env.set("E", Value::Double(Matrix::full(0, 0, 0.0)));
-        assert_eq!(last_text(&run("E + 1", &mut env)), "ans = []");
-    }
-
-    #[test]
-    fn matrix_product_is_honestly_rejected_in_p0() {
-        let mut env = Environment::new();
-        env.set("A", Value::Double(Matrix::full(2, 2, 1.0)));
-        let out = run("A * A", &mut env);
-        let err = out.error.expect("unsupported expected");
-        assert_eq!(err.id, ids::UNSUPPORTED);
-    }
+    out
 }

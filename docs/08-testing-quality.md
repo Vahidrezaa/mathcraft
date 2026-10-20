@@ -23,6 +23,8 @@
 
 گیت‌ها: هیچ PR بدون عبور هر ۶ لایه merge نمی‌شود. `panic!` در کد مسیر محصول با grep-guard در CI ممنوع (به‌جز assertهای لایه داخلی).
 
+**سیاست دقیق grep-guard `todo!/unimplemented!`:** این گارد فقط روی «کد دست‌نویس ما» اعمال می‌شود — یعنی `crates/*/src` **به‌استثنای فایل‌های اتوژنریت** flutter_rust_bridge. الگوی استثنا در CI: `grep -rn -E "todo!|unimplemented!" crates/*/src --exclude='frb_generated*.rs'`. دلیل: فایل `frb_generated.rs` خروجی machine-generated کدِجن است (با هر بار اجرای codegen از نو ساخته می‌شود و هر دست‌کاری دستی در آن با اولین codegen بازنویسی می‌شود) و `unimplemented!("")`های آن در شاخه‌های codec مسیر Dart→Rust برای نوع‌هایی قرار می‌گیرد که قرارداد v1 فقط در جهت Rust→Dart منتقل می‌کند (EvalResult/ConsoleEvent/JobStatus/WorkspaceDelta) — یعنی در زمان اجرا از طرف قرارداد غیرقابل‌رسد هستند. اگر روزی قرارداد نسخه‌ای شود که این شاخه‌ها قابل‌رسد شوند (نوعی به‌عنوان آرگومان Dart→Rust منتقل شود)، FRB به‌طور خودکار decode واقعی تولید می‌کند و placeholder حذف می‌شود — هیچ اقدام دستی لازم نیست. نگهبان انسانی: هیچ‌گاه `todo!`/`unimplemented!`/`panic!` در فایل‌های دست‌نویس `crates/*/src` (به‌جز ماژول‌های test) نوشته نمی‌شود.
+
 ---
 
 ## ۲. Golden Tests — قلب سازگاری با MATLAB/Octave

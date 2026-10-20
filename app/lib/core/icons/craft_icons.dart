@@ -28,6 +28,7 @@ class CraftIcons {
   // اکشن‌های اصلی P0
   static const actionRun = CraftIconData('ic_action_run');
   static const actionStop = CraftIconData('ic_action_stop');
+  static const actionCopy = CraftIconData('ic_action_copy');
   static const actionSettings = CraftIconData('ic_action_settings');
   static const actionTheme = CraftIconData('ic_action_theme');
   static const actionLang = CraftIconData('ic_action_lang');

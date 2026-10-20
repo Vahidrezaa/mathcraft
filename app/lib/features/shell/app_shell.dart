@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/cds/cds_tokens.dart';
 import '../../core/icons/craft_icons.dart';
 import '../console/console_page.dart';
+import '../editor/editor_page.dart';
 import '../empty/empty_tabs.dart';
-import '../../state/app_settings.dart';
 import '../../l10n/app_localizations.dart';
+import '../../state/app_settings.dart';
 
 /// پوسته ناوبری پرتره — ۵ تب (سند ۰۶ بخش ۵.۱).
 /// لنداسکیپ/تبلت (ریل کناری و سه‌پنل) با breakpoint در همین فایل توسعه می‌یابد
@@ -20,7 +21,6 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   int _index = 0;
-  int _previous = 0;
 
   static const _tabIcons = [
     CraftIcons.navConsole,
@@ -30,25 +30,22 @@ class _AppShellState extends ConsumerState<AppShell> {
     CraftIcons.navLearn,
   ];
 
+  /// هر پنج صفحه همیشه زنده می‌مانند (بازخورد P0.2 — لگ تب‌سوییچ):
+  /// IndexedStack به‌جای AnimatedSwitcher؛ سوییچ آنی است، state هر تب
+  /// (مثلاً تاریخچه کنسول) حفظ می‌شود و ساخت مجدد صفحه‌ها حذف می‌شود.
+  /// لیست const = بدون rebuild فرزندان هنگام هر build پوسته.
+  static const _pages = <Widget>[
+    ConsolePage(),
+    EditorPage(),
+    PlotsTab(),
+    VarsTab(),
+    LearnTab(),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
-
-    final pages = <Widget>[
-      const ConsolePage(),
-      EditorTab(),
-      PlotsTab(),
-      VarsTab(),
-      LearnTab(),
-    ];
-
-    // جهت اسلاید تب‌سوییچ — هماهنگ با جهت متن (سند ۰۶ بخش ۸: ۲۰۰ms emphasized)
-    final forward = _index >= _previous;
-    final dx = (Directionality.of(context) == TextDirection.rtl
-            ? -1.0
-            : 1.0) *
-        (forward ? 0.04 : -0.04);
 
     return Scaffold(
       appBar: AppBar(
@@ -77,38 +74,14 @@ class _AppShellState extends ConsumerState<AppShell> {
           const SizedBox(width: 4),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: CdsMotion.tabSwitch,
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) {
-          // فقط صفحه جدید اسلاید می‌خورد؛ صفحه قبلی cross-fade می‌شود.
-          if (child.key == ValueKey(_index)) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(dx, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          }
-          return FadeTransition(opacity: animation, child: child);
-        },
-        child: KeyedSubtree(
-          key: ValueKey(_index),
-          child: pages[_index],
-        ),
+      body: IndexedStack(
+        index: _index,
+        children: _pages,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
-          setState(() {
-            _previous = _index;
-            _index = i;
-          });
+          setState(() => _index = i);
         },
         destinations: [
           for (var i = 0; i < _tabIcons.length; i++)

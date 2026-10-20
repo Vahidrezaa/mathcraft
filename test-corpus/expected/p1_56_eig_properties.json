@@ -1,0 +1,16 @@
+{
+ "script": "p1_56_eig_properties.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "v": [
+   [
+    1.0
+   ],
+   [
+    3.0
+   ]
+  ],
+  "sumv": 4.0
+ }
+}

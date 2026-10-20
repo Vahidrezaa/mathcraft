@@ -26,7 +26,6 @@ MathCraft یک **نرم‌افزار محاسبات مهندسی آفلاین، 
 | [06-ui-ux-design.md](06-ui-ux-design.md) | سیستم طراحی (CDS)، ناوبری، صفحات، کیبورد ریاضی، انیمیشن‌ها، RTL | طراح UI و توسعه‌دهنده Flutter | بزرگ |
 | [07-roadmap.md](07-roadmap.md) | نقشه راه مایل‌استونی، معیار پذیرش هر فاز، ریسک رجیستر | همه اعضای تیم | متوسط |
 | [08-testing-quality.md](08-testing-quality.md) | استراتژی تست: Golden Tests با Octave، property testing، fuzzing، CI، بنچمارک | مهندس کیفیت/DevOps | متوسط |
-| [09-environment-termux.md](09-environment-termux.md) | محیط توسعه بومی روی گوشی: نصب Flutter/NDK/SDK در Termux، مسیرهای جایگزین، بودجه‌ها | توسعه‌دهنده روی دستگاه اندرویدی | متوسط |
 
 **ترتیب پیشنهادی مطالعه برای عضو جدید تیم:** 00 → 01 → 06 → 07 → 02 → 03 → 04 → 05 → 08
 

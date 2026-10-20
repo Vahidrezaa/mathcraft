@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- رنگ راه‌اندازی = توکن darkBgBase از app/lib/core/cds/cds_tokens.dart
+     (سند ۰۶ §2.1) — تک منبع حقیقت رنگ در Dart است؛ اینجا فقط قرینه دقیق آن. -->
+<resources>
+    <color name="mc_launch_background">#FF101418</color>
+</resources>

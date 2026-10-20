@@ -1,0 +1,15 @@
+{
+ "script": "p1_08_eig_symmetric.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "v": [
+   [
+    1.0
+   ],
+   [
+    3.0
+   ]
+  ]
+ }
+}

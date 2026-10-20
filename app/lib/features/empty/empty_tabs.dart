@@ -6,20 +6,7 @@ import '../../l10n/app_localizations.dart';
 /// تب‌های هنوز فعال‌نشده — طبق سند ۰۶ بخش ۹، حالت خالی «خوش‌آمد عملی» است
 /// نه لوگوی خالی؛ و طبق اصل صداقت (سند ۰۰ اصل ۵)، مایل‌استون واقعی رسیدن
 /// هر قابلیت اعلام می‌شود (سند ۰۷).
-class EditorTab extends StatelessWidget {
-  const EditorTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return _EmptyTab(
-      title: l10n.emptyEditorTitle,
-      hint: l10n.emptyEditorHint,
-      codeSample: 'x = 1:5',
-    );
-  }
-}
-
+/// (تب ادیتور از P1 فعال شد — features/editor/editor_page.dart)
 class PlotsTab extends StatelessWidget {
   const PlotsTab({super.key});
 

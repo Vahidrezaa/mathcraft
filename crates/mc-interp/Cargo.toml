@@ -9,3 +9,4 @@ authors.workspace = true
 [dependencies]
 mc-core.workspace = true
 mc-parser.workspace = true
+mc-num.workspace = true

@@ -23,27 +23,10 @@ if [ ! -d android ]; then
   fi
   # تست پیش‌فرض flutter create با کد ما هم‌خوان نیست — تست واقعی: test/console_demo_test.dart
   rm -f test/widget_test.dart
-fi
-
-echo "== ۲/۴+ — تنظیمات مخصوص Termux (سند ۰۹ بخش ۷) =="
-if [ -d android ] && [ -n "${PREFIX:-}" ] && [[ "$PREFIX" == *com.termux* ]]; then
-  # ndkVersion قالب → NDK aarch64 نصب‌شده توسط setup-termux-flutter.sh
-  if [ -f android/app/build.gradle.kts ]; then
-    sed -i -E 's/ndkVersion = "[^"]*"/ndkVersion = "29.0.14206865"/' android/app/build.gradle.kts || true
-  fi
-  if [ -f android/app/build.gradle ]; then
-    sed -i -E 's/ndkVersion "[^"]*"/ndkVersion "29.0.14206865"/' android/app/build.gradle || true
-  fi
-  # حافظهٔ گوشی (سند ۰۹ بخش ۵) — heap محدود به‌جای پیش‌فرض دسکتاپ
-  if [ -f android/gradle.properties ]; then
-    sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx1536m -XX:MaxMetaspaceSize=512m/' android/gradle.properties || true
-  fi
-  # aapt2 بومی aarch64 (اگر setup-termux-flutter.sh اجرا شده باشد)
-  if [ -n "${ANDROID_HOME:-}" ] && [ -x "$ANDROID_HOME/aapt2/aapt2" ] && [ -f android/gradle.properties ]; then
-    grep -q "aapt2FromMavenOverride" android/gradle.properties || \
-      echo "android.aapt2FromMavenOverride=$ANDROID_HOME/aapt2/aapt2" >> android/gradle.properties
-  fi
-  echo "Termux tuning: ndkVersion=29.0.14206865, gradle heap 1536m, arm64 aapt2 (اگر موجود)"
+  # تم لانچ CDS (بازخورد P0.2: رفع «صفحه سیاه» استارتاپ — سند ۰۶ §2.1):
+  # قالب‌های tracked در scripts/android-launch-theme/ روی res تولیدشده کپی می‌شوند
+  # تا اولین فریم با پس‌زمینه تیره #101418 نشان داده شود، بدون فلش سفید/خاکستری.
+  cp -r ../scripts/android-launch-theme/. android/app/src/main/res/
 fi
 flutter pub get
 

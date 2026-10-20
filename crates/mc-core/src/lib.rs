@@ -28,4 +28,4 @@ pub mod value;
 
 pub use error::{ids, McError};
 pub use matrix::Matrix;
-pub use value::Value;
+pub use value::{AnonCall, AnonFn, Value};

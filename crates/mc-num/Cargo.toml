@@ -7,3 +7,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+faer.workspace = true
+mc-core.workspace = true
+
+[dev-dependencies]
+# property testing (doc 08 §3) — invariants of linear algebra on random matrices
+proptest = "1"

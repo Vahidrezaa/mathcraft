@@ -3,8 +3,10 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  # کد تولیدی FRB از تحلیل مستثناست (استاندارد برای خروجی codegen)؛
+  # قرارداد نسخه‌دار در mc-ffi پایش می‌شود (سند ۰۲ بخش ۳).
   exclude:
-    - build/**
+    - lib/src/rust/**
   language:
     strict-casts: true
     strict-inference: true

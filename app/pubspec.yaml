@@ -12,22 +12,22 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
-  # قرارداد موتور (سند ۰۲ بخش ۳) — دقیقاً هم‌نسخه با codegen (درس P0.2.4)
-  flutter_rust_bridge: "2.13.0"
+  # قرارداد موتور (سند ۰۲ بخش ۳) — فقط نسخه ۲
+  flutter_rust_bridge: "2.12.0"
   # State (سند ۰۲ بخش ۱: Riverpod)
   flutter_riverpod: ">=2.5.0 <3.0.0"
   # رندر Craft Icons (SVG اختصاصی — سند ۰۶ بخش ۲.۵؛ ایموجی ممنوع)
   flutter_svg: ">=2.0.0 <3.0.0"
-  # کد Dart تولیدی FRB از freezed استفاده می‌کند (سند ۰۲ بخش ۳ بند ۵)
-  freezed_annotation: ">=2.4.0 <4.0.0"
+  # نیاز flutter_rust_bridge_codegen — برای انواع تولیدی قرارداد (سند ۰۲ بخش ۳)
+  freezed_annotation: ">=2.2.0 <3.0.0"
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ">=4.0.0 <7.0.0"
-  # تولید .freezed.dart برای DTOهای FRB — نبودش = MissingDep در codegen (سند ۰۲ بخش ۳ بند ۵)
-  freezed: ">=2.4.0 <4.0.0"
-  build_runner: ">=2.4.0 <4.0.0"
+  # نیاز flutter_rust_bridge_codegen (سازنده کد قرارداد)
+  freezed: ">=2.5.0 <3.0.0"
+  build_runner: ">=2.4.0 <3.0.0"
 
 flutter:
   generate: true

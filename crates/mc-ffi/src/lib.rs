@@ -17,17 +17,6 @@
     )
 )]
 
-pub mod api;
-
-// این خط در انتهای فایل است، نه ابتدای آن: تزریق پیش‌فرض FRB بالای کامنت‌های
-// داخلی می‌رود و Rust با E0753 شکست می‌خورد (درس P0.2.4). FRB با دیدن همین
-// خط، دوباره تزریق نمی‌کند.
-// کد تولیدی FRB ماشین‌ساخت است — lint های سخت‌گیرانه crate (unwrap/unimplemented و…)
-// با allow سطح ماژول exempt می‌شود؛ این allow در lib.rs می‌ماند و با regenerate نمی‌پرد.
-#[allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::todo,
-    clippy::unimplemented
-)]
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
+
+pub mod api;

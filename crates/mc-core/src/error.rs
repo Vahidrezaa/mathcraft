@@ -9,6 +9,10 @@ use std::fmt;
 pub mod ids {
     pub const UNDEFINED_VARIABLE: &str = "MC:E1001_UNDEFINED_VARIABLE";
     pub const SIZE_MISMATCH: &str = "MC:E2003_SIZE_MISMATCH";
+    // MC:E2004 — خانواده عددی (mc-num): پیوت دقیقاً صفر در LU/مثلثی/Thomas (سند ۰۴ §3).
+    pub const SINGULAR_MATRIX: &str = "MC:E2004_SINGULAR_MATRIX";
+    // MC:E2005 — شکست Cholesky: ماتریس متقارن مثبت معین نیست (سند ۰۴ §3.1).
+    pub const NOT_POSITIVE_DEFINITE: &str = "MC:E2005_NOT_POSITIVE_DEFINITE";
     pub const PARSE_ERROR: &str = "MC:E3001_PARSE_ERROR";
     pub const UNSUPPORTED: &str = "MC:E9xxx_UNSUPPORTED";
 }

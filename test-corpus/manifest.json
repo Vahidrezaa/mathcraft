@@ -1,0 +1,445 @@
+{
+ "tol_default": 1e-09,
+ "cases": [
+  {
+   "script": "p1_01_linear_system_2x2.m",
+   "vars": [
+    "x"
+   ]
+  },
+  {
+   "script": "p1_02_linear_system_5x5.m",
+   "vars": [
+    "maxabs"
+   ]
+  },
+  {
+   "script": "p1_03_backslash_tridiagonal.m",
+   "vars": [
+    "r"
+   ]
+  },
+  {
+   "script": "p1_04_overdetermined_exact.m",
+   "vars": [
+    "x",
+    "r"
+   ]
+  },
+  {
+   "script": "p1_05_underdetermined_min_norm.m",
+   "vars": [
+    "x"
+   ]
+  },
+  {
+   "script": "p1_06_rref_free_variable.m",
+   "vars": [
+    "r"
+   ]
+  },
+  {
+   "script": "p1_07_det_and_inv.m",
+   "vars": [
+    "d",
+    "I"
+   ]
+  },
+  {
+   "script": "p1_08_eig_symmetric.m",
+   "vars": [
+    "v"
+   ]
+  },
+  {
+   "script": "p1_09_chol_and_norm.m",
+   "vars": [
+    "err",
+    "n"
+   ]
+  },
+  {
+   "script": "p1_10_transpose_identity.m",
+   "vars": [
+    "err"
+   ]
+  },
+  {
+   "script": "p1_11_for_sum_squares.m",
+   "vars": [
+    "s"
+   ]
+  },
+  {
+   "script": "p1_12_for_matrix_columns.m",
+   "vars": [
+    "t"
+   ]
+  },
+  {
+   "script": "p1_13_while_break.m",
+   "vars": [
+    "s",
+    "k"
+   ]
+  },
+  {
+   "script": "p1_14_anon_capture.m",
+   "vars": [
+    "y"
+   ]
+  },
+  {
+   "script": "p1_15_nested_anon_closure.m",
+   "vars": [
+    "y"
+   ]
+  },
+  {
+   "script": "p1_16_colon_semantics.m",
+   "vars": [
+    "n",
+    "last"
+   ]
+  },
+  {
+   "script": "p1_17_ans_suppression.m",
+   "vars": [
+    "ans"
+   ]
+  },
+  {
+   "script": "p1_18_indexed_growth.m",
+   "vars": [
+    "x"
+   ]
+  },
+  {
+   "script": "p1_19_end_indexing.m",
+   "vars": [
+    "a",
+    "s"
+   ]
+  },
+  {
+   "script": "p1_20_matrix_vs_elementwise_power.m",
+   "vars": [
+    "d1",
+    "d2"
+   ]
+  },
+  {
+   "script": "p1_21_elementwise_identities.m",
+   "vars": [
+    "y1",
+    "y2",
+    "y3",
+    "y4"
+   ]
+  },
+  {
+   "script": "p1_22_trig_identity.m",
+   "vars": [
+    "s",
+    "t"
+   ]
+  },
+  {
+   "script": "p1_23_inverse_trig.m",
+   "vars": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "script": "p1_24_hyperbolic_identity.m",
+   "vars": [
+    "a",
+    "b",
+    "idd"
+   ]
+  },
+  {
+   "script": "p1_25_rounding_family.m",
+   "vars": [
+    "r",
+    "f",
+    "fl",
+    "ce"
+   ]
+  },
+  {
+   "script": "p1_26_sign_abs.m",
+   "vars": [
+    "s",
+    "a"
+   ]
+  },
+  {
+   "script": "p1_27_mod_rem_signs.m",
+   "vars": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  {
+   "script": "p1_28_log_family.m",
+   "vars": [
+    "l1",
+    "l2",
+    "l3"
+   ]
+  },
+  {
+   "script": "p1_29_sqrt_exp_elementwise.m",
+   "vars": [
+    "S",
+    "e"
+   ]
+  },
+  {
+   "script": "p1_30_atan2_quadrants.m",
+   "vars": [
+    "q1",
+    "q2",
+    "q3",
+    "q4"
+   ]
+  },
+  {
+   "script": "p1_31_reductions_vector.m",
+   "vars": [
+    "s",
+    "p",
+    "m",
+    "mn",
+    "cs"
+   ]
+  },
+  {
+   "script": "p1_32_reductions_matrix_dims.m",
+   "vars": [
+    "c",
+    "r",
+    "t"
+   ]
+  },
+  {
+   "script": "p1_33_cumprod_diff.m",
+   "vars": [
+    "cp",
+    "d"
+   ]
+  },
+  {
+   "script": "p1_34_mean_all_any.m",
+   "vars": [
+    "m",
+    "a1",
+    "q"
+   ]
+  },
+  {
+   "script": "p1_35_find_column_major.m",
+   "vars": [
+    "f",
+    "s"
+   ]
+  },
+  {
+   "script": "p1_36_sort_vector_flags.m",
+   "vars": [
+    "a",
+    "d"
+   ]
+  },
+  {
+   "script": "p1_37_sort_matrix_columns.m",
+   "vars": [
+    "a",
+    "d"
+   ]
+  },
+  {
+   "script": "p1_38_nan_semantics.m",
+   "vars": [
+    "s",
+    "mx",
+    "mn",
+    "sm"
+   ]
+  },
+  {
+   "script": "p1_39_constructors.m",
+   "vars": [
+    "zsum",
+    "osum",
+    "esum"
+   ]
+  },
+  {
+   "script": "p1_40_linspace_logspace.m",
+   "vars": [
+    "l",
+    "n",
+    "lg"
+   ]
+  },
+  {
+   "script": "p1_41_colon_steps.m",
+   "vars": [
+    "a",
+    "b",
+    "n"
+   ]
+  },
+  {
+   "script": "p1_42_diag_modes.m",
+   "vars": [
+    "m",
+    "dd"
+   ]
+  },
+  {
+   "script": "p1_43_tril_triu.m",
+   "vars": [
+    "L",
+    "U",
+    "zs"
+   ]
+  },
+  {
+   "script": "p1_44_reshape_repmat.m",
+   "vars": [
+    "A",
+    "t",
+    "R"
+   ]
+  },
+  {
+   "script": "p1_45_size_length_numel.m",
+   "vars": [
+    "s",
+    "l",
+    "n",
+    "q"
+   ]
+  },
+  {
+   "script": "p1_46_transpose_forms.m",
+   "vars": [
+    "B",
+    "err"
+   ]
+  },
+  {
+   "script": "p1_47_det_inv_diagonal.m",
+   "vars": [
+    "d",
+    "I",
+    "t"
+   ]
+  },
+  {
+   "script": "p1_48_det_upper_triangular.m",
+   "vars": [
+    "d",
+    "d2"
+   ]
+  },
+  {
+   "script": "p1_49_rank_trace.m",
+   "vars": [
+    "rk",
+    "rk2",
+    "t"
+   ]
+  },
+  {
+   "script": "p1_50_rref_two_cases.m",
+   "vars": [
+    "R",
+    "R2"
+   ]
+  },
+  {
+   "script": "p1_51_solve_exact_2x2.m",
+   "vars": [
+    "x",
+    "res"
+   ]
+  },
+  {
+   "script": "p1_52_solve_overdetermined.m",
+   "vars": [
+    "x",
+    "r"
+   ]
+  },
+  {
+   "script": "p1_53_least_squares_general.m",
+   "vars": [
+    "x",
+    "rn"
+   ]
+  },
+  {
+   "script": "p1_54_triangular_solve.m",
+   "vars": [
+    "x",
+    "chk"
+   ]
+  },
+  {
+   "script": "p1_55_chol_reconstruction.m",
+   "vars": [
+    "err",
+    "l11"
+   ]
+  },
+  {
+   "script": "p1_56_eig_properties.m",
+   "vars": [
+    "v",
+    "sumv"
+   ]
+  },
+  {
+   "script": "p1_57_svd_values.m",
+   "vars": [
+    "s",
+    "s1",
+    "s2"
+   ]
+  },
+  {
+   "script": "p1_58_qr_upper_factor.m",
+   "vars": [
+    "r11",
+    "r21",
+    "r22"
+   ]
+  },
+  {
+   "script": "p1_59_dot_cross_kron.m",
+   "vars": [
+    "d",
+    "c",
+    "k"
+   ]
+  },
+  {
+   "script": "p1_60_cond_and_norms.m",
+   "vars": [
+    "c1",
+    "ci",
+    "n1",
+    "ni",
+    "nf"
+   ]
+  }
+ ]
+}

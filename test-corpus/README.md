@@ -8,10 +8,16 @@
 - قاعده ضد تقلب: expected هرگز از خود MathCraft تولید نمی‌شود
 - هارنس از P0 (این ریپو) شروع می‌شود؛ ۶۰ اسکریپت اول در P1 (سند ۰۷)
 
-ساختار (در P1 شکل می‌گیرد):
+ساختار (فعال از جلسه 2026-10-20 — ۶۰ اسکریپت P1):
 
 ```
-scripts/   اسکریپت‌های .m
-expected/  خروجی مرجع JSON (canonical: sort keys, 15-digit rounding)
-manifest   متادیتا + tolerance per case
+scripts/           p1_01..p1_60.m — منبع یگانه اسکریپت‌ها (قطعی، tol 1e-9)
+expected/          خروجی مرجع JSON (اوراکل numpy/LAPACK — scripts/gen_corpus.py)
+manifest.json      متادیتا + متغیرهای capture + tolerance per case
+octave_regen.m     اجرای کل کورپوس با Octave ≥ 7 → generated/
+generated/         خروجی موقت Octave (گیت‌شده) — با expected مقایسه می‌شود
 ```
+
+اجرای محلی: `python3 scripts/gen_corpus.py` · تست Rust: `cargo test -p mc-interp --test corpus_p1_golden`
+CI: job ‏`octave-differential` = بازتولید با Octave واقعی + `scripts/compare_expected.py` (tol 1e-9).
+تا ۶۰/۲۰۰ — باقی در P2+ (سند ۰۷).

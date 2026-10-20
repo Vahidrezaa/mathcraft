@@ -1,7 +1,19 @@
-//! Lexer — ساختار واژگانی سند ۰۳ بخش ۲.
+//! Lexer — ساختار واژگانی سند ۰۳ بخش ۲ (نسخه P1).
 //!
 //! موقعیت‌ها ۱-پایه‌اند (خط، ستون) و ستون به‌ازای هر codepoint جلو می‌رود
 //! (سازگار با قاعده یونیکد سند ۰۳ بخش ۱۰).
+//!
+//! P1 اضافه می‌کند (سند ۰۳ بخش‌های ۴-۹): ماتریس لفظی `[]`، کولن، مقایسه/منطق،
+//! عملگرهای عنصری `.* ./ .^`، بک‌اسلش `\`، ترانهاده `'`/`.'`، رشته‌ها `'..'`/`".."`،
+//! توابع بی‌نام `@`، آکولاد `{}` برای case-list.
+//!
+//! دو پرچم حیاتی برای ابهام‌زدایی متلب:
+//! - `space_before`: فاصلهٔ واقعی قبل از توکن — قانون سند ۰۳ بخش ۴:
+//!   `[1 -2]` = دو عنصر (منوس یگانی: فاصله قبل، بدون فاصله بعد) ولی
+//!   `[1 - 2]` و `[1-2]` = یک عنصر (دویی). پارسر ترکیب
+//!   «space_before علامت» و «space_before توکن بعدی» را می‌سنجد.
+//! - `last_was_operand_end`: توکن قبلی پایان‌یافتهٔ عملوند است — تمایز
+//!   ترانهاده `'` از شروع رشته (سند ۰۳ بخش ۵: `a'` ترانهاده، `f('x')` رشته).
 
 use mc_core::{ids, McError};
 
@@ -9,13 +21,37 @@ use mc_core::{ids, McError};
 pub enum Tok {
     Num(f64),
     Ident(String),
+    Str(String),
     Plus,
     Minus,
     Star,
     Slash,
     Caret,
+    Backslash,
+    DotStar,
+    DotSlash,
+    DotCaret,
+    /// ترانهاده مزدوج `'` (فقط بعد از پایان‌یافتهٔ عملوند)
+    Transpose,
+    /// ترانهاده بدون مزدوج `.'`
+    DotTranspose,
+    Colon,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    AndAnd,
+    OrOr,
+    Not,
+    At,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    LBrace,
+    RBrace,
     Comma,
     Semicolon,
     Assign,
@@ -28,6 +64,8 @@ pub struct Token {
     pub tok: Tok,
     pub line: u32,
     pub col: u32,
+    /// فاصلهٔ واقعی (space/tab/خط جدید) قبل از این توکن — ابهام‌زدایی ماتریس (سند ۰۳ بخش ۴).
+    pub space_before: bool,
 }
 
 impl Token {
@@ -36,13 +74,35 @@ impl Token {
         match &self.tok {
             Tok::Num(_) => "number".to_owned(),
             Tok::Ident(n) => format!("'{n}'"),
+            Tok::Str(_) => "string".to_owned(),
             Tok::Plus => "'+'".to_owned(),
             Tok::Minus => "'-'".to_owned(),
             Tok::Star => "'*'".to_owned(),
             Tok::Slash => "'/'".to_owned(),
             Tok::Caret => "'^'".to_owned(),
+            Tok::Backslash => "'\\'".to_owned(),
+            Tok::DotStar => "'.*'".to_owned(),
+            Tok::DotSlash => "'./'".to_owned(),
+            Tok::DotCaret => "'.^'".to_owned(),
+            Tok::Transpose => "'''".to_owned(),
+            Tok::DotTranspose => "\" .'\"".to_owned(),
+            Tok::Colon => "':'".to_owned(),
+            Tok::Eq => "'=='".to_owned(),
+            Tok::Ne => "'~='".to_owned(),
+            Tok::Lt => "'<'".to_owned(),
+            Tok::Le => "'<='".to_owned(),
+            Tok::Gt => "'>'".to_owned(),
+            Tok::Ge => "'>='".to_owned(),
+            Tok::AndAnd => "'&&'".to_owned(),
+            Tok::OrOr => "'||'".to_owned(),
+            Tok::Not => "'~'".to_owned(),
+            Tok::At => "'@'".to_owned(),
             Tok::LParen => "'('".to_owned(),
             Tok::RParen => "')'".to_owned(),
+            Tok::LBracket => "'['".to_owned(),
+            Tok::RBracket => "']'".to_owned(),
+            Tok::LBrace => "'{'".to_owned(),
+            Tok::RBrace => "'}'".to_owned(),
             Tok::Comma => "','".to_owned(),
             Tok::Semicolon => "';'".to_owned(),
             Tok::Assign => "'='".to_owned(),
@@ -57,6 +117,10 @@ struct Lexer {
     pos: usize,
     line: u32,
     col: u32,
+    /// فاصلهٔ انباشته‌شده قبل از توکن بعدی.
+    pending_space: bool,
+    /// توکن قبلی پایان‌یافتهٔ عملوند؟ (تمایز `'` ترانهاده/رشته)
+    last_was_operand_end: bool,
 }
 
 /// Maximum significant identifier length, like MATLAB `namelengthmax` (doc 03 §2).
@@ -68,18 +132,23 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
         pos: 0,
         line: 1,
         col: 1,
+        pending_space: false,
+        last_was_operand_end: false,
     };
-    let mut out = Vec::new();
+    let mut out: Vec<Token> = Vec::new();
     while let Some(c) = lx.peek() {
         match c {
             ' ' | '\t' | '\r' => {
+                lx.pending_space = true;
                 lx.advance();
             }
             '\n' => {
+                lx.pending_space = true;
                 out.push(lx.make(Tok::Newline));
                 lx.advance();
                 lx.line += 1;
                 lx.col = 1;
+                lx.last_was_operand_end = false;
             }
             '%' => {
                 // کامنت تا انتهای خط (سند ۰۳ بخش ۲) — `%%` هم همین‌جا پوشش داده می‌شود.
@@ -107,52 +176,199 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
             '0'..='9' => out.push(lx.lex_number()?),
             '.' if lx.peek_at(1).is_some_and(|n| n.is_ascii_digit()) => out.push(lx.lex_number()?),
             'A'..='Z' | 'a'..='z' | '_' => out.push(lx.lex_ident()?),
+            '\'' if lx.last_was_operand_end => {
+                // ترانهاده مزدوج — فقط بعد از پایان‌یافتهٔ عملوند (سند ۰۳ بخش ۵).
+                out.push(lx.make(Tok::Transpose));
+                lx.advance();
+                lx.last_was_operand_end = true;
+            }
+            '\'' => out.push(lx.lex_char_string()?),
+            '"' => out.push(lx.lex_double_string()?),
+            '@' => {
+                out.push(lx.make(Tok::At));
+                lx.advance();
+                lx.last_was_operand_end = false;
+            }
             '+' => {
                 out.push(lx.make(Tok::Plus));
                 lx.advance();
+                lx.last_was_operand_end = false;
             }
             '-' => {
                 out.push(lx.make(Tok::Minus));
                 lx.advance();
+                lx.last_was_operand_end = false;
             }
             '*' => {
                 out.push(lx.make(Tok::Star));
                 lx.advance();
+                lx.last_was_operand_end = false;
             }
             '/' => {
                 out.push(lx.make(Tok::Slash));
                 lx.advance();
+                lx.last_was_operand_end = false;
+            }
+            '\\' => {
+                out.push(lx.make(Tok::Backslash));
+                lx.advance();
+                lx.last_was_operand_end = false;
             }
             '^' => {
                 out.push(lx.make(Tok::Caret));
                 lx.advance();
+                lx.last_was_operand_end = false;
+            }
+            '.' => {
+                // عملگرهای عنصری .* ./ .^ .' (عدد/ادامه‌خط در بالا هندل شده‌اند)
+                match lx.peek_at(1) {
+                    Some('*') => {
+                        out.push(lx.make(Tok::DotStar));
+                        lx.advance();
+                        lx.advance();
+                    }
+                    Some('/') => {
+                        out.push(lx.make(Tok::DotSlash));
+                        lx.advance();
+                        lx.advance();
+                    }
+                    Some('^') => {
+                        out.push(lx.make(Tok::DotCaret));
+                        lx.advance();
+                        lx.advance();
+                    }
+                    Some('\'') => {
+                        out.push(lx.make(Tok::DotTranspose));
+                        lx.advance();
+                        lx.advance();
+                        lx.last_was_operand_end = true;
+                    }
+                    _ => {
+                        return Err(lx.err_here(
+                            ids::UNSUPPORTED,
+                            "Unsupported '.' usage (elementwise ops are .* ./ .^ .').",
+                            "استفادهٔ ناشناخته از «.» (عملگرهای عنصری: .* ./ .^ .').",
+                        ));
+                    }
+                }
+            }
+            ':' => {
+                out.push(lx.make(Tok::Colon));
+                lx.advance();
+                lx.last_was_operand_end = false;
+            }
+            '=' => {
+                if lx.peek_at(1) == Some('=') {
+                    out.push(lx.make(Tok::Eq));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    out.push(lx.make(Tok::Assign));
+                    lx.advance();
+                }
+                lx.last_was_operand_end = false;
+            }
+            '~' => {
+                if lx.peek_at(1) == Some('=') {
+                    out.push(lx.make(Tok::Ne));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    out.push(lx.make(Tok::Not));
+                    lx.advance();
+                }
+                lx.last_was_operand_end = false;
+            }
+            '<' => {
+                if lx.peek_at(1) == Some('=') {
+                    out.push(lx.make(Tok::Le));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    out.push(lx.make(Tok::Lt));
+                    lx.advance();
+                }
+                lx.last_was_operand_end = false;
+            }
+            '>' => {
+                if lx.peek_at(1) == Some('=') {
+                    out.push(lx.make(Tok::Ge));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    out.push(lx.make(Tok::Gt));
+                    lx.advance();
+                }
+                lx.last_was_operand_end = false;
+            }
+            '&' => {
+                if lx.peek_at(1) == Some('&') {
+                    out.push(lx.make(Tok::AndAnd));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    // & تک‌نویسی (and برداری) — P2؛ فعلاً خطای صریح
+                    return Err(lx.err_here(
+                        ids::UNSUPPORTED,
+                        "Single '&' (elementwise and) arrives in a later milestone; use '&&'.",
+                        "«&» تکی (and عنصری) در مایل‌استون بعدی می‌آید؛ از '&&' استفاده کنید.",
+                    ));
+                }
+                lx.last_was_operand_end = false;
+            }
+            '|' => {
+                if lx.peek_at(1) == Some('|') {
+                    out.push(lx.make(Tok::OrOr));
+                    lx.advance();
+                    lx.advance();
+                } else {
+                    return Err(lx.err_here(
+                        ids::UNSUPPORTED,
+                        "Single '|' (elementwise or) arrives in a later milestone; use '||'.",
+                        "«|» تکی (or عنصری) در مایل‌استون بعدی می‌آید؛ از '||' استفاده کنید.",
+                    ));
+                }
+                lx.last_was_operand_end = false;
             }
             '(' => {
                 out.push(lx.make(Tok::LParen));
                 lx.advance();
+                lx.last_was_operand_end = false;
             }
             ')' => {
                 out.push(lx.make(Tok::RParen));
                 lx.advance();
+                lx.last_was_operand_end = true;
+            }
+            '[' => {
+                out.push(lx.make(Tok::LBracket));
+                lx.advance();
+                lx.last_was_operand_end = false;
+            }
+            ']' => {
+                out.push(lx.make(Tok::RBracket));
+                lx.advance();
+                lx.last_was_operand_end = true;
+            }
+            '{' => {
+                out.push(lx.make(Tok::LBrace));
+                lx.advance();
+                lx.last_was_operand_end = false;
+            }
+            '}' => {
+                out.push(lx.make(Tok::RBrace));
+                lx.advance();
+                lx.last_was_operand_end = true;
             }
             ',' => {
                 out.push(lx.make(Tok::Comma));
                 lx.advance();
+                lx.last_was_operand_end = false;
             }
             ';' => {
                 out.push(lx.make(Tok::Semicolon));
                 lx.advance();
-            }
-            '=' => {
-                if lx.peek_at(1) == Some('=') {
-                    return Err(lx.err_here(
-                        ids::UNSUPPORTED,
-                        "Comparison operators ('==') arrive in a later milestone.",
-                        "اپراتورهای مقایسه ('==') در مایل‌استون‌های بعدی می‌آیند.",
-                    ));
-                }
-                out.push(lx.make(Tok::Assign));
-                lx.advance();
+                lx.last_was_operand_end = false;
             }
             other => {
                 // هیچ کاراکتری «بی‌صدا» نادیده گرفته نمی‌شود (سند ۰۳ بخش ۱ بند ۲).
@@ -168,6 +384,7 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
         tok: Tok::Eof,
         line: lx.line,
         col: lx.col,
+        space_before: true,
     });
     Ok(out)
 }
@@ -192,11 +409,15 @@ impl Lexer {
         self.col += 1;
     }
 
-    fn make(&self, tok: Tok) -> Token {
+    /// ساخت توکن با مصرف `pending_space` (فقط یک‌بار مصرف می‌شود).
+    fn make(&mut self, tok: Tok) -> Token {
+        let space_before = self.pending_space;
+        self.pending_space = false;
         Token {
             tok,
             line: self.line,
             col: self.col,
+            space_before,
         }
     }
 
@@ -208,13 +429,17 @@ impl Lexer {
     fn lex_number(&mut self) -> Result<Token, McError> {
         let start_line = self.line;
         let start_col = self.col;
+        let space_before = self.pending_space;
+        self.pending_space = false;
         let mut text = String::new();
 
         while self.peek().is_some_and(|c| c.is_ascii_digit()) {
             text.push(self.peek().unwrap_or('0'));
             self.advance();
         }
-        if self.peek() == Some('.') {
+        // نقطهٔ اعشار فقط اگر رقم بعدش بیاید یا پایان ورودی باشد — رفتار متلب:
+        // `2.'` و `2.*3` نقطه را نمی‌بلعد (نقطه متعلق به .'/.* است) ولی `1.5` و `1.` اعشارند.
+        if self.peek() == Some('.') && self.peek_at(1).is_none_or(|c| c.is_ascii_digit()) {
             text.push('.');
             self.advance();
             while self.peek().is_some_and(|c| c.is_ascii_digit()) {
@@ -250,28 +475,32 @@ impl Lexer {
             }
         }
 
-        // پسوند موهومی i/j — کامل در نسخه ۱ (سند ۰۳ بخش ۳) اما نه در P0: خطای صریح.
+        // پسوند موهومی i/j — کامل در نسخه ۱ (سند ۰۳ بخش ۳) اما نه در P1: خطای صریح.
         if matches!(self.peek(), Some('i') | Some('j')) {
             return Err(McError::new(
                 ids::UNSUPPORTED,
                 start_line,
                 start_col,
-                "Complex literals (like 3i) arrive in a later milestone.",
-                "اعداد مختلط (مثل 3i) در مایل‌استون‌های بعدی می‌آیند.",
+                "Complex literals (like 3i) arrive with P2 complex support.",
+                "اعداد مختلط (مثل 3i) با پشتیبانی مختلط P2 می‌آیند.",
             ));
         }
 
         let value: f64 = text.parse().unwrap_or(f64::INFINITY); // سرریز مثل 1e999 → Inf (رفتار IEEE، سند ۰۳ بخش ۱۱)
+        self.last_was_operand_end = true;
         Ok(Token {
             tok: Tok::Num(value),
             line: start_line,
             col: start_col,
+            space_before,
         })
     }
 
     fn lex_ident(&mut self) -> Result<Token, McError> {
         let start_line = self.line;
         let start_col = self.col;
+        let space_before = self.pending_space;
+        self.pending_space = false;
         let mut name = String::new();
         while self
             .peek()
@@ -289,10 +518,100 @@ impl Lexer {
                 ));
             }
         }
+        self.last_was_operand_end = true;
         Ok(Token {
             tok: Tok::Ident(name),
             line: start_line,
             col: start_col,
+            space_before,
+        })
+    }
+
+    /// رشته کاراکتری با `'` (سند ۰۳ بخش ۱۰) — `''` داخل رشته = خود `'`.
+    fn lex_char_string(&mut self) -> Result<Token, McError> {
+        let start_line = self.line;
+        let start_col = self.col;
+        let space_before = self.pending_space;
+        self.pending_space = false;
+        self.advance(); // کوتیشن باز
+        let mut s = String::new();
+        loop {
+            match self.peek() {
+                None | Some('\n') => {
+                    return Err(McError::new(
+                        ids::PARSE_ERROR,
+                        start_line,
+                        start_col,
+                        "Unterminated character string (missing closing ').",
+                        "رشته کاراکتری بسته‌نشده (کوتیشن پایانی ' جا افتاده).",
+                    ));
+                }
+                Some('\'') => {
+                    if self.peek_at(1) == Some('\'') {
+                        s.push('\'');
+                        self.advance();
+                        self.advance();
+                    } else {
+                        self.advance(); // کوتیشن بسته
+                        break;
+                    }
+                }
+                Some(ch) => {
+                    s.push(ch);
+                    self.advance();
+                }
+            }
+        }
+        self.last_was_operand_end = true;
+        Ok(Token {
+            tok: Tok::Str(s),
+            line: start_line,
+            col: start_col,
+            space_before,
+        })
+    }
+
+    /// رشته scalar با `"` (سند ۰۳ بخش ۱۰) — `""` داخل رشته = خود `"`.
+    fn lex_double_string(&mut self) -> Result<Token, McError> {
+        let start_line = self.line;
+        let start_col = self.col;
+        let space_before = self.pending_space;
+        self.pending_space = false;
+        self.advance();
+        let mut s = String::new();
+        loop {
+            match self.peek() {
+                None | Some('\n') => {
+                    return Err(McError::new(
+                        ids::PARSE_ERROR,
+                        start_line,
+                        start_col,
+                        "Unterminated string (missing closing \").",
+                        "رشته بسته‌نشده (کوتیشن پایانی \" جا افتاده).",
+                    ));
+                }
+                Some('"') => {
+                    if self.peek_at(1) == Some('"') {
+                        s.push('"');
+                        self.advance();
+                        self.advance();
+                    } else {
+                        self.advance();
+                        break;
+                    }
+                }
+                Some(ch) => {
+                    s.push(ch);
+                    self.advance();
+                }
+            }
+        }
+        self.last_was_operand_end = true;
+        Ok(Token {
+            tok: Tok::Str(s),
+            line: start_line,
+            col: start_col,
+            space_before,
         })
     }
 }
@@ -385,5 +704,140 @@ mod tests {
         // کامنت فارسی قبل از خط دوم؛ موقعیت توکن بعدی باید درست باشد.
         let err = tokenize("% سلام\n1 & 2").unwrap_err();
         assert_eq!(err.line, 2);
+    }
+
+    // ---- تست‌های P1 ----
+
+    #[test]
+    fn transpose_vs_string_disambiguation() {
+        // بعد از پایان‌یافته → ترانهاده؛ بعد از عملگر/شروع → رشته
+        assert_eq!(
+            toks("a'"),
+            vec![Tok::Ident("a".into()), Tok::Transpose, Tok::Eof]
+        );
+        assert_eq!(
+            toks("2.'"),
+            vec![Tok::Num(2.0), Tok::DotTranspose, Tok::Eof]
+        );
+        assert_eq!(
+            toks("f('x')"),
+            vec![
+                Tok::Ident("f".into()),
+                Tok::LParen,
+                Tok::Str("x".into()),
+                Tok::RParen,
+                Tok::Eof
+            ]
+        );
+        // '' escape
+        assert_eq!(toks("'it''s'"), vec![Tok::Str("it's".into()), Tok::Eof]);
+        // رشته با "
+        assert_eq!(toks("\"سلام\""), vec![Tok::Str("سلام".into()), Tok::Eof]);
+    }
+
+    #[test]
+    fn comparison_and_logical_tokens() {
+        assert_eq!(
+            toks("a == b ~= c <= d >= e && f || ~g"),
+            vec![
+                Tok::Ident("a".into()),
+                Tok::Eq,
+                Tok::Ident("b".into()),
+                Tok::Ne,
+                Tok::Ident("c".into()),
+                Tok::Le,
+                Tok::Ident("d".into()),
+                Tok::Ge,
+                Tok::Ident("e".into()),
+                Tok::AndAnd,
+                Tok::Ident("f".into()),
+                Tok::OrOr,
+                Tok::Not,
+                Tok::Ident("g".into()),
+                Tok::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn elementwise_and_backslash_tokens() {
+        assert_eq!(
+            toks("A.*2 ./b .^c \\d"),
+            vec![
+                Tok::Ident("A".into()),
+                Tok::DotStar,
+                Tok::Num(2.0),
+                Tok::DotSlash,
+                Tok::Ident("b".into()),
+                Tok::DotCaret,
+                Tok::Ident("c".into()),
+                Tok::Backslash,
+                Tok::Ident("d".into()),
+                Tok::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn space_flags_for_matrix_ambiguity() {
+        // [1 -2] — منوس با فاصلهٔ قبلی → یگانی (پارسر با نگاه به بعدی تصمیم می‌گیرد)
+        let ts = tokenize("[1 -2]").unwrap();
+        assert!(ts[2].space_before, "spaced minus flagged");
+
+        // [1 - 2] — منوس با فاصله ولی توکن بعدی هم فاصله دارد → دوویی
+        let ts2 = tokenize("[1 - 2]").unwrap();
+        assert!(ts2[2].space_before);
+        // [1- 2] — منوس چسبیده به 1، فاصله بعد → بدون فاصله قبل
+        assert!(!tokenize("[1- 2]").unwrap()[2].space_before);
+        // [1-2] — منوس چسبیده → بدون فاصله
+        assert!(!tokenize("[1-2]").unwrap()[2].space_before);
+    }
+
+    #[test]
+    fn colon_and_brackets() {
+        assert_eq!(
+            toks("a(1:end)"),
+            vec![
+                Tok::Ident("a".into()),
+                Tok::LParen,
+                Tok::Num(1.0),
+                Tok::Colon,
+                Tok::Ident("end".into()),
+                Tok::RParen,
+                Tok::Eof
+            ]
+        );
+        assert_eq!(
+            toks("[1 2; 3 4]"),
+            vec![
+                Tok::LBracket,
+                Tok::Num(1.0),
+                Tok::Num(2.0),
+                Tok::Semicolon,
+                Tok::Num(3.0),
+                Tok::Num(4.0),
+                Tok::RBracket,
+                Tok::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn anonymous_fn_at_token() {
+        assert_eq!(
+            toks("f = @(x) x.^2"),
+            vec![
+                Tok::Ident("f".into()),
+                Tok::Assign,
+                Tok::At,
+                Tok::LParen,
+                Tok::Ident("x".into()),
+                Tok::RParen,
+                Tok::Ident("x".into()),
+                Tok::DotCaret,
+                Tok::Num(2.0),
+                Tok::Eof
+            ]
+        );
     }
 }

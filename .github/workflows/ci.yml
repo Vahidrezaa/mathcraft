@@ -21,11 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # پین هماهنگ با rust-toolchain.toml — جلوگیری از دانلود دوباره toolchain (سند ۰۸ §7)
       - name: Install pinned toolchain (rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: '1.99.1'
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
@@ -39,10 +37,11 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
-      - name: No todo!/unimplemented! in product path (doc 08 §2)
+      - name: No todo!/unimplemented! in hand-written product code (doc 08 §1)
         run: |
-          if grep -rn -E "todo!|unimplemented!" crates/*/src; then
-            echo "::error::todo!/unimplemented! is forbidden"
+          # frb_generated.rs خروجی اتوژنریت FRB است و مستثناست (سند ۰۸ §1)
+          if grep -rn -E "todo!|unimplemented!" crates/*/src --exclude='frb_generated*.rs'; then
+            echo "::error::todo!/unimplemented! is forbidden in hand-written code"
             exit 1
           fi
 
@@ -58,14 +57,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust (needed by flutter_rust_bridge_codegen)
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.99.1'
+        uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install flutter_rust_bridge_codegen (pinned — doc 02 s3.5)
-        run: cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --locked
 
       - uses: subosito/flutter-action@v2
         with:
@@ -77,12 +74,7 @@ jobs:
           flutter pub get
 
       - name: FRB codegen (generates lib/src/rust/)
-        working-directory: app
         run: flutter_rust_bridge_codegen generate
-
-      - name: build_runner (.freezed.dart for FRB DTOs — doc 02 s3.5)
-        working-directory: app
-        run: dart run build_runner build
 
       - name: Analyze
         run: |
@@ -93,3 +85,20 @@ jobs:
         run: |
           cd app
           flutter test
+
+  octave-differential:
+    name: Octave differential (corpus P1 — doc 08 §2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Octave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends octave
+
+      - name: Regenerate corpus output with Octave
+        run: octave --no-gui --eval "run('test-corpus/octave_regen.m')"
+
+      - name: Compare Octave vs expected (tol per case — default 1e-9)
+        run: python3 scripts/compare_expected.py

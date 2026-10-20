@@ -153,10 +153,10 @@ fn run_repl(lang: Lang) -> ExitCode {
         if trimmed.is_empty() {
             continue;
         }
-        // دستورهای کنسولی فقط روی خودِ خط (بدون حساس به بزرگی حرف)؛ خطوط دیگر
-        // عیناً و بدون تغییر به موتور می‌روند — نام متغیرها case-sensitive می‌مانند.
-        let lowered = trimmed.to_ascii_lowercase();
-        match commands::dispatch(&lowered, lang) {
+        // دستورهای کنسولی روی خودِ خط (بدون حساس به بزرگی حرفِ *کلیدواژه*)؛
+        // آرگومان‌ها (مسیر/نام) اصل بزرگی حرف را حفظ می‌کنند — dispatch خودش
+        // کلیدواژه‌ها را دقیق و lowercase می‌شناسد؛ خطوط دیگر عیناً به موتور می‌روند.
+        match commands::dispatch(trimmed, lang) {
             commands::Meta::Exit => break,
             commands::Meta::Handled => continue,
             commands::Meta::Demo => {

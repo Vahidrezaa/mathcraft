@@ -6,7 +6,7 @@
 [![CI](https://github.com/mathcraft/mathcraft/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-این ریپو در فاز **P0 (شالوده)** است — نقشه کامل در [`docs/`](docs/) (۱۰ سند پیش‌تولید و محیط، قرارداد رسمی پروژه).
+این ریپو در فاز **P0 (شالوده)** است — نقشه کامل در [`docs/`](docs/) (۹ سند پیش‌تولید، قرارداد رسمی پروژه).
 
 ---
 
@@ -23,7 +23,7 @@ Flutter UI (Dart)  ◄── قرارداد باریک flutter_rust_bridge v2 �
 |---|---|
 | `crates/` | ۸ کرِیت Rust workspace (سند ۰۲ بخش ۲) — شامل `mc-cli` (کنسول بومی ترمینال) |
 | `app/` | پروژه Flutter با تم CDS و Craft Icons (سند ۰۶) |
-| `docs/` | ۱۰ سند پیش‌تولید و محیط — هر تصمیم فنی باید به آن‌ها ارجاع دهد |
+| `docs/` | ۹ سند پیش‌تولید — هر تصمیم فنی باید به آن‌ها ارجاع دهد |
 | `docs-pack/` | مستندات آفلاین دوزبانه (P5) |
 | `test-corpus/` | کورپوس رگرسیون Octave (P0 هارنس → P1 تکمیل) |
 
@@ -38,8 +38,7 @@ Flutter UI (Dart)  ◄── قرارداد باریک flutter_rust_bridge v2 �
 - [x] مسیر بومی Termux: `scripts/setup-termux.sh` (تست + بیلد release + نصب `mc` در $PREFIX/bin)
 - [x] پوسته UI با تم CDS (تیره/روشن)، ناوبری ۵ تبی، ۱۲ Craft Icon اختصاصی SVG
 - [x] سوییچ آنی زبان (FA/EN) و تم (مدرن/آشنا) — با تست ویجت
-- [x] خط تولید APK با GitHub Actions (سند ۰۹ بخش ۸): debug با هر push، release با تگ — کنترل کامل از ترمینال با `scripts/gh-apk.sh`
-- [ ] اتصال end-to-end روی دستگاه واقعی (بیلد محلی یا اجرای APK خروجی CI — بخش‌های زیر)
+- [ ] اتصال end-to-end روی دستگاه واقعی (نیازمند بیلد محلی — بخش زیر)
 
 **دموی P0:** کنسولی که `1+1` را با `ans = 2` از موتور واقعی Rust جواب می‌دهد.
 
@@ -49,7 +48,7 @@ Flutter UI (Dart)  ◄── قرارداد باریک flutter_rust_bridge v2 �
 
 ```bash
 cd ~
-tar -xzf MathCraft-P0-Foundation-v1.3.tar.gz   # بسته دانلودشده در پوشه خانه
+tar -xzf MathCraft-P0-Foundation-v1.1.tar.gz   # بسته دانلودشده در پوشه خانه
 cd mathcraft
 bash scripts/setup-termux.sh    # پیش‌نیاز + cargo test + بیلد release + نصب mc
 mc                              # کنسول MathCraft — تور: demo — فارسی: MC_LANG=fa mc
@@ -61,49 +60,24 @@ mc                              # کنسول MathCraft — تور: demo — فا
 - در P0.1 همه کرِیت‌ها pure-Rust هستند (rug/GMP در P4 به mc-cas اضافه می‌شود) — نیازی به clang/GMP نیست.
 - خروجی اسکریپتی: `mc -e "2^3^2"` → `ans = 64` (کد خروج ۰/۱).
 
-## لایه Flutter/APK روی خود گوشی (Termux — سند ۰۹)
-
-اگر می‌خواهید همان گوشی، APK هم ببیلد، ابزارهای Flutter/NDK/SDK بومی aarch64 را با یک دستور نصب کنید (جزئیات، مسیرهای جایگزین و بودجهٔ ~۸GB فضا: سند ۰۹):
-
-```bash
-bash scripts/setup-termux-flutter.sh   # openjdk-17 + Flutter + NDK r29 + build-tools aarch64 + aapt2 arm64
-bash scripts/bootstrap.sh              # flutter create + پچ‌های Termux + FRB codegen + flutter test
-bash scripts/build_rust_android.sh     # cargo-ndk → libmathcraft.so (روی گوشی: فقط arm64)
-cd app && flutter build apk --debug    # اولین بیلد ~۱۵-۴۰ دقیقه (سند ۰۹ بخش ۵)
-```
-
-بیلدهای release برای انتشار همیشه از CI می‌آیند (سند ۰۸ بخش ۷) — گوشی محیط توسعه است، نه خط انتشار.
-
-## GitHub Actions — بیلد APK بدون رایانه (مسیر اصلی — سند ۰۹ بخش ۸)
-
-پردازش سنگین به رانرهای ابری می‌رود؛ گوشی فقط ویرایش/تست موتور. پیش‌نیاز: `pkg install gh jq` و یک‌بار `gh auth login`.
-
-```bash
-# یک‌بار — ساخت ریپو و پوش از داخل پوشهٔ پروژه:
-cd ~/mathcraft
-gh repo create mathcraft --private --source=. --remote=origin --push
-
-# چرخهٔ روزمره:
-bash scripts/gh-apk.sh trigger     # اجرای دستی وورک‌فلو android (یا فقط push کن)
-bash scripts/gh-apk.sh watch       # پیگیری زندهٔ ران
-bash scripts/gh-apk.sh download    # آخرین APK موفق → dist/
-
-# انتشار release (خودکار با تگ):
-git tag v0.1.0-p0 && git push origin v0.1.0-p0
-```
-
-دو وورک‌فلو: `ci.yml` (گیت‌های fmt/clippy/test/deny + flutter analyze/test) و `android.yml` (کل خط لولهٔ APK: flutter create ← FRB codegen ← cargo-ndk ← build apk). ران Android با کش گرم ~۱۰-۲۰ دقیقه.
-
 ## بوت‌استرپ محلی (اولین بار — مسیر Flutter/APK روی رایانه)
 
 پیش‌نیازها: Rust (پین‌شده با `rust-toolchain.toml`)، Flutter 3.24+، اندروید SDK، `cargo-ndk` و `flutter_rust_bridge_codegen`.
 
 ```bash
 git clone https://github.com/mathcraft/mathcraft && cd mathcraft
-./scripts/bootstrap.sh        # flutter create + codegen FRB + pub get + verify
+./scripts/bootstrap.sh        # flutter create + codegen FRB + pub get + verify + تم لانچ CDS
 ./scripts/build_rust_android.sh   # cargo-ndk → libmathcraft.so (arm64-v8a, armeabi-v7a)
-cd app && flutter run
+cd app && flutter run --release
 ```
+
+**⚠️ مهم — بیلد release، نه debug (بازخورد P0.2):**
+`flutter build apk` یا `flutter run` **بدون فلگ** بیلد debug می‌سازد: حجم ~۱۵۰MB،
+استارتاپ ~۵ ثانیه با صفحه سیاه، و لگ در سوییچ تم/تب. این طبیعت debug است، نه باگ برنامه.
+همیشه `--release` بزنید — APK release انتظاری ~۲۵-۴۰MB و استارتاپ زیر ۱.۵ ثانیه.
+برای نصب نهایی: `flutter build apk --release --split-per-abi` (خروجی per-ABI سبک‌تر).
+تم لانچ تیره CDS (#101418) هم اکنون توسط bootstrap از `scripts/android-launch-theme/`
+نصب می‌شود تا حتی قبل از اولین فریم، «حالت مدرن» دیده شود (سند ۰۶ §2.1).
 
 ## توسعه روزمره
 

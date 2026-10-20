@@ -1,0 +1,10 @@
+{
+ "script": "p1_24_hyperbolic_identity.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "a": 1.1752011936438,
+  "b": 1.54308063481524,
+  "idd": 1.0
+ }
+}

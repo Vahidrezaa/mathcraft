@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MathCraft — تم راه‌اندازی اندروید (بازخورد P0.2: «۵ ثانیه صفحه سیاه»).
+     پس‌زمینه = توکن darkBgBase سند ۰۶ §2.1 (‎#101418) تا اولین فریم Flutter
+     هیچ فلش سفید/خاکستری نداشته باشد و «حالت مدرن» از همان لحظه لمس آیکون
+     شروع شود. package/minSdk و منطق manifest طبق bootstrap دست‌نخورده است. -->
+<resources>
+    <!-- تم هنگام launch فلوتر — windowBackground باید لایه‌درِ تیره CDS باشد. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- تم پس از launch و پیش از اولین فریم Flutter — همان تیره CDS. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/mc_launch_background</item>
+    </style>
+</resources>

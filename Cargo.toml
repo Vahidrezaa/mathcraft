@@ -25,7 +25,8 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 thin-vec = "0.2"
-flutter_rust_bridge = "=2.13.0"
+flutter_rust_bridge = "2"
+faer = "0.22"
 mc-core = { path = "crates/mc-core" }
 mc-parser = { path = "crates/mc-parser" }
 mc-interp = { path = "crates/mc-interp" }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- حالت شب اندروید — همان تم تیره CDS؛ لانچر هرگز سفید نمی‌شود
+     (سند ۰۶ §2.1: تیره پیش‌فرض است و روشن داخل اپ انتخاب می‌شود). -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/mc_launch_background</item>
+    </style>
+</resources>

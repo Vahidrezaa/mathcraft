@@ -48,6 +48,8 @@ pub fn format_short(x: f64) -> String {
 pub fn format_value(v: &Value) -> String {
     match v {
         Value::Double(m) => format_matrix(m),
+        Value::Char(s) => format!("'{s}'"),
+        Value::Anon(_) => "function_handle".to_owned(),
     }
 }
 

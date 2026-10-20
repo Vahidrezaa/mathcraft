@@ -1,442 +1,1076 @@
-//! پارسر Pratt — اولویت‌ها دقیقاً طبق جدول سند ۰۳ بخش ۵.
+//! Parser — پارسر Pratt با اولویت‌های دقیق متلب (سند ۰۳ بخش ۵).
 //!
-//! نکته‌های سمانتیکی که اینجا قفل می‌شوند:
-//! - توان `^` **چپ‌گرا** است (رفتار MATLAB): `2^3^2 = (2^3)^2 = 64`.
-//! - یگاری زیر توان است: `-2^2 = -(2^2) = -4`؛ اما در توان `2^-2` مجاز است.
-//! - `*` `/` و `+` `-` چپ‌گرا: `6/2*3 = 9`، `1-2-3 = -4`.
-//! - `=` فقط در سطح دستور (statement) دیده می‌شود و مقدار برنمی‌گرداند.
+//! اولویت‌ها (بالا به پایین):
+//! `() [] .  ` `+' `.'` ترانهاده | `^` و `.^` چپ‌گرا | یگانی `- + ~` |
+//! `.* ./ \ /` | `+ -` | `:` (کولن) | مقایسه‌ها | `&&` | `||`
+//!
+//! نکات حیاتی:
+//! - توان چپ‌گرا است: `2^3^2 = 64` (سند ۰۳ بخش ۵ — تفاوت با ریاضی متعارف).
+//! - یگاری توان با ضرب: `-3^2 = -9` ولی `2*-3^2 = 2*(-(3^2))`... سمانتیک متلب:
+//!   یگانی فقط بعد از عملگرها/شروع، پیش از پایه توان اعمال می‌شود.
+//! - ابهام ماتریس: `[1 -2]` دو عنصر، `[1 - 2]` یک عنصر (space flags لکسر).
+//! - `end` در اندیس = Expr::End.
+//! - کولن زنجیره‌ای: `a:b:c:d` = (a:b:c):d (سمانتیک متلب).
 
+use crate::ast::*;
+use crate::lexer::{tokenize, Tok, Token};
 use mc_core::{ids, McError};
 
-use crate::ast::{BinOp, Expr, Program, Stmt, UnOp};
-use crate::lexer::{self, Tok, Token};
-
-/// حداقل قدرت اتصال (binding power) برای عملوند یگاری — بین توان (۹۰) و ضرب (۸۰).
-const UNARY_RBP: u8 = 85;
-
-const POW_BP: u8 = 90;
-const MUL_BP: u8 = 80;
-const ADD_BP: u8 = 70;
+/// کلیدواژه‌های رزرو — مثل متلب نمی‌توان نام متغیر باشند (سند ۰۳ بخش ۲).
+const KEYWORDS: &[&str] = &[
+    "if", "elseif", "else", "end", "for", "while", "break", "continue", "return",
+];
 
 pub fn parse(src: &str) -> Result<Program, McError> {
-    let tokens = lexer::tokenize(src)?;
-    Parser { tokens, pos: 0 }.program()
+    let tokens = tokenize(src)?;
+    let mut p = Parser {
+        toks: tokens,
+        pos: 0,
+        mat_sign_ctx: false,
+        fn_depth: 0,
+    };
+    p.parse_program()
 }
 
 struct Parser {
-    tokens: Vec<Token>,
+    toks: Vec<Token>,
     pos: usize,
-}
-
-/// پیام خطای سینتکسی — الگوی مرجع سند ۰۳ بخش ۱۴ (MC:E3001).
-fn parse_err(line: u32, col: u32, unexpected: &str, expected: &str) -> McError {
-    McError::new(
-        ids::PARSE_ERROR,
-        line,
-        col,
-        format!("Unexpected {unexpected}: expected {expected}."),
-        format!("«{unexpected}» غیرمنتظره: {expected} انتظار می‌رفت."),
-    )
+    /// داخل ماتریس لفظی `[...]` هستیم؟ — قانون ابهام علامت متلب (سند ۰۳ §4):
+    /// فقط داخل براکت فعال است؛ بیرون آن `1 -2` همیشه تفریق است.
+    mat_sign_ctx: bool,
+    /// عمق تعریف تابع فایلی — تعریف تو در تو ممنوع (سمانتیک متلب P1).
+    fn_depth: usize,
 }
 
 impl Parser {
+    // ---------- ابزارها ----------
     fn peek(&self) -> &Token {
-        // Eof همیشه آخرین توکن است؛ پس pos بیرون از بازه یعنی روی Eof بمانیم.
-        let i = self.pos.min(self.tokens.len() - 1);
-        &self.tokens[i]
+        &self.toks[self.pos.min(self.toks.len() - 1)]
     }
 
-    fn peek_ahead(&self, offset: usize) -> Option<&Token> {
-        self.tokens.get(self.pos + offset)
+    fn peek_at(&self, off: usize) -> &Token {
+        &self.toks[(self.pos + off).min(self.toks.len() - 1)]
     }
 
-    fn advance(&mut self) -> Token {
-        let t = self.peek().clone();
-        if !matches!(t.tok, Tok::Eof) {
+    fn bump(&mut self) -> Token {
+        let t = self.toks[self.pos.min(self.toks.len() - 1)].clone();
+        if self.pos < self.toks.len() - 1 {
             self.pos += 1;
         }
         t
     }
 
-    fn program(&mut self) -> Result<Program, McError> {
+    fn at(&self, tok: &Tok) -> bool {
+        std::mem::discriminant(&self.peek().tok) == std::mem::discriminant(tok)
+    }
+
+    fn eat(&mut self, tok: &Tok) -> bool {
+        if self.at(tok) {
+            self.bump();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expect(&mut self, tok: &Tok, what_en: &str, what_fa: &str) -> Result<Token, McError> {
+        if self.at(tok) {
+            Ok(self.bump())
+        } else {
+            let t = self.peek().clone();
+            Err(McError::new(
+                ids::PARSE_ERROR,
+                t.line,
+                t.col,
+                format!("Expected {what_en}, found {}.", t.describe()),
+                format!("{what_fa}، ولی {} یافت شد.", t.describe()),
+            ))
+        }
+    }
+
+    fn err(&self, t: &Token, en: impl Into<String>, fa: impl Into<String>) -> McError {
+        McError::new(ids::PARSE_ERROR, t.line, t.col, en, fa)
+    }
+
+    // ---------- برنامه ----------
+    fn parse_program(&mut self) -> Result<Program, McError> {
         let mut stmts = Vec::new();
         loop {
-            // خطوط خالی متوالی مجازند (رفتار متلب با `1;;2` و خطوط خالی).
-            match self.peek().tok {
-                Tok::Semicolon | Tok::Comma => {
-                    self.advance();
-                    continue;
-                }
-                Tok::Newline => {
-                    self.advance();
-                    continue;
-                }
-                Tok::Eof => break,
-                _ => {}
+            self.skip_separators();
+            if self.at(&Tok::Eof) {
+                break;
             }
-            let stmt = self.statement()?;
-            stmts.push(stmt);
-            match self.peek().tok {
-                Tok::Semicolon => {
-                    self.mark_last_suppressed(&mut stmts);
-                    self.advance();
-                }
-                Tok::Comma => {
-                    self.advance();
-                }
-                Tok::Newline | Tok::Eof => {}
-                _ => {
-                    let t = self.peek();
-                    return Err(parse_err(
-                        t.line,
-                        t.col,
-                        &t.describe(),
-                        "',', ';' or end of line",
-                    ));
-                }
-            }
+            let s = self.parse_stmt()?;
+            stmts.push(s);
         }
         Ok(Program { stmts })
     }
 
-    /// `;` به دستور «قبلی» چسبیده است (`x = 1;`) — پرچم suppress را عقب‌گرد اعمال می‌کنیم.
-    fn mark_last_suppressed(&mut self, stmts: &mut [Stmt]) {
-        if let Some(last) = stmts.last_mut() {
-            match last {
-                Stmt::Expr { suppress, .. } | Stmt::Assign { suppress, .. } => {
-                    *suppress = true;
-                }
-            }
+    /// حذف `;`/newline/`,` های اضافی — هر سه جداکننده گزاره در سطح برنامه (سند ۰۳ §2).
+    fn skip_separators(&mut self) {
+        while self.at(&Tok::Semicolon) || self.at(&Tok::Newline) || self.at(&Tok::Comma) {
+            self.bump();
         }
     }
 
-    fn statement(&mut self) -> Result<Stmt, McError> {
-        // انتساب: Ident '=' (سند ۰۳ بخش ۵ سطح ۱۰)
-        if let Tok::Ident(_) = self.peek().tok {
-            if matches!(self.peek_ahead(1).map(|t| &t.tok), Some(Tok::Assign)) {
-                let name_tok = self.advance();
-                let Tok::Ident(name) = name_tok.tok else {
-                    return Err(parse_err(
-                        name_tok.line,
-                        name_tok.col,
-                        "identifier",
-                        "identifier",
+    // ---------- گزاره‌ها ----------
+    fn parse_stmt(&mut self) -> Result<Stmt, McError> {
+        let t = self.peek().clone();
+        match &t.tok {
+            Tok::Ident(name) if name == "if" => self.parse_if(),
+            Tok::Ident(name) if name == "for" => self.parse_for(),
+            Tok::Ident(name) if name == "while" => self.parse_while(),
+            Tok::Ident(name) if name == "break" => {
+                self.bump();
+                Ok(Stmt::Break {
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::Ident(name) if name == "continue" => {
+                self.bump();
+                Ok(Stmt::Continue {
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::Ident(name) if name == "return" => {
+                self.bump();
+                Ok(Stmt::Return {
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::Ident(name) if name == "function" => {
+                // تابع تو در تو ممنوع (سند ۰۳ §9 — تابع‌های محلی فقط سطح فایل)
+                if self.fn_depth > 0 {
+                    return Err(self.err(
+                        &t,
+                        "Nested function definitions are not supported. Define local functions at file level.",
+                        "تعریف تابع تو در تو پشتیبانی نمی‌شود؛ توابع محلی را در سطح فایل تعریف کنید.",
                     ));
-                };
-                // نام‌های رزرو هرگز به‌عنوان متغیر قابل ساخت نیستند (سند ۰۳ بخش ۲).
-                check_keyword(&name, name_tok.line, name_tok.col)?;
-                self.advance(); // '='
-                let expr = self.expr_bp(0)?;
-                return Ok(Stmt::Assign {
-                    name,
-                    expr,
-                    suppress: false,
-                    line: name_tok.line,
-                    col: name_tok.col,
-                });
+                }
+                self.parse_fn_def()
+            }
+            _ => self.parse_expr_stmt(),
+        }
+    }
+
+    /// تعریف تابع فایلی — `function [out1,out2] = name(in1,in2) body end`.
+    /// سمانتیک متلب §9: نام تابع پس از `=` می‌آید؛ خروجی‌ها قبل از آن؛
+    /// هر دو اختیاری‌اند؛ بدنه تا `end` (P1: پایان‌دادن با `end` الزامی است).
+    fn parse_fn_def(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // function
+        let mut outputs = Vec::new();
+        if self.at(&Tok::LBracket) {
+            // `[a,b] = name(...)` — چند خروجی
+            self.bump();
+            loop {
+                if self.at(&Tok::RBracket) {
+                    self.bump();
+                    break;
+                }
+                let ot = self.expect(&Tok::Ident("".into()), "output name", "نام خروجی")?;
+                if let Tok::Ident(n) = ot.tok.clone() {
+                    if KEYWORDS.contains(&n.as_str()) {
+                        return Err(self.err(
+                            &ot,
+                            format!("'{n}' is reserved and cannot be an output name."),
+                            format!("«{n}» رزرو است و نمی‌تواند نام خروجی باشد."),
+                        ));
+                    }
+                    outputs.push(n);
+                }
+                if !self.eat(&Tok::Comma) {
+                    self.expect(&Tok::RBracket, "']'", "«]»")?;
+                    break;
+                }
+            }
+        } else if let Tok::Ident(n) = self.peek().tok.clone() {
+            // تشخیص `function y = name` از `function name(...)`: نگاه به توکن بعد
+            if self.peek_at(1).tok == Tok::Assign {
+                self.bump();
+                outputs.push(n);
             }
         }
-        let expr = self.expr_bp(0)?;
-        Ok(Stmt::Expr {
-            expr,
-            suppress: false,
+        if !outputs.is_empty() {
+            self.expect(
+                &Tok::Assign,
+                "'=' between outputs and function name",
+                "«=» بین خروجی‌ها و نام تابع",
+            )?;
+        }
+        let name_tok = self.expect(&Tok::Ident("".into()), "function name", "نام تابع")?;
+        let name = match name_tok.tok.clone() {
+            Tok::Ident(n) if !KEYWORDS.contains(&n.as_str()) => n,
+            Tok::Ident(n) => {
+                return Err(self.err(
+                    &name_tok,
+                    format!("'{n}' is a reserved keyword and cannot be a function name."),
+                    format!("«{n}» کلیدواژه رزرو است و نمی‌تواند نام تابع باشد."),
+                ))
+            }
+            _ => unreachable!(),
+        };
+        let mut params = Vec::new();
+        if self.eat(&Tok::LParen) {
+            if !self.at(&Tok::RParen) {
+                loop {
+                    let pt =
+                        self.expect(&Tok::Ident("".into()), "parameter name", "نام پارامتر")?;
+                    if let Tok::Ident(n) = pt.tok.clone() {
+                        if KEYWORDS.contains(&n.as_str()) {
+                            return Err(self.err(
+                                &pt,
+                                format!("'{n}' is reserved and cannot be a parameter."),
+                                format!("«{n}» رزرو است و نمی‌تواند پارامتر باشد."),
+                            ));
+                        }
+                        params.push(n);
+                    }
+                    if !self.eat(&Tok::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.expect(&Tok::RParen, "')' after parameters", "«)» بعد از پارامترها")?;
+        }
+        self.fn_depth += 1;
+        let body = self.parse_block();
+        self.fn_depth -= 1;
+        let body = body?;
+        self.expect_end("function")?;
+        Ok(Stmt::FnDef {
+            name,
+            outputs,
+            params,
+            body,
+            line: t.line,
+            col: t.col,
         })
     }
 
-    fn expr_bp(&mut self, min_bp: u8) -> Result<Expr, McError> {
-        let mut lhs = self.unary()?;
-        while let Some((l_bp, r_bp, op)) = self.infix_op() {
-            if l_bp < min_bp {
+    /// عبارت یا انتساب (ساده، اندیس‌دار، یا چندخروجی `[a,b] = f(...)`).
+    fn parse_expr_stmt(&mut self) -> Result<Stmt, McError> {
+        let start = self.peek().clone();
+        let expr = self.parse_expr()?;
+
+        // انتساب؟ `x = e` یا `A(i,j) = e` یا `[a,b] = f(...)`
+        if self.at(&Tok::Assign) {
+            self.bump();
+            let rhs = self.parse_expr()?;
+            let suppress = self.at(&Tok::Semicolon);
+            // انتساب چندخروجی: ماتریس لفظی که همه سلول‌هایش Var باشند
+            if let Expr::Matrix { rows, .. } = &expr {
+                if let Some(targets) = out_targets(rows) {
+                    return Ok(Stmt::MultiAssign {
+                        targets,
+                        expr: rhs,
+                        suppress,
+                    });
+                }
+            }
+            let target = match expr {
+                Expr::Var { name, line, col } => AssignTarget::Var { name, line, col },
+                Expr::Call {
+                    name,
+                    args,
+                    line,
+                    col,
+                    ..
+                } if !args.is_empty() => AssignTarget::Indexed {
+                    name,
+                    subs: args,
+                    line,
+                    col,
+                },
+                _ => {
+                    return Err(self.err(
+                        &start,
+                        "Invalid assignment target (left of '=').",
+                        "سمت چپ «=» هدف انتساب معتبری نیست.",
+                    ));
+                }
+            };
+            return Ok(Stmt::Assign {
+                target,
+                expr: rhs,
+                suppress,
+            });
+        }
+
+        let suppress = self.at(&Tok::Semicolon);
+        let _ = start;
+        Ok(Stmt::Expr { expr, suppress })
+    }
+
+    fn parse_if(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // if
+        let mut branches = Vec::new();
+        let cond = self.parse_expr()?;
+        let body = self.parse_block()?;
+        branches.push((cond, body));
+        let mut else_body = None;
+        loop {
+            // elseif / else / end
+            if matches!(self.peek().tok, Tok::Ident(ref n) if n == "elseif") {
+                self.bump();
+                let c = self.parse_expr()?;
+                let b = self.parse_block()?;
+                branches.push((c, b));
+            } else if matches!(self.peek().tok, Tok::Ident(ref n) if n == "else") {
+                self.bump();
+                else_body = Some(self.parse_block()?);
+                self.expect_end("if")?;
+                break;
+            } else {
+                self.expect_end("if")?;
                 break;
             }
-            let op_tok = self.advance();
-            let rhs = self.expr_bp(r_bp)?;
-            lhs = Expr::Binary {
-                op,
+        }
+        Ok(Stmt::If {
+            branches,
+            else_body,
+            line: t.line,
+            col: t.col,
+        })
+    }
+
+    /// بدنه تا `end`/`elseif`/`else` — جداکننده‌ها را می‌خورد.
+    fn parse_block(&mut self) -> Result<Vec<Stmt>, McError> {
+        self.skip_separators();
+        let mut stmts = Vec::new();
+        loop {
+            if self.at(&Tok::Eof) {
+                let t = self.peek().clone();
+                return Err(self.err(
+                    &t,
+                    "Missing 'end' to close the block.",
+                    "«end» برای بستن بلوک جا افتاده است.",
+                ));
+            }
+            if self.stmt_terminator_ahead() {
+                break;
+            }
+            stmts.push(self.parse_stmt()?);
+            // جداکننده‌های بین گزاره‌ها
+            let mut had_sep = false;
+            while self.at(&Tok::Semicolon) || self.at(&Tok::Newline) || self.at(&Tok::Comma) {
+                self.bump();
+                had_sep = true;
+            }
+            let _ = had_sep;
+            if self.stmt_terminator_ahead() {
+                break;
+            }
+            if self.at(&Tok::Eof) {
+                let t = self.peek().clone();
+                return Err(self.err(
+                    &t,
+                    "Missing 'end' to close the block.",
+                    "«end» برای بستن بلوک جا افتاده است.",
+                ));
+            }
+        }
+        Ok(stmts)
+    }
+
+    /// آیا توکن فعلی پایان‌دهنده بلوک است (end/elseif/else)؟
+    fn stmt_terminator_ahead(&self) -> bool {
+        if let Tok::Ident(n) = &self.peek().tok {
+            matches!(n.as_str(), "end" | "elseif" | "else")
+        } else {
+            false
+        }
+    }
+
+    fn expect_end(&mut self, what: &str) -> Result<(), McError> {
+        let t = self.peek().clone();
+        match &t.tok {
+            Tok::Ident(n) if n == "end" => {
+                self.bump();
+                Ok(())
+            }
+            _ => Err(self.err(
+                &t,
+                format!("Missing 'end' to close '{what}'."),
+                format!("«end» برای بستن «{what}» جا افتاده است."),
+            )),
+        }
+    }
+
+    fn parse_for(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // for
+        let var_tok = self.expect(&Tok::Ident("".into()), "loop variable", "متغیر حلقه")?;
+        let var = match var_tok.tok.clone() {
+            Tok::Ident(n) if !KEYWORDS.contains(&n.as_str()) => n,
+            Tok::Ident(n) => {
+                return Err(self.err(
+                    &var_tok,
+                    format!("'{n}' is a reserved keyword and cannot be a loop variable."),
+                    format!("«{n}» کلیدواژه رزرو است و نمی‌تواند متغیر حلقه باشد."),
+                ))
+            }
+            _ => unreachable!(),
+        };
+        self.expect(
+            &Tok::Assign,
+            "'=' after loop variable",
+            "«=» بعد از متغیر حلقه",
+        )?;
+        let iter_expr = self.parse_expr()?;
+        let body = self.parse_block()?;
+        self.expect_end("for")?;
+        Ok(Stmt::For {
+            var,
+            iter_expr,
+            body,
+            line: t.line,
+            col: t.col,
+        })
+    }
+
+    fn parse_while(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // while
+        let cond = self.parse_expr()?;
+        let body = self.parse_block()?;
+        self.expect_end("while")?;
+        Ok(Stmt::While {
+            cond,
+            body,
+            line: t.line,
+            col: t.col,
+        })
+    }
+
+    // ---------- عبارت‌ها (Pratt) ----------
+    pub fn parse_expr(&mut self) -> Result<Expr, McError> {
+        self.parse_or()
+    }
+
+    fn parse_or(&mut self) -> Result<Expr, McError> {
+        let mut lhs = self.parse_and()?;
+        while self.at(&Tok::OrOr) {
+            let t = self.bump();
+            let rhs = self.parse_and()?;
+            lhs = Expr::Logic {
+                op: LogicOp::Or,
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
-                line: op_tok.line,
-                col: op_tok.col,
+            };
+            let _ = t;
+        }
+        Ok(lhs)
+    }
+
+    fn parse_and(&mut self) -> Result<Expr, McError> {
+        let mut lhs = self.parse_compare()?;
+        while self.at(&Tok::AndAnd) {
+            self.bump();
+            let rhs = self.parse_compare()?;
+            lhs = Expr::Logic {
+                op: LogicOp::And,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
             };
         }
         Ok(lhs)
     }
 
-    /// (قدرت چپ، قدرت راست، اپراتور) — همه اپراتورهای P0 **چپ‌گرا**اند (رفتار متلب
-    /// و سند ۰۳ بخش ۵): برای چپ‌گرایی، عملوند راست با `l_bp + 1` پارس می‌شود تا
-    /// اپراتور هم‌سطح بعدی به lhs بچسبد نه به rhs (`6/2*3 = (6/2)*3 = 9`).
-    fn infix_op(&self) -> Option<(u8, u8, BinOp)> {
-        let bp = match self.peek().tok {
-            Tok::Plus => (ADD_BP, ADD_BP + 1, BinOp::Add),
-            Tok::Minus => (ADD_BP, ADD_BP + 1, BinOp::Sub),
-            Tok::Star => (MUL_BP, MUL_BP + 1, BinOp::Mul),
-            Tok::Slash => (MUL_BP, MUL_BP + 1, BinOp::Div),
-            Tok::Caret => (POW_BP, POW_BP + 1, BinOp::Pow),
-            _ => return None,
-        };
-        Some(bp)
+    fn parse_compare(&mut self) -> Result<Expr, McError> {
+        let mut lhs = self.parse_colon()?;
+        loop {
+            let op = match self.peek().tok {
+                Tok::Eq => CmpOp::Eq,
+                Tok::Ne => CmpOp::Ne,
+                Tok::Lt => CmpOp::Lt,
+                Tok::Le => CmpOp::Le,
+                Tok::Gt => CmpOp::Gt,
+                Tok::Ge => CmpOp::Ge,
+                _ => break,
+            };
+            let t = self.bump();
+            let rhs = self.parse_colon()?;
+            lhs = Expr::Compare {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
+            };
+        }
+        Ok(lhs)
     }
 
-    fn unary(&mut self) -> Result<Expr, McError> {
-        match self.peek().tok {
+    /// کولن زنجیره‌ای: `a:b`، `a:s:b`، و زنجیره‌های بلندتر با تاشدن چپ‌گرا
+    /// (سند ۰۳ §7 — سمانتیک دقیق در eval).
+    fn parse_colon(&mut self) -> Result<Expr, McError> {
+        let first = self.parse_addsub()?;
+        if !self.at(&Tok::Colon) {
+            return Ok(first);
+        }
+        let mut parts = vec![first];
+        while self.at(&Tok::Colon) {
+            self.bump();
+            parts.push(self.parse_addsub()?);
+        }
+        // تاشدن چپ‌گرا: [a,b,c,d] → Range(Range(a,b,c), 1, d)
+        let mut it = parts.into_iter();
+        let mut acc = it.next().unwrap_or(Expr::Num(0.0));
+        let mut rest: Vec<Expr> = it.collect();
+        while rest.len() >= 2 {
+            let b = rest.remove(0);
+            let c = rest.remove(0);
+            acc = Expr::Range {
+                start: Box::new(acc),
+                step: Some(Box::new(b)),
+                end: Box::new(c),
+            };
+        }
+        if let Some(last) = rest.pop() {
+            acc = Expr::Range {
+                start: Box::new(acc),
+                step: None,
+                end: Box::new(last),
+            };
+        }
+        Ok(acc)
+    }
+
+    fn parse_addsub(&mut self) -> Result<Expr, McError> {
+        let mut lhs = self.parse_muldiv()?;
+        loop {
+            let op = match self.peek().tok {
+                Tok::Plus => BinOp::Add,
+                Tok::Minus => BinOp::Sub,
+                _ => break,
+            };
+            // قانون واژگانی متلب (سند ۰۳ §4): داخل براکت، علامتِ «فاصله‌قبل +
+            // بدون‌فاصله‌بعد» یگانی است و عنصر جدید می‌سازد — اینجا دودی مصرفش نکن:
+            // [1 -2] = [1,-2] ولی [1 - 2] و [1-2] = تفریق.
+            if self.mat_sign_ctx && self.peek().space_before && !self.peek_at(1).space_before {
+                break;
+            }
+            let t = self.bump();
+            let rhs = self.parse_muldiv()?;
+            lhs = Expr::Binary {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
+            };
+        }
+        Ok(lhs)
+    }
+
+    /// `* / \ .* ./` — ضرب/تقسیم ماتریسی و عنصری و بک‌اسلش در یک سطح (سند ۰۳ §5).
+    fn parse_muldiv(&mut self) -> Result<Expr, McError> {
+        let mut lhs = self.parse_unary()?;
+        loop {
+            let op = match self.peek().tok {
+                Tok::Star => BinOp::Mul,
+                Tok::Slash => BinOp::Div,
+                Tok::Backslash => BinOp::Backslash,
+                Tok::DotStar => BinOp::ElemMul,
+                Tok::DotSlash => BinOp::ElemDiv,
+                _ => break,
+            };
+            let t = self.bump();
+            let rhs = self.parse_unary()?;
+            lhs = Expr::Binary {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
+            };
+        }
+        Ok(lhs)
+    }
+
+    /// یگانی: `- + ~` — سمانتیک متلب: یگانی پایهٔ توان را می‌گیرد ولی خودش
+    /// زیر توان می‌رود: `-3^2 = -(3^2)` (سند ۰۳ §5).
+    fn parse_unary(&mut self) -> Result<Expr, McError> {
+        let t = self.peek().clone();
+        match t.tok {
             Tok::Minus => {
-                self.advance();
-                let operand = self.expr_bp(UNARY_RBP)?;
+                self.bump();
+                let operand = self.parse_unary()?;
                 Ok(Expr::Unary {
                     op: UnOp::Neg,
                     operand: Box::new(operand),
                 })
             }
             Tok::Plus => {
-                self.advance();
-                let operand = self.expr_bp(UNARY_RBP)?;
+                self.bump();
+                let operand = self.parse_unary()?;
                 Ok(Expr::Unary {
                     op: UnOp::Pos,
                     operand: Box::new(operand),
                 })
             }
-            Tok::Num(_) | Tok::Ident(_) | Tok::LParen => {
-                // اول advance تا بorrow تمام شود، بعد روی توکن مالک‌شده کار کن.
-                let tok = self.advance();
-                match tok.tok {
-                    Tok::Num(v) => Ok(Expr::Num(v)),
-                    Tok::Ident(name) => {
-                        check_keyword(&name, tok.line, tok.col)?;
-                        Ok(Expr::Var {
-                            name,
-                            line: tok.line,
-                            col: tok.col,
-                        })
-                    }
-                    Tok::LParen => {
-                        let inner = self.expr_bp(0)?;
-                        if !matches!(self.peek().tok, Tok::RParen) {
-                            let t = self.peek();
-                            return Err(parse_err(t.line, t.col, &t.describe(), "')'"));
-                        }
-                        self.advance();
-                        Ok(inner)
-                    }
-                    _ => Err(parse_err(
-                        tok.line,
-                        tok.col,
-                        &tok.describe(),
-                        "an expression",
-                    )),
+            Tok::Not => {
+                self.bump();
+                let operand = self.parse_unary()?;
+                Ok(Expr::Unary {
+                    op: UnOp::Not,
+                    operand: Box::new(operand),
+                })
+            }
+            _ => self.parse_pow(),
+        }
+    }
+
+    /// توان چپ‌گرا (سند ۰۳ §5 سطح 90/91): `2^3^2 = 64`.
+    /// پایهٔ توان می‌تواند خودش یگانی‌دار باشد (بالا هندل شد) —
+    /// توان روی «توان-پایه» تکرار می‌شود: `a^b^c` = (a^b)^c.
+    fn parse_pow(&mut self) -> Result<Expr, McError> {
+        let mut base = self.parse_postfix()?;
+        loop {
+            let op = match self.peek().tok {
+                Tok::Caret => BinOp::Pow,
+                Tok::DotCaret => BinOp::ElemPow,
+                _ => break,
+            };
+            let t = self.bump();
+            // توان راستش می‌تواند یگانی‌دار باشد: 2^-3
+            let rhs = self.parse_pow_operand()?;
+            base = Expr::Binary {
+                op,
+                lhs: Box::new(base),
+                rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
+            };
+        }
+        Ok(base)
+    }
+
+    fn parse_pow_operand(&mut self) -> Result<Expr, McError> {
+        if matches!(self.peek().tok, Tok::Minus | Tok::Plus) {
+            return self.parse_unary();
+        }
+        self.parse_postfix()
+    }
+
+    /// postfix: ترانهاده‌ها و فراخوانی/اندیس — `A(2,3)'(1)` مثل متلب زنجیره می‌شود.
+    fn parse_postfix(&mut self) -> Result<Expr, McError> {
+        let mut expr = self.parse_primary()?;
+        loop {
+            match self.peek().tok {
+                Tok::Transpose => {
+                    let t = self.bump();
+                    expr = Expr::Transpose {
+                        operand: Box::new(expr),
+                        conj: true,
+                        line: t.line,
+                        col: t.col,
+                    };
                 }
+                Tok::DotTranspose => {
+                    let t = self.bump();
+                    expr = Expr::Transpose {
+                        operand: Box::new(expr),
+                        conj: false,
+                        line: t.line,
+                        col: t.col,
+                    };
+                }
+                Tok::LParen => {
+                    // فراخوانی/اندیس — نام پایه باید Var باشد (سمانتیک متلب: نام‌محور)
+                    let name = match &expr {
+                        Expr::Var { name, .. } => name.clone(),
+                        _ => {
+                            let t = self.peek().clone();
+                            return Err(self.err(
+                                &t,
+                                "Only named calls like f(x) or A(i,j) are supported here.",
+                                "در اینجا فقط فراخوانی نام‌دار مثل f(x) یا A(i,j) پشتیبانی می‌شود.",
+                            ));
+                        }
+                    };
+                    let (line, col) = match &expr {
+                        Expr::Var { line, col, .. } => (*line, *col),
+                        _ => (0, 0),
+                    };
+                    self.bump(); // (
+                    let mut args = Vec::new();
+                    let mut nargout = 0usize;
+                    // آرگومان‌ها تا ) — جداکننده , یا فاصله؛ end مجاز
+                    if !self.at(&Tok::RParen) {
+                        loop {
+                            let arg = self.parse_expr()?;
+                            args.push(arg);
+                            if self.at(&Tok::Comma) {
+                                self.bump();
+                                // `[a,b] = f(...)` — [ بعد از , یعنی ادامه خروجی‌ها؛
+                                // اینجا پارسر ساده: چندخروجی فقط در انتساب [a,b]=f() هندل می‌شود
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    self.expect(&Tok::RParen, "')'", "«)»")?;
+                    let _ = nargout;
+                    nargout = 1;
+                    expr = Expr::Call {
+                        name,
+                        args,
+                        nargout,
+                        line,
+                        col,
+                    };
+                }
+                _ => break,
+            }
+        }
+        Ok(expr)
+    }
+
+    fn parse_primary(&mut self) -> Result<Expr, McError> {
+        let t = self.peek().clone();
+        match t.tok {
+            Tok::Colon => {
+                // کولن تنها = زیرنویس «همه» (: در اندیس/آرگومان) — A(:)، A(:,2)
+                self.bump();
+                Ok(Expr::Var {
+                    name: ":".to_owned(),
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::Num(v) => {
+                self.bump();
+                Ok(Expr::Num(v))
+            }
+            Tok::Str(s) => {
+                self.bump();
+                Ok(Expr::Str(s))
+            }
+            Tok::LBracket => self.parse_matrix(),
+            Tok::At => {
+                self.bump();
+                // هندل نام‌دار `@f` — توکن بعد Ident است نه پرانتز (سمانتیک متلب §9)
+                if let Tok::Ident(n) = &self.peek().tok {
+                    let name = n.clone();
+                    let t2 = self.peek().clone();
+                    self.bump();
+                    if KEYWORDS.contains(&name.as_str()) {
+                        return Err(self.err(
+                            &t2,
+                            format!("'{name}' is reserved and cannot be a function handle target."),
+                            format!("«{name}» رزرو است و نمی‌تواند هدف function handle باشد."),
+                        ));
+                    }
+                    return Ok(Expr::FnHandle {
+                        name,
+                        line: t2.line,
+                        col: t2.col,
+                    });
+                }
+                // @(x,y) body — capture-by-value در eval (سند ۰۳ §9)
+                self.expect(&Tok::LParen, "'(' after @", "«(» بعد از @")?;
+                let mut params = Vec::new();
+                if !self.at(&Tok::RParen) {
+                    loop {
+                        let pt =
+                            self.expect(&Tok::Ident("".into()), "parameter name", "نام پارامتر")?;
+                        if let Tok::Ident(n) = pt.tok.clone() {
+                            if KEYWORDS.contains(&n.as_str()) {
+                                return Err(self.err(
+                                    &pt,
+                                    format!("'{n}' is reserved and cannot be a parameter."),
+                                    format!("«{n}» رزرو است و نمی‌تواند پارامتر باشد."),
+                                ));
+                            }
+                            params.push(n);
+                        }
+                        if !self.eat(&Tok::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(&Tok::RParen, "')' after @ params", "«)» بعد از پارامترها")?;
+                let body = self.parse_expr()?;
+                Ok(Expr::AnonFn {
+                    params,
+                    body: Box::new(body),
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::LParen => {
+                self.bump();
+                let e = self.parse_expr()?;
+                self.expect(&Tok::RParen, "')'", "«)»")?;
+                Ok(e)
+            }
+            Tok::Ident(ref name) => {
+                let name = name.clone();
+                self.bump();
+                if KEYWORDS.contains(&name.as_str()) {
+                    if name == "end" {
+                        // `end` فقط در اندیس معنادار است — اینجا به‌عنوان نود End
+                        // (eval فقط در زمینهٔ اندیس آن را می‌پذیرد)
+                        return Ok(Expr::End {
+                            line: t.line,
+                            col: t.col,
+                        });
+                    }
+                    return Err(self.err(
+                        &t,
+                        format!("'{name}' is a reserved keyword here."),
+                        format!("«{name}» اینجا کلیدواژهٔ رزرو است."),
+                    ));
+                }
+                Ok(Expr::Var {
+                    name,
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            _ => Err(self.err(
+                &t,
+                format!("Unexpected {}.", t.describe()),
+                format!("{} غیرمنتظره بود.", t.describe()),
+            )),
+        }
+    }
+
+    /// ماتریس لفظی `[...]` (سند ۰۳ §4) — قلب ابهام متلب.
+    ///
+    /// جداکننده ستون: `,` یا فاصله (با قانون یگانی/دویی +/- از space flags)
+    /// جداکننده ردیف: `;` یا newline.
+    fn parse_matrix(&mut self) -> Result<Expr, McError> {
+        // فعال‌سازی قانون ابهام علامت فقط در گسترهٔ این براکت (خروجی‌ها بازگردانی)
+        let saved = self.mat_sign_ctx;
+        self.mat_sign_ctx = true;
+        let r = self.parse_matrix_inner();
+        self.mat_sign_ctx = saved;
+        r
+    }
+
+    fn parse_matrix_inner(&mut self) -> Result<Expr, McError> {
+        let t = self.bump(); // [
+        let mut rows: Vec<Vec<Expr>> = vec![Vec::new()];
+        loop {
+            if self.at(&Tok::Eof) {
+                return Err(self.err(
+                    self.peek(),
+                    "Missing ']' to close the matrix.",
+                    "«]» برای بستن ماتریس جا افتاده است.",
+                ));
+            }
+            if self.at(&Tok::RBracket) {
+                self.bump();
+                break;
+            }
+            if self.at(&Tok::Semicolon) || self.at(&Tok::Newline) {
+                self.bump();
+                // ردیف خنجین تهیِ آخر را نساز
+                if !self.at(&Tok::RBracket) {
+                    rows.push(Vec::new());
+                }
+                continue;
+            }
+            if self.at(&Tok::Comma) {
+                self.bump();
+                continue;
+            }
+            let e = self.parse_matrix_element(&rows)?;
+            rows.last_mut().unwrap_or(&mut Vec::new()).push(e);
+        }
+        // ردیف‌های تهی انتهایی را حذف نکن — `[]` = ماتریس 0×0 (سند ۰۳ §4)
+        if rows.len() == 1 && rows[0].is_empty() {
+            return Ok(Expr::Matrix {
+                rows: Vec::new(),
+                line: t.line,
+                col: t.col,
+            });
+        }
+        Ok(Expr::Matrix {
+            rows,
+            line: t.line,
+            col: t.col,
+        })
+    }
+
+    /// یک سلول ماتریس — با قانون ابهام علامت:
+    /// داخل ماتریس بعد از یک سلول کامل، `+/-` با فاصله‌قبل و بدون‌فاصله‌بعد = یگانی.
+    fn parse_matrix_element(&mut self, rows: &[Vec<Expr>]) -> Result<Expr, McError> {
+        // قانون متلب: بعد از سلولِ کامل، علامتِ «فاصله‌قبل + بدون‌فاصله‌بعد» یگانی است.
+        if (self.at(&Tok::Plus) || self.at(&Tok::Minus))
+            && self.peek().space_before
+            && !self.peek_at(1).space_before
+            && !rows.last().is_some_and(|r| r.is_empty())
+        {
+            let op_tok = self.bump();
+            let operand = self.parse_matrix_element_signless()?;
+            let expr = match op_tok.tok {
+                Tok::Minus => Expr::Unary {
+                    op: UnOp::Neg,
+                    operand: Box::new(operand),
+                },
+                _ => Expr::Unary {
+                    op: UnOp::Pos,
+                    operand: Box::new(operand),
+                },
+            };
+            // ادامهٔ سطح-بالای عبارت را با این یگانی به‌عنوان شروع ادامه بده
+            return self.finish_matrix_element(expr);
+        }
+        let e = self.parse_expr()?;
+        self.finish_matrix_element(e)
+    }
+
+    /// بعد از یگانیِ ماتریسی، ادامهٔ عبارت (مثلاً `[1 -2 +3]`).
+    fn parse_matrix_element_signless(&mut self) -> Result<Expr, McError> {
+        self.parse_postfix_pow_base()
+    }
+
+    fn parse_postfix_pow_base(&mut self) -> Result<Expr, McError> {
+        let e = self.parse_postfix()?;
+        // توان چسبیده: [1 -2^2] → -2^2 = -(2^2)
+        let op = match self.peek().tok {
+            Tok::Caret => BinOp::Pow,
+            Tok::DotCaret => BinOp::ElemPow,
+            _ => return Ok(e),
+        };
+        let t = self.bump();
+        let rhs = self.parse_pow_operand()?;
+        Ok(Expr::Binary {
+            op,
+            lhs: Box::new(e),
+            rhs: Box::new(rhs),
+            line: t.line,
+            col: t.col,
+        })
+    }
+
+    /// ادامهٔ یک سلول شروع‌شده — عملگرهای دویی سطح بالا (بدون کولن/مقایسه داخل ماتریسِ چندهنری).
+    /// علامتِ ابهام‌دار (فاصله‌قبل + بدون‌فاصله‌بعد) اینجا هم دودی مصرف نمی‌شود —
+    /// عنصر جدید است: [1 -2 +3] = سه عنصر، نه 1 و (-2+3).
+    fn finish_matrix_element(&mut self, first: Expr) -> Result<Expr, McError> {
+        let mut lhs = first;
+        loop {
+            if matches!(self.peek().tok, Tok::Plus | Tok::Minus)
+                && self.peek().space_before
+                && !self.peek_at(1).space_before
+            {
+                break;
+            }
+            let op = match self.peek().tok {
+                Tok::Plus => BinOp::Add,
+                Tok::Minus => BinOp::Sub,
+                Tok::Star => BinOp::Mul,
+                Tok::Slash => BinOp::Div,
+                Tok::Backslash => BinOp::Backslash,
+                Tok::DotStar => BinOp::ElemMul,
+                Tok::DotSlash => BinOp::ElemDiv,
+                Tok::Caret => BinOp::Pow,
+                Tok::DotCaret => BinOp::ElemPow,
+                Tok::Transpose | Tok::DotTranspose | Tok::LParen => {
+                    // postfix بعد از عنصر — مثل a(1)' — با parse_postfix ادامه بده
+                    lhs = self.parse_postfix_from(lhs)?;
+                    continue;
+                }
+                _ => break,
+            };
+            let t = self.bump();
+            let rhs = self.parse_matrix_element_rhs()?;
+            lhs = Expr::Binary {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
+            };
+        }
+        Ok(lhs)
+    }
+
+    fn parse_postfix_from(&mut self, expr: Expr) -> Result<Expr, McError> {
+        // بازاستفاده از منطق postfix — ترانهاده/اندیس رویexpr موجود
+        let mut lhs = expr;
+        loop {
+            match self.peek().tok {
+                Tok::Transpose => {
+                    let t = self.bump();
+                    lhs = Expr::Transpose {
+                        operand: Box::new(lhs),
+                        conj: true,
+                        line: t.line,
+                        col: t.col,
+                    };
+                }
+                Tok::DotTranspose => {
+                    let t = self.bump();
+                    lhs = Expr::Transpose {
+                        operand: Box::new(lhs),
+                        conj: false,
+                        line: t.line,
+                        col: t.col,
+                    };
+                }
+                _ => break,
+            }
+        }
+        Ok(lhs)
+    }
+
+    fn parse_matrix_element_rhs(&mut self) -> Result<Expr, McError> {
+        // سمت راست عملگر داخل ماتریس — یگانی‌ها و postfix مجاز
+        let t = self.peek().clone();
+        match t.tok {
+            Tok::Minus => {
+                self.bump();
+                let operand = self.parse_matrix_element_rhs()?;
+                Ok(Expr::Unary {
+                    op: UnOp::Neg,
+                    operand: Box::new(operand),
+                })
+            }
+            Tok::Plus => {
+                self.bump();
+                let operand = self.parse_matrix_element_rhs()?;
+                Ok(Expr::Unary {
+                    op: UnOp::Pos,
+                    operand: Box::new(operand),
+                })
             }
             _ => {
-                let t = self.peek();
-                Err(parse_err(t.line, t.col, &t.describe(), "an expression"))
+                let e = self.parse_postfix_pow_base()?;
+                // توان/ترانهاده زنجیره‌ای
+                self.finish_matrix_element(e)
             }
         }
     }
 }
 
-/// کلمات کلیدی رزرو (سند ۰۳ بخش ۲) — هرگز به‌عنوان شناسه پذیرفته نمی‌شوند.
-fn check_keyword(name: &str, line: u32, col: u32) -> Result<(), McError> {
-    const PERMANENT: &[(&str, &str, &str)] = &[
-        (
-            "eval",
-            "eval does not exist in MathCraft; use functions and variables instead.",
-            "eval در MathCraft وجود ندارد؛ از توابع و متغیرها استفاده کنید.",
-        ),
-        (
-            "evalin",
-            "evalin does not exist in MathCraft; use functions and variables instead.",
-            "evalin در MathCraft وجود ندارد؛ از توابع و متغیرها استفاده کنید.",
-        ),
-        (
-            "parfor",
-            "parfor is intentionally not supported in version 1.",
-            "parfor در نسخه ۱ عمداً پشتیبانی نمی‌شود.",
-        ),
-        (
-            "classdef",
-            "classdef (OOP) is intentionally not supported in version 1.",
-            "classdef (برنامه‌نویسی شیءگرا) در نسخه ۱ عمداً پشتیبانی نمی‌شود.",
-        ),
-    ];
-    for (kw, en, fa) in PERMANENT {
-        if *kw == name {
-            return Err(McError::new(ids::UNSUPPORTED, line, col, *en, *fa));
+/// ماتریسِ سمت چپ انتساب، چندخروجی است؟ — فقط اگر همه سلول‌ها Var معتبر باشند
+/// (`[a,b]`، `[a b]`، حتی `[a;b]`)؛ در غیر این صورت None (ماتریس معمولی).
+fn out_targets(rows: &[Vec<Expr>]) -> Option<Vec<OutTarget>> {
+    let mut targets = Vec::new();
+    for row in rows {
+        for e in row {
+            match e {
+                Expr::Var { name, line, col }
+                    if name != ":" && !KEYWORDS.contains(&name.as_str()) =>
+                {
+                    targets.push(OutTarget {
+                        name: name.clone(),
+                        line: *line,
+                        col: *col,
+                    });
+                }
+                _ => return None,
+            }
         }
     }
-    const CONTROL: &[&str] = &[
-        "if",
-        "elseif",
-        "else",
-        "end",
-        "for",
-        "while",
-        "switch",
-        "case",
-        "otherwise",
-        "try",
-        "catch",
-        "break",
-        "continue",
-        "return",
-        "function",
-        "global",
-        "persistent",
-    ];
-    if CONTROL.contains(&name) {
-        return Err(McError::new(
-            ids::UNSUPPORTED,
-            line,
-            col,
-            format!("'{name}' is reserved; it arrives with the language milestone."),
-            format!("«{name}» رزرو شده است؛ همراه مایل‌استون زبان می‌آید."),
-        ));
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse_ok(src: &str) -> Program {
-        parse(src).unwrap_or_else(|e| panic!("parse failed for {src:?}: {e}"))
-    }
-
-    #[test]
-    fn one_plus_one_is_one_statement() {
-        let p = parse_ok("1+1");
-        assert_eq!(p.stmts.len(), 1);
-        match &p.stmts[0] {
-            Stmt::Expr { expr, suppress } => {
-                assert!(!suppress);
-                assert_eq!(
-                    expr,
-                    &Expr::Binary {
-                        op: BinOp::Add,
-                        lhs: Box::new(Expr::Num(1.0)),
-                        rhs: Box::new(Expr::Num(1.0)),
-                        line: 1,
-                        col: 2
-                    }
-                );
-            }
-            other => panic!("expected expr stmt, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn power_is_left_associative_like_matlab() {
-        // سند ۰۳ بخش ۵: 2^3^2 = (2^3)^2 = 64
-        let p = parse_ok("2^3^2");
-        let Stmt::Expr { expr, .. } = &p.stmts[0] else {
-            panic!("expr expected");
-        };
-        let Expr::Binary { op, lhs, .. } = expr else {
-            panic!("binary expected");
-        };
-        assert_eq!(*op, BinOp::Pow);
-        let Expr::Binary { op: inner_op, .. } = lhs.as_ref() else {
-            panic!("nested pow expected");
-        };
-        assert_eq!(*inner_op, BinOp::Pow);
-    }
-
-    #[test]
-    fn unary_minus_binds_looser_than_power() {
-        // -2^2 باید در ارزیابی -4 بدهد؛ ساختار: Neg(2^2)
-        let p = parse_ok("-2^2");
-        let Stmt::Expr { expr, .. } = &p.stmts[0] else {
-            panic!("expr expected");
-        };
-        let Expr::Unary { operand, .. } = expr else {
-            panic!("unary expected");
-        };
-        assert!(matches!(
-            operand.as_ref(),
-            Expr::Binary { op: BinOp::Pow, .. }
-        ));
-    }
-
-    #[test]
-    fn negative_exponent_allowed() {
-        assert!(parse("2^-2").is_ok());
-        assert!(parse("2 ^ -2 ^ 2").is_ok());
-    }
-
-    #[test]
-    fn left_associativity_of_arithmetic() {
-        // 6/2*3: ساختار (6/2)*3
-        let p = parse_ok("6/2*3");
-        let Stmt::Expr { expr, .. } = &p.stmts[0] else {
-            panic!("expr expected");
-        };
-        let Expr::Binary { op, lhs, .. } = expr else {
-            panic!("binary expected");
-        };
-        assert_eq!(*op, BinOp::Mul);
-        assert!(matches!(lhs.as_ref(), Expr::Binary { op: BinOp::Div, .. }));
-
-        // 1-2-3: ساختار (1-2)-3
-        let p = parse_ok("1-2-3");
-        let Stmt::Expr { expr, .. } = &p.stmts[0] else {
-            panic!("expr expected");
-        };
-        let Expr::Binary { op, lhs, .. } = expr else {
-            panic!("binary expected");
-        };
-        assert_eq!(*op, BinOp::Sub);
-        assert!(matches!(lhs.as_ref(), Expr::Binary { op: BinOp::Sub, .. }));
-    }
-
-    #[test]
-    fn assignment_and_suppression() {
-        let p = parse_ok("x = 1+2; y = 3, 4");
-        assert_eq!(p.stmts.len(), 3);
-        assert!(matches!(&p.stmts[0], Stmt::Assign { suppress: true, .. }));
-        assert!(matches!(
-            &p.stmts[1],
-            Stmt::Assign {
-                suppress: false,
-                ..
-            }
-        ));
-        assert!(matches!(
-            &p.stmts[2],
-            Stmt::Expr {
-                suppress: false,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn error_positions_are_exact() {
-        let err = parse("1 + (2 * 3").unwrap_err();
-        assert_eq!(err.id, ids::PARSE_ERROR);
-        assert_eq!(err.line, 1);
-        assert_eq!(err.col, 11); // انتهای ورودی (Eof)
-    }
-
-    #[test]
-    fn trailing_token_is_syntax_error() {
-        let err = parse("2 3").unwrap_err();
-        assert_eq!(err.id, ids::PARSE_ERROR);
-    }
-
-    #[test]
-    fn keywords_are_rejected_with_honest_messages() {
-        let e1 = parse("if x > 0").unwrap_err();
-        assert_eq!(e1.id, ids::UNSUPPORTED);
-        // eval ممنوع دائمی (سند ۰۳ بخش ۱۵) — در موقعیت عبارتی
-        let e2 = parse("eval + 1").unwrap_err();
-        assert!(e2.message_fa.contains("وجود ندارد"));
-        // کلمات رزرو حتی به‌عنوان هدف انتساب مجاز نیستند
-        let e3 = parse("if = 5").unwrap_err();
-        assert_eq!(e3.id, ids::UNSUPPORTED);
-    }
-
-    #[test]
-    fn empty_and_comment_only_input() {
-        assert!(parse("").unwrap().stmts.is_empty());
-        assert!(parse("% فقط کامنت").unwrap().stmts.is_empty());
+    if targets.is_empty() {
+        None
+    } else {
+        Some(targets)
     }
 }

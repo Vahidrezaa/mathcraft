@@ -8,9 +8,15 @@ import 'features/shell/app_shell.dart';
 import 'l10n/app_localizations.dart';
 import 'state/app_settings.dart';
 
+/// تم‌های کامل فقط یک‌بار ساخته و کش می‌شوند (بازخورد P0.2 — لگ سوییچ تم):
+/// ساخت ThemeData در هر rebuild پرهزینه بود؛ اکنون instanceهای top-level final
+/// فقط در اولین دسترسی ساخته می‌شوند و در سوییچ تم/زبان دوباره استفاده می‌شوند.
+/// خود انیمیشن، cross-fade سراسری ۲۵۰ms است (جدول سند ۰۶ بخش ۸) — نه ساخت مجدد.
+final ThemeData _lightTheme = CdsTheme.light();
+final ThemeData _darkTheme = CdsTheme.dark();
+
 /// ریشه MathCraft — سوییچ آنی تم/زبان (DoD سند ۰۷ P0):
-/// تم پیش‌فرض تیره «حالت مدرن»، تم روشن «حالت آشنا» با همان کیفیت (سند ۰۶ §1.5)؛
-/// تغییر تم با cross-fade سراسری ۲۵۰ms (جدول سند ۰۶ بخش ۸).
+/// تم پیش‌فرض تیره «حالت مدرن»، تم روشن «حالت آشنا» با همان کیفیت (سند ۰۶ §1.5).
 class MathCraftApp extends ConsumerWidget {
   const MathCraftApp({super.key});
 
@@ -29,8 +35,8 @@ class MathCraftApp extends ConsumerWidget {
       ],
       supportedLocales: const [Locale('fa'), Locale('en')],
       locale: locale,
-      theme: CdsTheme.light(),
-      darkTheme: CdsTheme.dark(),
+      theme: _lightTheme,
+      darkTheme: _darkTheme,
       themeMode: themeMode,
       themeAnimationDuration: CdsMotion.themeLanguageFade,
       debugShowCheckedModeBanner: false,

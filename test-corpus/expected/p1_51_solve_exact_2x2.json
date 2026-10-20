@@ -1,0 +1,16 @@
+{
+ "script": "p1_51_solve_exact_2x2.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "x": [
+   [
+    2.0
+   ],
+   [
+    3.0
+   ]
+  ],
+  "res": 0.0
+ }
+}

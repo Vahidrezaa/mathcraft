@@ -1,0 +1,8 @@
+{
+ "script": "p1_03_backslash_tridiagonal.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "r": 0.0
+ }
+}

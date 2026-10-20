@@ -1,0 +1,21 @@
+{
+ "script": "p1_36_sort_vector_flags.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "a": [
+   [
+    1.0,
+    2.0,
+    3.0
+   ]
+  ],
+  "d": [
+   [
+    3.0,
+    2.0,
+    1.0
+   ]
+  ]
+ }
+}

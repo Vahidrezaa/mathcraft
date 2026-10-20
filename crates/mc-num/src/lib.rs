@@ -1,15 +1,15 @@
 //! mc-num — موتور عددی MathCraft (سند ۰۴).
 //!
-//! اسکلت P0: این کرِیت در مایل‌استون P2 (با زیرمجموعه جبر خطی در P1) پر می‌شود.
-//! نقشه ماژول‌ها طبق سند ۰۴ بخش ۱:
+//! P1: هسته جبر خطی (`linalg`) — facade روی faer + درخت dispatch بک‌اسلش (سند ۰۴ §3.2).
+//! باقی ماژول‌ها (solvers/interp/poly/stats/rng) در P2 پر می‌شوند. نقشه ماژول‌ها طبق سند ۰۴ بخش ۱:
 //!
 //! ```text
 //! linalg/    facade روی faer — LU/Cholesky/QR/SVD/Eigen + درخت dispatch بک‌اسلش (۷ شاخه، سند ۰۴ §3.2)
-//! solvers/   fzero (Brent)، roots، integral (Gauss–Kronrod تطبیقی)، ode45/ode23 (Dormand–Prince)
-//! interp/    linear، pchip (Fritsch–Carlson)، cubic spline
-//! poly/      polyfit (QR — هیچ‌وقت normal equations)، roots (همراه یونیک، ماتریس همبند)
-//! stats/     توصیفی NaN-aware، توزیع‌ها، corrcoef/cov، histogram binning
-//! rng/       PCG64 + Ziggurat — تکرارپذیری با seed (سند ۰۴ بخش ۷)
+//! solvers/   fzero (Brent)، roots، integral (Gauss–Kronrod تطبیقی)، ode45/ode23 (Dormand–Prince)  ← P2
+//! interp/    linear، pchip (Fritsch–Carlson)، cubic spline                                        ← P2
+//! poly/      polyfit (QR — هیچ‌وقت normal equations)، roots (ماتریس همبند)                         ← P2
+//! stats/     توصیفی NaN-aware، توزیع‌ها، corrcoef/cov، histogram binning                           ← P2
+//! rng/       PCG64 + Ziggurat — تکرارپذیری با seed (سند ۰۴ بخش ۷)                                 ← P2
 //! ```
 //!
 //! قواعد غیرقابل‌مذاکره (سند ۰۴ بخش ۹):
@@ -26,3 +26,16 @@
         clippy::unimplemented
     )
 )]
+
+pub mod linalg;
+
+/// تشخیص تقارن دقیق — عمومی برای لایه‌های بالا (dispatch متقارن سند ۰۴ §3.2).
+pub fn is_exactly_symmetric(a: &mc_core::matrix::Matrix) -> bool {
+    linalg::convert::is_exactly_symmetric(a)
+}
+
+pub use linalg::{
+    chol, cond, det, eig, eig_sym, inv, is_permuted_triangular, is_triangular, is_tridiagonal, lu,
+    mldivide, mrdivide, norm, qr, qr_pivoted, rank, rref, svd, thomas_solve, trisolve_lower,
+    trisolve_upper, DispatchStep,
+};

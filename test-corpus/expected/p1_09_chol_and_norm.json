@@ -1,0 +1,9 @@
+{
+ "script": "p1_09_chol_and_norm.m",
+ "tol": 1e-09,
+ "generator": "numpy-2.1.3-seed",
+ "vars": {
+  "err": 0.0,
+  "n": 5.0
+ }
+}
