@@ -17,13 +17,18 @@ if [ ! -d android ]; then
     flutter create --platforms=android --org io.mathcraft --project-name mathcraft .
     rm -f test/widget_test.dart
 fi
-# minSdk 24 (doc 02 s8)
-if [ -f android/app/build.gradle.kts ]; then
-    sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts || true
-fi
-if [ -f android/app/build.gradle ]; then
-    sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle || true
-fi
+# minSdk 24 (doc 02 s8) — patch BOTH template styles:
+#   Groovy (flutter 3.24.x build.gradle):  `minSdk = flutter.minSdkVersion`
+#   older Groovy:                          `minSdkVersion flutter.minSdkVersion`
+#   Kotlin DSL (build.gradle.kts):         `minSdk = flutter.minSdkVersion`
+for MINSDK_F in android/app/build.gradle android/app/build.gradle.kts; do
+    [ -f "$MINSDK_F" ] || continue
+    sed -i -e 's/minSdk = flutter.minSdkVersion/minSdk = 24/' \
+           -e 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' "$MINSDK_F" || true
+done
+grep -h 'minSdk' android/app/build.gradle android/app/build.gradle.kts 2>/dev/null | grep -q 24 || {
+    echo "::error::minSdk 24 patch failed — template syntax changed? Inspect android/app/build.gradle*"; exit 1
+}
 # ndkVersion -> NDK نصب‌شده (CI/Termux)؛ روی دسکتاپ بدون متغیر، پیش‌فرض قالب می‌ماند
 if [ -n "${ANDROID_NDK_HOME:-}" ]; then
     NDKV="$(basename "$ANDROID_NDK_HOME")"
@@ -39,7 +44,7 @@ echo "== 2/6 pub get =="
 flutter pub get
 
 echo "== 3/6 FRB codegen (قرارداد mc-ffi -- سند ۰۲ بخش ۳) =="
-command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
+command -v flutter_rust_bridge_codegen >/dev/null || cargo install flutter_rust_bridge_codegen --version 2.12.0 --locked
 flutter_rust_bridge_codegen generate
 
 echo "== 4/6 build_runner (.freezed.dart — سند ۰۲ بخش ۳ بند ۵) =="

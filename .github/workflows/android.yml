@@ -1,13 +1,17 @@
-# Android pipeline — engine .so (cargo-ndk) + Flutter gates (doc 02 §8, doc 07).
-# The APK build itself moves to the release workflow at P6 (base CI budget).
-# NOTE: mirrors scripts/build_rust_android.sh — every command here is validated
-# locally against NDK r27c / Flutter 3.24.5 / cargo-ndk 4.1.2 before shipping.
+# Android pipeline — engine .so (cargo-ndk) + Flutter gates + installable APK
+# (doc 02 s8, doc 07, doc 09 s2/s8: path D — GitHub Actions is the main build line).
+# Every push to main / manual dispatch produces a debug-signed release APK
+# (split per ABI) as the "MathCraft-APK" artifact — installable for testing.
+# The formal release workflow (own keystore, changelog, F-Droid) stays at P6 (doc 07).
+# NOTE: mirrors scripts/ci-build-apk.sh — every command here is validated locally
+# against Flutter 3.24.5 / JDK 17 / NDK r27c / cargo-ndk 4.1.2 before shipping.
 name: Android
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,7 +22,7 @@ env:
 
 jobs:
   engine-and-flutter:
-    name: libmathcraft.so (cargo-ndk) + analyze/test
+    name: libmathcraft.so + analyze/test + release APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +51,12 @@ jobs:
           channel: stable
           flutter-version: 3.24.5  # pinned = locally-validated version
 
+      - name: Pin JDK 17 for Gradle (AGP 8.x / Gradle 8.3 do not run on newer JDKs)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Pub get
         run: |
           cd app
@@ -64,15 +74,25 @@ jobs:
             exit 1
           fi
 
-      - name: build_runner (freezed — doc 02 §3.5)
+      - name: build_runner (freezed — doc 02 s3.5)
         run: |
           cd app
           dart run build_runner build --delete-conflicting-outputs
 
-      - name: Build engine .so for both ABIs (cargo-ndk v4 semantics)
+      - name: Analyze
+        run: |
+          cd app
+          flutter analyze --fatal-infos
+
+      - name: Widget tests (FakeEngineClient — no .so needed, doc 08 s6)
+        run: |
+          cd app
+          flutter test
+
+      - name: Build engine .so + release APK (ci-build-apk.sh — single source of truth)
         env:
           ANDROID_NDK_HOME: ${{ env.NDK_PATH }}
-        run: bash scripts/build_rust_android.sh
+        run: APK_MODE=release bash scripts/ci-build-apk.sh
 
       - name: Upload jniLibs artifact
         uses: actions/upload-artifact@v4
@@ -81,12 +101,9 @@ jobs:
           path: app/android/app/src/main/jniLibs/
           if-no-files-found: error
 
-      - name: Analyze
-        run: |
-          cd app
-          flutter analyze --fatal-infos
-
-      - name: Widget tests (FakeEngineClient — no .so needed, doc 08 §6)
-        run: |
-          cd app
-          flutter test
+      - name: Upload APK artifact (debug-signed release, split per ABI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MathCraft-APK
+          path: app/build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
