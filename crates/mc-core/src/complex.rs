@@ -56,12 +56,7 @@ impl ComplexMatrix {
     }
 
     pub fn full(rows: usize, cols: usize, re: f64, im: f64) -> Self {
-        Self::from_columns(
-            rows,
-            cols,
-            vec![re; rows * cols],
-            vec![im; rows * cols],
-        )
+        Self::from_columns(rows, cols, vec![re; rows * cols], vec![im; rows * cols])
     }
 
     /// اسکالر مختلط ۱×۱.

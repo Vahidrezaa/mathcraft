@@ -880,12 +880,20 @@ fn eval_expr_end(
                                     ))
                                 }
                             }
-                            None => match registry::lookup(name) {
-                                // builtin برهنه = فراخوانی بدون آرگومان؛
-                                // پیام خطا از خود builtin می‌آید (رفتار متلب)
-                                Some(f) => f(&[], 1),
-                                None => Err(undefined_var_in(name, *line, *col, env)),
-                            },
+                            // builtin برهنه = فراخوانی بدون آرگومان؛
+                            // پیام خطا از خود builtin می‌آید (رفتار متلب)
+                            None => {
+                                if let Some(f) = registry::lookup(name) {
+                                    f(&[], 1)
+                                } else if let Some(mf) =
+                                    crate::registry_p2::lookup_multi(name)
+                                {
+                                    let mut outs = mf(&[], 1)?;
+                                    Ok(outs.remove(0))
+                                } else {
+                                    Err(undefined_var_in(name, *line, *col, env))
+                                }
+                            }
                         }
                     }
                 }
@@ -1080,6 +1088,19 @@ fn eval_expr_end(
                     call,
                 }));
             }
+            if let Some(mf) = crate::registry_p2::lookup_multi(name) {
+                let call: mc_core::AnonCall = Arc::new(move |args: &[Value]| {
+                    let mut outs = mf(args, 1)?;
+                    match outs.len() {
+                        1 => Ok(outs.remove(0)),
+                        _ => Ok(Value::Double(Matrix::full(0, 0, 0.0))),
+                    }
+                });
+                return Ok(Value::Anon(AnonFn {
+                    params: Vec::new(),
+                    call,
+                }));
+            }
             Err(undefined_var_in(name, *line, *col, env))
         }
     }
@@ -1156,13 +1177,34 @@ fn call_named(
             ),
         ));
     }
-    // ۳) builtin؟
+    // ۳) builtin؟ — تک‌خروجی REGISTRY، سپس چندخروجی P2 با nargout=1
     if let Some(f) = registry::lookup(name) {
         let vals: Vec<Value> = args
             .iter()
             .map(|a| eval_expr_end(a, env, depth, target, 0))
             .collect::<Result<_, _>>()?;
         return f(&vals, 1);
+    }
+    if let Some(mf) = crate::registry_p2::lookup_multi(name) {
+        let vals: Vec<Value> = args
+            .iter()
+            .map(|a| eval_expr_end(a, env, depth, target, 0))
+            .collect::<Result<_, _>>()?;
+        let outs = mf(&vals, 1).map_err(|mut e| {
+            e.line = line;
+            e.col = col;
+            e
+        })?;
+        if let Some(v) = outs.into_iter().next() {
+            return Ok(v);
+        }
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!("'{name}' returned no value."),
+            format!("«{name}» مقداری برنگرداند."),
+        ));
     }
     // ۴) هیچ‌کدام — خطا با did-you-mean (builtin، متغیر، تعریف ثبت‌شده)
     Err(undefined_var_in(name, line, col, env))
@@ -1360,8 +1402,16 @@ fn eval_multi_assign(
                             ids::PARSE_ERROR,
                             line,
                             col,
-                            format!("'{name}' produced {} outputs, {} requested.", outs.len(), targets.len()),
-                            format!("«{name}» {} خروجی داد، {} خواسته شده بود.", outs.len(), targets.len()),
+                            format!(
+                                "'{name}' produced {} outputs, {} requested.",
+                                outs.len(),
+                                targets.len()
+                            ),
+                            format!(
+                                "«{name}» {} خروجی داد، {} خواسته شده بود.",
+                                outs.len(),
+                                targets.len()
+                            ),
                         ));
                     }
                     let mut texts = Vec::new();
@@ -1637,8 +1687,7 @@ fn negate(v: &Value) -> Result<Value, McError> {
 
 fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
     // مختلط: == و ~= عنصری؛ ترتیبی (< > <= >=) خطای صادقانه متلب
-    let complex_involved =
-        matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
+    let complex_involved = matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
     if complex_involved {
         if !matches!(op, CmpOp::Eq | CmpOp::Ne) {
             return Err(McError::new(
@@ -1712,8 +1761,7 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
 
 fn apply_binary(op: BinOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
     // مختلط: هر عملوندی که مختلط باشد کل مسیر مختلط می‌رود (رفتار متلب)
-    let complex_involved =
-        matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
+    let complex_involved = matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
     if complex_involved {
         return apply_binary_complex(op, l, r, line, col);
     }

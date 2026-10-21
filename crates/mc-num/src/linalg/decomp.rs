@@ -315,12 +315,7 @@ pub fn eig_complex(
             "تجزیه ویژه برای این ماتریس همگرا نشد.",
         )
     })?;
-    let values: Vec<(f64, f64)> = e
-        .S()
-        .column_vector()
-        .iter()
-        .map(|c| (c.re, c.im))
-        .collect();
+    let values: Vec<(f64, f64)> = e.S().column_vector().iter().map(|c| (c.re, c.im)).collect();
     let mut re = vec![0.0f64; n * n];
     let mut im = vec![0.0f64; n * n];
     for c in 0..n {

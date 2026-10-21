@@ -551,7 +551,8 @@ mod tests {
             r.console_events,
             vec![ConsoleEvent::Print {
                 text: "ans =\n     2
-".to_owned()
+"
+                .to_owned()
             }]
         );
         assert_eq!(r.workspace_delta.changed.len(), 1);

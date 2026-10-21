@@ -134,7 +134,10 @@ fn need_fn<'a>(args: &'a [Value], i: usize, name: &str) -> Result<&'a mc_core::A
     match args.get(i) {
         Some(Value::Anon(f)) => Ok(f),
         _ => Err(err(
-            &format!("{name}: argument {} must be a function handle like @(x)...", i + 1),
+            &format!(
+                "{name}: argument {} must be a function handle like @(x)...",
+                i + 1
+            ),
             &format!("{name}: آرگومان {} باید هندل تابع باشد مثل @(x)...", i + 1),
         )),
     }
@@ -182,11 +185,7 @@ fn bi_randn(args: &[Value], _n: usize) -> Result<Value, McError> {
     uniform_like(args, "randn", num::rng::normal)
 }
 
-fn uniform_like(
-    args: &[Value],
-    name: &str,
-    draw: fn() -> f64,
-) -> Result<Value, McError> {
+fn uniform_like(args: &[Value], name: &str, draw: fn() -> f64) -> Result<Value, McError> {
     let (rows, cols) = match args.len() {
         0 => (1usize, 1usize),
         1 => {
@@ -211,7 +210,7 @@ fn uniform_like(
             }
             (m as usize, n as usize)
         }
-        k => {
+        _k => {
             return Err(err(
                 &format!("{name}: 0 to 2 arguments supported in this milestone."),
                 &format!("{name}: در این مایل‌استون ۰ تا ۲ آرگومان پشتیبانی می‌شود."),
@@ -238,12 +237,7 @@ fn bi_randi(args: &[Value], _n: usize) -> Result<Value, McError> {
             let imax = need_scalar(args, 0, NAME)?;
             (1.0, imax)
         }
-        None => {
-            return Err(err(
-                "randi: needs a bound.",
-                "randi: به سقف نیاز دارد.",
-            ))
-        }
+        None => return Err(err("randi: needs a bound.", "randi: به سقف نیاز دارد.")),
     };
     if lo < 1.0 || hi < lo || hi.fract() != 0.0 || lo.fract() != 0.0 {
         return Err(err(
@@ -500,11 +494,7 @@ fn bi_integral(args: &[Value], _n: usize) -> Result<Value, McError> {
 // ---------- آمار ----------
 
 /// کاهش ستونی (dim=1 متلب) — روی بردار → اسکالر، روی ماتریس → سطر 1×n.
-fn column_reduce(
-    m: &Matrix,
-    name: &str,
-    f: impl Fn(&[f64]) -> f64,
-) -> Result<Value, McError> {
+fn column_reduce(m: &Matrix, name: &str, f: impl Fn(&[f64]) -> f64) -> Result<Value, McError> {
     if m.rows() == 1 || m.cols() == 1 {
         let vals: Vec<f64> = (0..m.numel()).map(|k| m.get_linear(k)).collect();
         return Ok(scalar_val(f(&vals)));
@@ -637,9 +627,11 @@ fn bi_abs(args: &[Value], _n: usize) -> Result<Value, McError> {
 }
 
 fn bi_angle(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(args, |x| if x < 0.0 { std::f64::consts::PI } else { 0.0 }, |re, im| {
-        (im.atan2(re), 0.0)
-    })
+    elem_apply_value(
+        args,
+        |x| if x < 0.0 { std::f64::consts::PI } else { 0.0 },
+        |re, im| (im.atan2(re), 0.0),
+    )
 }
 
 fn bi_isreal(args: &[Value], _n: usize) -> Result<Value, McError> {
@@ -686,11 +678,7 @@ enum OdeMethod {
     Bs32,
 }
 
-fn ode_driver(
-    args: &[Value],
-    nargout: usize,
-    method: OdeMethod,
-) -> Result<Vec<Value>, McError> {
+fn ode_driver(args: &[Value], nargout: usize, method: OdeMethod) -> Result<Vec<Value>, McError> {
     const NAME: &str = "ode";
     let fname = match method {
         OdeMethod::Dp54 => "ode45",
@@ -723,6 +711,7 @@ fn ode_driver(
     let mut opts = num::solvers::OdeOpts::default();
     let mut i = 3;
     while i + 1 < args.len() {
+        #[allow(unused_assignments)]
         let key = need_char(args, i, fname)?;
         let val = need_scalar(args, i + 1, fname)?;
         match key.as_str() {
@@ -758,8 +747,16 @@ fn ode_driver(
         let v = value_to_vec(&out, fname)?;
         if v.len() != y.len() {
             return Err(err(
-                &format!("{fname}: function returned {} components, expected {}.", v.len(), y.len()),
-                &format!("{fname}: تابع {} مؤلفه برگرداند، {} انتظار می‌رفت.", v.len(), y.len()),
+                &format!(
+                    "{fname}: function returned {} components, expected {}.",
+                    v.len(),
+                    y.len()
+                ),
+                &format!(
+                    "{fname}: تابع {} مؤلفه برگرداند، {} انتظار می‌رفت.",
+                    v.len(),
+                    y.len()
+                ),
             ));
         }
         Ok(v)
@@ -769,15 +766,26 @@ fn ode_driver(
     let (tspan_pair, tout): ((f64, f64), Option<Vec<f64>>) = if tspan.len() == 2 {
         ((tspan[0], tspan[1]), None)
     } else {
-        (
-            (tspan[0], tspan[tspan.len() - 1]),
-            Some(tspan.clone()),
-        )
+        ((tspan[0], tspan[tspan.len() - 1]), Some(tspan.clone()))
     };
 
     let res = match method {
-        OdeMethod::Dp54 => num::solvers::ode45(&mut rhs, &[tspan_pair.0, tspan_pair.1], y0, tout.as_deref(), &opts, None)?,
-        OdeMethod::Bs32 => num::solvers::ode23(&mut rhs, &[tspan_pair.0, tspan_pair.1], y0, tout.as_deref(), &opts, None)?,
+        OdeMethod::Dp54 => num::solvers::ode45(
+            &mut rhs,
+            &[tspan_pair.0, tspan_pair.1],
+            y0,
+            tout.as_deref(),
+            &opts,
+            None,
+        )?,
+        OdeMethod::Bs32 => num::solvers::ode23(
+            &mut rhs,
+            &[tspan_pair.0, tspan_pair.1],
+            y0,
+            tout.as_deref(),
+            &opts,
+            None,
+        )?,
     };
 
     let n = res.t.len();
@@ -840,14 +848,5 @@ fn bi_eig(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
             Value::Complex(vectors),
             Value::Complex(ComplexMatrix::from_columns(n, n, d_re, d_im)),
         ]),
-    }
-}
-
-/// تجزیهٔ بردار تخت برای تست‌ها.
-#[cfg(test)]
-pub(crate) fn flat(v: &Value) -> Vec<f64> {
-    match v {
-        Value::Double(m) => (0..m.numel()).map(|k| m.get_linear(k)).collect(),
-        _ => Vec::new(),
     }
 }

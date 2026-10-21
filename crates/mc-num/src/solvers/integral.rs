@@ -135,13 +135,19 @@ fn adaptive<F: QuadFn>(
     budget: u32,
 ) -> Result<QuadResult, McError> {
     let mut fcalls = 0u32;
+    #[allow(unused_variables)]
     let max_abs_f = 0.0f64;
     // جعبه‌ابزار محلی برای شمارش پرسش‌ها — qk15 خودش 15 بار صدا می‌زند؛
     // شمارش: هر qk15 = 15 فراخوانی (۷ جفت + مرکز)
     let (v0, e0) = qk15(f, a, b)?;
     fcalls += 15;
     let mut heap = BinaryHeap::new();
-    heap.push(Interval { a, b, value: v0, err: e0 });
+    heap.push(Interval {
+        a,
+        b,
+        value: v0,
+        err: e0,
+    });
     let mut total = v0;
     let mut total_err = e0;
     while total_err > (abstol).max(reltol * total.abs()) {
@@ -158,10 +164,25 @@ fn adaptive<F: QuadFn>(
         total_err -= iv.err;
         total += vl + vr;
         total_err += el + er;
-        heap.push(Interval { a: iv.a, b: mid, value: vl, err: el });
-        heap.push(Interval { a: mid, b: iv.b, value: vr, err: er });
+        heap.push(Interval {
+            a: iv.a,
+            b: mid,
+            value: vl,
+            err: el,
+        });
+        heap.push(Interval {
+            a: mid,
+            b: iv.b,
+            value: vr,
+            err: er,
+        });
     }
-    Ok(QuadResult { value: total, abserr: total_err, fcalls, max_abs_f: 0.0 })
+    Ok(QuadResult {
+        value: total,
+        abserr: total_err,
+        fcalls,
+        max_abs_f: 0.0,
+    })
 }
 
 /// انتگرال‌گیری روی بازهٔ بی‌نهایت با تبدیل متغیر (سند ۰۴ §5.3).
@@ -202,7 +223,11 @@ fn integrate_infinite<F: QuadFn>(
             Ok(fx * jacobian)
         }
     }
-    let mut inner = Transformed { inner: f, bounds, max_abs: 0.0 };
+    let mut inner = Transformed {
+        inner: f,
+        bounds,
+        max_abs: 0.0,
+    };
     let res = match bounds {
         Bounds::HalfUp { .. } | Bounds::HalfDown { .. } => {
             adaptive(&mut inner, 0.0, 1.0, reltol, abstol, budget)
@@ -281,7 +306,10 @@ pub fn integrate_transformed<F: QuadFn>(
         }
     }
     adaptive(
-        &mut Map { inner: f, map: t_of_x },
+        &mut Map {
+            inner: f,
+            map: t_of_x,
+        },
         a,
         b,
         reltol,
@@ -312,7 +340,16 @@ mod tests {
     fn analytic_exp_and_sin() {
         // ∫₀^π sin = 2
         let mut f = call(|x| Ok(x.sin()));
-        let r = integrate(&mut f, Bounds::Finite { a: 0.0, b: std::f64::consts::PI }, 1e-10, 1e-10).unwrap();
+        let r = integrate(
+            &mut f,
+            Bounds::Finite {
+                a: 0.0,
+                b: std::f64::consts::PI,
+            },
+            1e-10,
+            1e-10,
+        )
+        .unwrap();
         assert!((r.value - 2.0).abs() < 1e-9, "got {}", r.value);
         // ∫₀¹ e^x = e − 1
         let mut g = call(|x| Ok(x.exp()));
@@ -326,12 +363,19 @@ mod tests {
         let mut f = call(|x| Ok((50.0 * x).sin().powi(2)));
         let r = integrate(
             &mut f,
-            Bounds::Finite { a: 0.0, b: 2.0 * std::f64::consts::PI },
+            Bounds::Finite {
+                a: 0.0,
+                b: 2.0 * std::f64::consts::PI,
+            },
             1e-8,
             1e-8,
         )
         .unwrap_or_else(|e| panic!("{e:?}"));
-        assert!((r.value - std::f64::consts::PI).abs() < 1e-6, "got {}", r.value);
+        assert!(
+            (r.value - std::f64::consts::PI).abs() < 1e-6,
+            "got {}",
+            r.value
+        );
     }
 
     #[test]
@@ -357,7 +401,11 @@ mod tests {
         let mut f = call(|x| Ok((-x * x).exp()));
         let r = integrate(&mut f, Bounds::DoublyInfinite, 1e-10, 1e-10)
             .unwrap_or_else(|e| panic!("{e:?}"));
-        assert!((r.value - std::f64::consts::PI.sqrt()).abs() < 1e-9, "got {}", r.value);
+        assert!(
+            (r.value - std::f64::consts::PI.sqrt()).abs() < 1e-9,
+            "got {}",
+            r.value
+        );
     }
 
     #[test]
@@ -370,9 +418,18 @@ mod tests {
 
     #[test]
     fn bounds_direction_checks() {
-        assert!(matches!(bounds_from(0.0, f64::INFINITY), Ok(Bounds::HalfUp { .. })));
-        assert!(matches!(bounds_from(f64::NEG_INFINITY, 0.0), Ok(Bounds::HalfDown { .. })));
-        assert!(matches!(bounds_from(f64::NEG_INFINITY, f64::INFINITY), Ok(Bounds::DoublyInfinite)));
+        assert!(matches!(
+            bounds_from(0.0, f64::INFINITY),
+            Ok(Bounds::HalfUp { .. })
+        ));
+        assert!(matches!(
+            bounds_from(f64::NEG_INFINITY, 0.0),
+            Ok(Bounds::HalfDown { .. })
+        ));
+        assert!(matches!(
+            bounds_from(f64::NEG_INFINITY, f64::INFINITY),
+            Ok(Bounds::DoublyInfinite)
+        ));
         // جهت غلط: [+∞ به 0]
         assert!(bounds_from(f64::INFINITY, 0.0).is_err());
     }

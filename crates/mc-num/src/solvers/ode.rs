@@ -71,6 +71,7 @@ fn err_norm(e: &[f64], y0: &[f64], y1: &[f64], reltol: f64, abstol: f64) -> f64 
 }
 
 /// هیوریستیک گام اول Hairer (پروب اویلر دوبل) — نسخهٔ استاندارد.
+#[allow(clippy::too_many_arguments)]
 fn initial_step<F: OdeFn>(
     f: &mut F,
     t0: f64,
@@ -96,7 +97,11 @@ fn initial_step<F: OdeFn>(
         0.01 * d0 / d1
     };
     h0 = h0.min(max_step);
-    let y1: Vec<f64> = y0.iter().zip(f0.iter()).map(|(y, fi)| y + h0 * fi).collect();
+    let y1: Vec<f64> = y0
+        .iter()
+        .zip(f0.iter())
+        .map(|(y, fi)| y + h0 * fi)
+        .collect();
     let f1 = f.call(t0 + direction * h0, &y1)?;
     let mut d2 = 0.0f64;
     for i in 0..neq {
@@ -132,14 +137,11 @@ fn hermite_dense(
     let h10 = s3 - 2.0 * s2 + s;
     let h01 = -2.0 * s3 + 3.0 * s2;
     let h11 = s3 - s2;
-    y0
-        .iter()
+    y0.iter()
         .zip(y1.iter())
         .zip(f0.iter())
         .zip(f1.iter())
-        .map(|(((y0i, y1i), f0i), f1i)| {
-            h00 * y0i + h10 * h * f0i + h01 * y1i + h11 * h * f1i
-        })
+        .map(|(((y0i, y1i), f0i), f1i)| h00 * y0i + h10 * h * f0i + h01 * y1i + h11 * h * f1i)
         .collect()
 }
 
@@ -219,7 +221,16 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
     let mut f_hist: Vec<Vec<f64>> = vec![k[0].clone()];
     let mut h = match opts.initial_step {
         Some(h) => direction * h.abs(),
-        None => initial_step(f, t0, &y0, &k[0], direction, max_step, opts.reltol, opts.abstol)?,
+        None => initial_step(
+            f,
+            t0,
+            &y0,
+            &k[0],
+            direction,
+            max_step,
+            opts.reltol,
+            opts.abstol,
+        )?,
     };
     let mut steps_since_cancel = 0u32;
     loop {
@@ -326,11 +337,7 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
 }
 
 /// tspan دو عنصری → گام‌ها؛ چندعنصری → درون‌یابی روی نقاط خواسته‌شده.
-fn finish_output(
-    
-    run: AdaptiveRun,
-    tout: Option<&[f64]>,
-) -> Result<OdeResult, McError> {
+fn finish_output(run: AdaptiveRun, tout: Option<&[f64]>) -> Result<OdeResult, McError> {
     let stats = (run.f_evals, run.accepted, run.rejected);
     let Some(points) = tout else {
         return Ok(OdeResult {
@@ -496,7 +503,11 @@ mod tests {
     fn ode45_exponential_decay() {
         // y' = −y، y(0)=1 → y(2) = e^{−2}
         let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
-        let opts = OdeOpts { reltol: 1e-8, abstol: 1e-10, ..Default::default() };
+        let opts = OdeOpts {
+            reltol: 1e-8,
+            abstol: 1e-10,
+            ..Default::default()
+        };
         let r = ode45(&mut f, &[0.0, 2.0], vec![1.0], None, &opts, None)
             .unwrap_or_else(|e| panic!("{e:?}"));
         let last = r.y.last().unwrap_or_else(|| panic!("empty"))[0];
@@ -511,7 +522,11 @@ mod tests {
     fn ode45_sec_reference() {
         // y' = y·tan(t)، y(0)=1 → y(t) = sec(t) → y(1) ≈ 1.8508157176809255
         let mut f = |t: f64, y: &[f64]| Ok(vec![y[0] * t.tan()]);
-        let opts = OdeOpts { reltol: 1e-9, abstol: 1e-12, ..Default::default() };
+        let opts = OdeOpts {
+            reltol: 1e-9,
+            abstol: 1e-12,
+            ..Default::default()
+        };
         let r = ode45(&mut f, &[0.0, 1.0], vec![1.0], None, &opts, None).unwrap();
         let last = r.y.last().unwrap_or_else(|| panic!("empty"))[0];
         let want = 1.0 / 1.0_f64.cos();
@@ -522,7 +537,11 @@ mod tests {
     fn ode45_harmonic_oscillator_period() {
         // y'' = −y — پس از 10π واحد (۵ دوره کامل) به نقطهٔ شروع برمی‌گردد
         let mut f = |_t: f64, y: &[f64]| Ok(vec![y[1], -y[0]]);
-        let opts = OdeOpts { reltol: 1e-9, abstol: 1e-12, ..Default::default() };
+        let opts = OdeOpts {
+            reltol: 1e-9,
+            abstol: 1e-12,
+            ..Default::default()
+        };
         let r = ode45(
             &mut f,
             &[0.0, 10.0 * std::f64::consts::PI],
@@ -541,7 +560,11 @@ mod tests {
     fn ode45_tspan_points_interpolated() {
         // y' = −y با خروجی روی ۱۱ نقطه — Hermite باید روی حل تحلیلی بنشیند
         let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
-        let opts = OdeOpts { reltol: 1e-8, abstol: 1e-10, ..Default::default() };
+        let opts = OdeOpts {
+            reltol: 1e-8,
+            abstol: 1e-10,
+            ..Default::default()
+        };
         let ts: Vec<f64> = (0..=10).map(|i| i as f64 * 0.2).collect();
         let r = ode45(&mut f, &[0.0, 2.0], vec![1.0], Some(&ts), &opts, None).unwrap();
         assert_eq!(r.t.len(), 11);
@@ -559,13 +582,24 @@ mod tests {
     fn ode23_default_accuracy_like_matlab() {
         // y' = −y با پیش‌فرض‌های متلب (RelTol 1e-3) — دقت ~1e-3 نسبی
         let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
-        let r = ode23(&mut f, &[0.0, 1.0], vec![1.0], None, &OdeOpts::default(), None)
-            .unwrap_or_else(|e| panic!("{e:?}"));
+        let r = ode23(
+            &mut f,
+            &[0.0, 1.0],
+            vec![1.0],
+            None,
+            &OdeOpts::default(),
+            None,
+        )
+        .unwrap_or_else(|e| panic!("{e:?}"));
         let last = r.y.last().unwrap_or_else(|| panic!("empty"))[0];
         let want = (-1.0_f64).exp();
         assert!((last - want).abs() < 5e-3, "got {last} want {want}");
         // تلورانس سخت‌گیرتر → دقیق‌تر
-        let opts = OdeOpts { reltol: 1e-8, abstol: 1e-10, ..Default::default() };
+        let opts = OdeOpts {
+            reltol: 1e-8,
+            abstol: 1e-10,
+            ..Default::default()
+        };
         let r2 = ode23(&mut f, &[0.0, 1.0], vec![1.0], None, &opts, None).unwrap();
         let last2 = r2.y.last().unwrap_or_else(|| panic!("empty"))[0];
         assert!((last2 - want).abs() < 1e-6, "got {last2} want {want}");
@@ -575,14 +609,29 @@ mod tests {
     fn cancel_flag_stops_solver() {
         let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
         let stop = AtomicBool::new(true);
-        let r = ode45(&mut f, &[0.0, 1.0], vec![1.0], None, &OdeOpts::default(), Some(&stop));
+        let r = ode45(
+            &mut f,
+            &[0.0, 1.0],
+            vec![1.0],
+            None,
+            &OdeOpts::default(),
+            Some(&stop),
+        );
         assert!(r.is_err(), "cancelled run must error");
     }
 
     #[test]
     fn bad_tspan_errors() {
         let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
-        assert!(ode45(&mut f, &[1.0, 1.0], vec![1.0], None, &OdeOpts::default(), None).is_err());
+        assert!(ode45(
+            &mut f,
+            &[1.0, 1.0],
+            vec![1.0],
+            None,
+            &OdeOpts::default(),
+            None
+        )
+        .is_err());
         assert!(ode45(&mut f, &[0.0], vec![1.0], None, &OdeOpts::default(), None).is_err());
     }
 

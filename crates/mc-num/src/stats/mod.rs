@@ -94,18 +94,18 @@ pub fn cov(a: &Matrix) -> Result<Matrix, McError> {
     }
     // میانگین هر ستون
     let mut mu = vec![0.0f64; n];
-    for c in 0..n {
+    for (c, mu_c) in mu.iter_mut().enumerate() {
         let mut s = 0.0;
         for r in 0..m {
             s += a.get(r, c);
         }
-        mu[c] = s / m as f64;
+        *mu_c = s / m as f64;
     }
     // ماتریس متمرکز X = A − μ  (m×n)
     let mut xc = Matrix::full(m, n, 0.0);
-    for c in 0..n {
+    for (c, mu_c) in mu.iter().enumerate() {
         for r in 0..m {
-            xc.set(r, c, a.get(r, c) - mu[c]);
+            xc.set(r, c, a.get(r, c) - mu_c);
         }
     }
     // C = Xᵀ·X / (m−1) — ضرب دستی کوچک (n×m ضرب m×n)
@@ -132,8 +132,16 @@ pub fn cov2(x: &Matrix, y: &Matrix) -> Result<Matrix, McError> {
     if xs.len() != ys.len() {
         return Err(num_error(
             mc_core::error::ids::SIZE_MISMATCH,
-            format!("cov: vectors must have the same length ({} vs {}).", xs.len(), ys.len()),
-            format!("cov: بردارها باید هم‌طول باشند ({} در برابر {}).", xs.len(), ys.len()),
+            format!(
+                "cov: vectors must have the same length ({} vs {}).",
+                xs.len(),
+                ys.len()
+            ),
+            format!(
+                "cov: بردارها باید هم‌طول باشند ({} در برابر {}).",
+                xs.len(),
+                ys.len()
+            ),
         ));
     }
     let m = Matrix::from_columns(xs.len(), 2, {
@@ -154,7 +162,11 @@ pub fn corrcoef(a: &Matrix) -> Result<Matrix, McError> {
         for j in i..n {
             let denom = (c.get(i, i) * c.get(j, j)).sqrt();
             let v = if denom == 0.0 {
-                if i == j { 1.0 } else { f64::NAN }
+                if i == j {
+                    1.0
+                } else {
+                    f64::NAN
+                }
             } else {
                 c.get(i, j) / denom
             };
@@ -196,10 +208,6 @@ pub fn corrcoef2(x: &Matrix, y: &Matrix) -> Result<Matrix, McError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn col(v: &[f64]) -> Matrix {
-        Matrix::from_columns(v.len(), 1, v.to_vec())
-    }
 
     fn row(v: &[f64]) -> Matrix {
         Matrix::from_columns(1, v.len(), v.to_vec())

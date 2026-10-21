@@ -36,27 +36,33 @@ where
     let mut fb = f(b)?;
     fcalls += 1;
     if fa == 0.0 {
-        return Ok(BrentResult { x: a, fx: fa, iterations: 0, fcalls });
+        return Ok(BrentResult {
+            x: a,
+            fx: fa,
+            iterations: 0,
+            fcalls,
+        });
     }
     if fb == 0.0 {
-        return Ok(BrentResult { x: b, fx: fb, iterations: 0, fcalls });
+        return Ok(BrentResult {
+            x: b,
+            fx: fb,
+            iterations: 0,
+            fcalls,
+        });
     }
     if fa.signum() == fb.signum() {
         return Err(solver_error(
             ids::PARSE_ERROR,
-            format!(
-                "fzero: endpoints must bracket a sign change (f(a) = {fa}, f(b) = {fb})."
-            ),
-            format!(
-                "fzero: دو سر بازه باید تغییر علامت داشته باشند (f(a) = {fa}، f(b) = {fb})."
-            ),
+            format!("fzero: endpoints must bracket a sign change (f(a) = {fa}, f(b) = {fb})."),
+            format!("fzero: دو سر بازه باید تغییر علامت داشته باشند (f(a) = {fa}، f(b) = {fb})."),
         ));
     }
 
     // متغیرهای Brent (قالب zbrent — Numerical Recipes)
     let (mut c, mut fc, mut d, mut e) = (b, fb, b - a, b - a);
     let mut iterations = 0u32;
-    for _ in 0..MAX_ITER {
+    while iterations < MAX_ITER {
         iterations += 1;
         if fb.signum() == fc.signum() {
             c = a;
@@ -76,7 +82,12 @@ where
         let tol1 = 2.0 * f64::EPSILON * b.abs() + 0.5 * tol;
         let xm = 0.5 * (c - b);
         if xm.abs() <= tol1 || fb == 0.0 {
-            return Ok(BrentResult { x: b, fx: fb, iterations, fcalls });
+            return Ok(BrentResult {
+                x: b,
+                fx: fb,
+                iterations,
+                fcalls,
+            });
         }
         if e.abs() >= tol1 && fa.abs() > fb.abs() {
             // تلاش درجه‌۲ وارون / امتیانی
@@ -86,8 +97,10 @@ where
             } else {
                 let q0 = fa / fc;
                 let r = fb / fc;
-                (s * (2.0 * xm * q0 * (q0 - r) - (b - a) * (r - 1.0)),
-                 (q0 - 1.0) * (r - 1.0) * (s - 1.0))
+                (
+                    s * (2.0 * xm * q0 * (q0 - r) - (b - a) * (r - 1.0)),
+                    (q0 - 1.0) * (r - 1.0) * (s - 1.0),
+                )
             };
             let q = if p > 0.0 { -q } else { q };
             let p = p.abs();
@@ -107,7 +120,15 @@ where
         // جابه‌جایی براکت
         a = b;
         fa = fb;
-        b += if d.abs() > tol1 { d } else { if d > 0.0 { tol1 } else { -tol1 } };
+        b += if d.abs() > tol1 {
+            d
+        } else {
+            if d > 0.0 {
+                tol1
+            } else {
+                -tol1
+            }
+        };
         fb = f(b)?;
         fcalls += 1;
         if fcalls > MAX_FCALLS {
@@ -132,7 +153,12 @@ where
 {
     let f0 = f(x0)?;
     if f0 == 0.0 {
-        return Ok(BrentResult { x: x0, fx: f0, iterations: 0, fcalls: 1 });
+        return Ok(BrentResult {
+            x: x0,
+            fx: f0,
+            iterations: 0,
+            fcalls: 1,
+        });
     }
     // الگوی متلب: گسترش هندسی از نقاط مجاور — ۶۰ گام ×۱.۷ (~۰.۱ تا ۱e13 برابر)
     let mut dx = (x0.abs() * 0.01).max(0.1);
@@ -140,7 +166,12 @@ where
         for &cand in &[x0 - dx, x0 + dx] {
             let fc = f(cand)?;
             if fc == 0.0 {
-                return Ok(BrentResult { x: cand, fx: fc, iterations: 0, fcalls: 1 });
+                return Ok(BrentResult {
+                    x: cand,
+                    fx: fc,
+                    iterations: 0,
+                    fcalls: 1,
+                });
             }
             if fc.signum() != f0.signum() {
                 return fzero_bracket(f, x0, cand, tol);
@@ -154,9 +185,7 @@ where
             "fzero: cannot detect a sign change around x0 = {x0}; provide a bracket [a b] \
              with f(a)·f(b) < 0."
         ),
-        format!(
-            "fzero: تغییر علامت اطراف x0 = {x0} پیدا نشد؛ براکت [a b] با f(a)·f(b) < 0 بدهید."
-        ),
+        format!("fzero: تغییر علامت اطراف x0 = {x0} پیدا نشد؛ براکت [a b] با f(a)·f(b) < 0 بدهید."),
     )
     .with_suggestion("try a bracket: fzero(f, [2 4])"))
 }
@@ -185,7 +214,11 @@ mod tests {
         // cos(x) = 0 نزدیک ۱.۵ → π/2
         let mut f = |x: f64| Ok::<f64, McError>(x.cos());
         let r = fzero_scalar(&mut f, 1.5, f64::EPSILON).unwrap();
-        assert!(close(r.x, std::f64::consts::FRAC_PI_2, 1e-12), "x = {}", r.x);
+        assert!(
+            close(r.x, std::f64::consts::FRAC_PI_2, 1e-12),
+            "x = {}",
+            r.x
+        );
         // بدون تغییر علامت اطراف: x² + 1
         let mut g = |x: f64| Ok::<f64, McError>(x * x + 1.0);
         assert!(fzero_scalar(&mut g, 5.0, f64::EPSILON).is_err());

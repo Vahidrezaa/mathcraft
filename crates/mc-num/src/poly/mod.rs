@@ -56,7 +56,11 @@ pub fn roots(p: &Matrix) -> Result<ComplexMatrix, McError> {
     let (values, _) = eig_complex(&c)?;
     // ستون‌بردار n×1 مختلط — مرتب‌سازی صعودی (re، im) برای تکرارپذیری
     let mut sorted = values;
-    sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)));
+    sorted.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+    });
     let mut re = Vec::with_capacity(n);
     let mut im = Vec::with_capacity(n);
     for (r, i) in sorted {
@@ -87,23 +91,37 @@ pub fn polyfit(x: &Matrix, y: &Matrix, degree: usize) -> Result<Matrix, McError>
     if xs.len() != ys.len() {
         return Err(num_error(
             mc_core::error::ids::SIZE_MISMATCH,
-            format!("polyfit: X and Y must have the same length ({} vs {}).", xs.len(), ys.len()),
-            format!("polyfit: X و Y باید هم‌طول باشند ({} در برابر {}).", xs.len(), ys.len()),
+            format!(
+                "polyfit: X and Y must have the same length ({} vs {}).",
+                xs.len(),
+                ys.len()
+            ),
+            format!(
+                "polyfit: X و Y باید هم‌طول باشند ({} در برابر {}).",
+                xs.len(),
+                ys.len()
+            ),
         ));
     }
     let k = degree + 1; // تعداد ضریب‌ها
     if xs.len() < k {
         return Err(num_error(
             mc_core::error::ids::SIZE_MISMATCH,
-            format!("polyfit: degree {degree} needs at least {k} points, got {}.", xs.len()),
-            format!("polyfit: درجه {degree} دست‌کم {k} نقطه می‌خواهد، {} داده شد.", xs.len()),
+            format!(
+                "polyfit: degree {degree} needs at least {k} points, got {}.",
+                xs.len()
+            ),
+            format!(
+                "polyfit: درجه {degree} دست‌کم {k} نقطه می‌خواهد، {} داده شد.",
+                xs.len()
+            ),
         ));
     }
     // ماتریس واندرمونده m×k: ستون j = x.^ (k-1-j) — ضرایب نزولی
     let m = xs.len();
     let mut vander = Matrix::full(m, k, 0.0);
-    for r in 0..m {
-        for (c, xv) in (0..k).zip(std::iter::repeat(xs[r])) {
+    for (r, &xv) in xs.iter().enumerate() {
+        for c in 0..k {
             vander.set(r, c, xv.powi((k - 1 - c) as i32));
         }
     }
@@ -112,12 +130,12 @@ pub fn polyfit(x: &Matrix, y: &Matrix, degree: usize) -> Result<Matrix, McError>
     let (q, r_full) = qr(&vander)?;
     // qy = Qᵀ·y — فقط k مؤلفه اول لازم است
     let mut qy = vec![0.0f64; k];
-    for c in 0..k {
+    for (c, qy_c) in qy.iter_mut().enumerate() {
         let mut acc = 0.0;
         for r in 0..m {
             acc += q.get(r, c) * ymat.get(r, 0);
         }
-        qy[c] = acc;
+        *qy_c = acc;
     }
     // R مثلثی بالایی k×k (بخش بالای r_full)
     let mut rtri = Matrix::full(k, k, 0.0);

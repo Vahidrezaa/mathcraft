@@ -127,6 +127,7 @@ fn elem_apply(args: &[Value], f: fn(f64) -> Result<f64, McError>) -> Result<Valu
 }
 
 // ---- wrapperهای نام‌دار برای رجیستری static (fn pointer ها const-safe اند) ----
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_abs(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, bi_abs)
@@ -207,18 +208,22 @@ fn el_fix(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, bi_fix)
 }
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_angle(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, bi_angle)
 }
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_real(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, Ok)
 } // روی حقیقی = همانی
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_imag(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, |_| Ok(0.0))
 }
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_conj(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, Ok)
@@ -235,6 +240,7 @@ fn el_isfinite(a: &[Value], n: usize) -> Result<Value, McError> {
     let _ = n;
     elem_apply(a, |x| Ok(x.is_finite() as i32 as f64))
 }
+#[allow(dead_code)] // P1 نسخه؛ نسخهٔ مختلط-آگاه در registry_p2
 fn el_isreal(a: &[Value], _n: usize) -> Result<Value, McError> {
     let _ = a;
     Ok(scalar_val(1.0))

@@ -105,11 +105,11 @@ fn normal_pdf(x: f64) -> f64 {
 fn gauss_legendre(n: usize) -> (Vec<f64>, Vec<f64>) {
     let mut x = vec![0.0f64; n];
     let mut w = vec![0.0f64; n];
-    let m = (n + 1) / 2;
+    let m = n.div_ceil(2);
     for i in 0..m {
         // حدس اولیه ریشه i-ام (قرارداد gauleg)
         let mut z = (std::f64::consts::PI * (i as f64 + 0.75) / (n as f64 + 0.5)).cos();
-        let mut p1 = 0.0f64;
+        let mut p1;
         let mut pp = 0.0f64;
         for _ in 0..100 {
             p1 = 1.0;
@@ -237,6 +237,7 @@ pub fn normal() -> f64 {
 }
 
 impl GlobalRng {
+    #[allow(clippy::never_loop)] // تحلیلگر: مسیر پذیرش/رد ممیز شناور را نمی‌بیند
     fn normal_zig(&mut self) -> f64 {
         let table = zig_table();
         loop {
@@ -263,7 +264,9 @@ impl GlobalRng {
             // پذیرفته (a_k) به مساحت مستطیل (V_k) بین نوارها متفاوت است،
             // نوارهای پهنِ دم کم‌نمونه‌برداری می‌شوند (بایاس سیستماتیک دم).
             let idx = match table.cum.binary_search_by(|probe| {
-                probe.partial_cmp(&u_sel).unwrap_or(std::cmp::Ordering::Less)
+                probe
+                    .partial_cmp(&u_sel)
+                    .unwrap_or(std::cmp::Ordering::Less)
             }) {
                 Ok(i) => i.min(ZIG_LEVELS - 1),
                 Err(i) => (i - 1).min(ZIG_LEVELS - 1),
@@ -320,7 +323,11 @@ mod tests {
                 + t * (-0.284_496_736
                     + t * (1.421_413_741 + t * (-1.453_152_027 + t * 1.061_405_429))))
                 * (-x * x).exp();
-        if x >= 0.0 { y } else { -y }
+        if x >= 0.0 {
+            y
+        } else {
+            -y
+        }
     }
 
     #[test]
@@ -339,12 +346,18 @@ mod tests {
         let t = zig_table();
         // مرزها اکیداً صعودی از 0
         for i in 0..ZIG_LEVELS {
-            assert!(t.bounds[i] < t.bounds[i + 1], "boundary not increasing at {i}");
+            assert!(
+                t.bounds[i] < t.bounds[i + 1],
+                "boundary not increasing at {i}"
+            );
         }
         assert_eq!(t.bounds[0], 0.0);
         // جرم‌های تجمعی اکیداً صعودی و کمتر از کل
         for i in 0..ZIG_LEVELS {
-            assert!(t.cum[i] < t.cum[i + 1], "cumulative mass not increasing at {i}");
+            assert!(
+                t.cum[i] < t.cum[i + 1],
+                "cumulative mass not increasing at {i}"
+            );
         }
         assert!(t.cum[ZIG_LEVELS] < t.total, "tail mass must be positive");
         assert!(t.total - t.cum[ZIG_LEVELS] > 1e-6, "tail too small");
@@ -419,7 +432,11 @@ mod tests {
         let cdf = |z: f64| 0.5 * (1.0 + erf_approx(z / std::f64::consts::SQRT_2));
         let mut chi2 = 0.0;
         let mut lo = f64::NEG_INFINITY;
-        for (i, hi) in edges.iter().chain(std::iter::once(&f64::INFINITY)).enumerate() {
+        for (i, hi) in edges
+            .iter()
+            .chain(std::iter::once(&f64::INFINITY))
+            .enumerate()
+        {
             let p = cdf(*hi) - cdf(lo);
             let expected = p * n as f64;
             let diff = counts[i] as f64 - expected;

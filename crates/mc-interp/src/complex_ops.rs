@@ -77,7 +77,9 @@ pub fn complex_broadcast(
             0,
             0,
             format!("{op_name}: sizes must agree or one scalar, got {ar}x{ac} and {br}x{bc}."),
-            format!("{op_name}: ابعاد باید هم‌خوان یا یکی اسکالر باشد؛ دریافت شد {ar}×{ac} و {br}×{bc}."),
+            format!(
+                "{op_name}: ابعاد باید هم‌خوان یا یکی اسکالر باشد؛ دریافت شد {ar}×{ac} و {br}×{bc}."
+            ),
         ));
     }
     let (rows, cols) = if a_scalar { (br, bc) } else { (ar, ac) };
@@ -102,7 +104,10 @@ pub fn build_matrix_value(elements: &[Value], rows: usize, cols: usize) -> Resul
         return Err(cerr(
             0,
             0,
-            format!("matrix literal: expected {n} elements, got {}.", elements.len()),
+            format!(
+                "matrix literal: expected {n} elements, got {}.",
+                elements.len()
+            ),
             format!("ماتریس لفظی: {n} عنصر لازم است، {} داده شد.", elements.len()),
         ));
     }
@@ -397,7 +402,10 @@ mod tests {
         // i² = −1 (با تلورانس — π در ممیز شناور دقیق نیست)
         let p2 = c_elem_pow(&z(0.0, 1.0), &z(2.0, 0.0)).unwrap();
         let (pr, pi) = p2.get(0, 0);
-        assert!((pr - -1.0).abs() < 1e-12 && pi.abs() < 1e-12, "i² = ({pr}, {pi})");
+        assert!(
+            (pr - -1.0).abs() < 1e-12 && pi.abs() < 1e-12,
+            "i² = ({pr}, {pi})"
+        );
         // 0^0 = 1
         let p3 = c_elem_pow(&z(0.0, 0.0), &z(0.0, 0.0)).unwrap();
         assert_eq!(p3.get(0, 0), (1.0, 0.0));
@@ -456,7 +464,10 @@ mod tests {
         assert_eq!(z.get(1, 0), (3.0, 0.0));
         assert_eq!(z.get(1, 1), (4.0, 1.0));
         // همهٔ حقیقی → Double
-        let real_vals = vec![Value::Double(Matrix::scalar(1.0)), Value::Double(Matrix::scalar(2.0))];
+        let real_vals = vec![
+            Value::Double(Matrix::scalar(1.0)),
+            Value::Double(Matrix::scalar(2.0)),
+        ];
         let v2 = build_matrix_value(&real_vals, 1, 2).unwrap();
         assert!(matches!(v2, Value::Double(_)));
     }

@@ -129,19 +129,19 @@ fn format_matrix(m: &Matrix) -> String {
     }
     // عرض هر ستون از بلندترین عضو قالب‌بندی‌شده
     let mut widths = vec![COLUMN_MIN_WIDTH; m.cols()];
-    for c in 0..m.cols() {
+    for (c, w_c) in widths.iter_mut().enumerate() {
         let mut w = 0usize;
         for r in 0..m.rows() {
             w = w.max(format_short(m.get(r, c)).chars().count());
         }
-        widths[c] = widths[c].max(w + COLUMN_PAD);
+        *w_c = (*w_c).max(w + COLUMN_PAD);
     }
     let mut lines = Vec::with_capacity(m.rows());
     for r in 0..m.rows() {
         let mut line = String::new();
-        for c in 0..m.cols() {
+        for (c, w_c) in widths.iter().enumerate() {
             let cell = format_short(m.get(r, c));
-            let pad = widths[c].saturating_sub(cell.chars().count());
+            let pad = w_c.saturating_sub(cell.chars().count());
             line.push_str(&" ".repeat(pad));
             line.push_str(&cell);
         }
@@ -160,21 +160,21 @@ fn format_complex_matrix(z: &ComplexMatrix) -> String {
         return pad_column(&[format_complex(re, im)]);
     }
     let mut widths = vec![COLUMN_MIN_WIDTH; z.cols()];
-    for c in 0..z.cols() {
+    for (c, w_c) in widths.iter_mut().enumerate() {
         let mut w = 0usize;
         for r in 0..z.rows() {
             let (re, im) = z.get(r, c);
             w = w.max(format_complex(re, im).chars().count());
         }
-        widths[c] = widths[c].max(w + COLUMN_PAD);
+        *w_c = (*w_c).max(w + COLUMN_PAD);
     }
     let mut lines = Vec::with_capacity(z.rows());
     for r in 0..z.rows() {
         let mut line = String::new();
-        for c in 0..z.cols() {
+        for (c, w_c) in widths.iter().enumerate() {
             let (re, im) = z.get(r, c);
             let cell = format_complex(re, im);
-            let pad = widths[c].saturating_sub(cell.chars().count());
+            let pad = w_c.saturating_sub(cell.chars().count());
             line.push_str(&" ".repeat(pad));
             line.push_str(&cell);
         }
@@ -249,27 +249,23 @@ mod tests {
         );
         // residual =\n     0\n
         let res = Matrix::scalar(0.0);
-        assert_eq!(format_assignment("residual", &Value::Double(res)), "residual =\n     0\n");
+        assert_eq!(
+            format_assignment("residual", &Value::Double(res)),
+            "residual =\n     0\n"
+        );
     }
 
     #[test]
     fn matrix_two_columns_aligned() {
         // [1 2; 3 4] → هر ستون عرض 6: "     1     2"
         let m = Matrix::from_columns(2, 2, vec![1.0, 3.0, 2.0, 4.0]);
-        assert_eq!(
-            format_matrix(&m),
-            "     1     2\n     3     4"
-        );
+        assert_eq!(format_matrix(&m), "     1     2\n     3     4");
     }
 
     #[test]
     fn decimal_columns_wide_fields() {
         // اجزای ۵رقمی → میدان ۱۱تایی (مثال سبک سند متلب با قاعدهٔ +4)
-        let m = Matrix::from_columns(
-            2,
-            2,
-            vec![1.0 / 3.0, 1.0 / 7.0, 1.0 / 6.0, 1.0 / 8.0],
-        );
+        let m = Matrix::from_columns(2, 2, vec![1.0 / 3.0, 1.0 / 7.0, 1.0 / 6.0, 1.0 / 8.0]);
         let out = format_matrix(&m);
         let rows: Vec<&str> = out.split('\n').collect();
         assert_eq!(rows[0], "    0.33333    0.16667");
@@ -288,15 +284,15 @@ mod tests {
         let z = ComplexMatrix::scalar(1.0, 2.0);
         assert_eq!(format_value(&Value::Complex(z)), "    1.0000 + 2.0000i\n");
         let z2 = ComplexMatrix::scalar(0.0, -1.0);
-        assert_eq!(
-            format_value(&Value::Complex(z2)),
-            "    0.0000 - 1.0000i\n"
-        );
+        assert_eq!(format_value(&Value::Complex(z2)), "    0.0000 - 1.0000i\n");
     }
 
     #[test]
     fn ans_block() {
-        assert_eq!(format_ans(&Value::Double(Matrix::scalar(2.0))), "ans =\n     2\n");
+        assert_eq!(
+            format_ans(&Value::Double(Matrix::scalar(2.0))),
+            "ans =\n     2\n"
+        );
     }
 
     #[test]
@@ -307,6 +303,9 @@ mod tests {
         );
         assert_eq!(format_value(&Value::Char("abc".to_owned())), "'abc'\n");
         // anon از format_ans/assignment مسیر جدا دارد
-        assert_eq!(format_assignment("f", &Value::Char("x".into())), "f =\n'x'\n");
+        assert_eq!(
+            format_assignment("f", &Value::Char("x".into())),
+            "f =\n'x'\n"
+        );
     }
 }

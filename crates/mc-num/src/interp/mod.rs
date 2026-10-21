@@ -291,9 +291,10 @@ pub fn not_a_knot_second_derivs(x: &[f64], v: &[f64]) -> Vec<f64> {
     }
     // ردیف ۰ — not-a-knot چپ (x_1): پیوستگی S''' بین بازه‌های ۰ و ۱
     // (M₂−M₁)/h₁ = (M₁−M₀)/h₀ ⟹ h₁·M₀ − (h₀+h₁)·M₁ + h₀·M₂ = 0
-    a[0 * dim + 0] = h[1];
-    a[0 * dim + 1] = -(h[0] + h[1]);
-    a[0 * dim + 2] = h[0];
+    // ردیف ۰ — اندیس‌های صریح (clippy: 0*dim را عملیات صفر می‌بیند)
+    a[0] = h[1];
+    a[1] = -(h[0] + h[1]);
+    a[2] = h[0];
     // ردیف‌های داخلی (i = 1..n-1) — معادلهٔ گرهٔ i
     for i in 1..n {
         let r = i * dim;
@@ -356,15 +357,12 @@ pub fn not_a_knot_second_derivs(x: &[f64], v: &[f64]) -> Vec<f64> {
 
 /// ارزیابی spline از دومین مشتق‌های گره‌ای.
 fn spline_eval(x: &[f64], v: &[f64], m2: &[f64], t: f64) -> f64 {
-    let n1 = x.len();
     let i = find_interval(x, t);
     let h = x[i + 1] - x[i];
     let a = (x[i + 1] - t) / h;
     let b = (t - x[i]) / h;
     // فرمول استاندارد spline مکعبی بر پایهٔ دومین مشتق
-    a * v[i]
-        + b * v[i + 1]
-        + ((a * a * a - a) * m2[i] + (b * b * b - b) * m2[i + 1]) * h * h / 6.0
+    a * v[i] + b * v[i + 1] + ((a * a * a - a) * m2[i] + (b * b * b - b) * m2[i + 1]) * h * h / 6.0
 }
 
 /// کمینهٔ نقطه لازم برای هر روش — not-a-knot دست‌کم ۴ گره می‌خواهد.
@@ -396,15 +394,8 @@ mod tests {
     }
 
     fn run(x: &[f64], v: &[f64], tq: f64, method: Method) -> f64 {
-        let inp = prepare_interp1(
-            &row(x),
-            &row(v),
-            &row(&[tq]),
-            method,
-            false,
-            None,
-        )
-        .unwrap_or_else(|e| panic!("{e:?}"));
+        let inp = prepare_interp1(&row(x), &row(v), &row(&[tq]), method, false, None)
+            .unwrap_or_else(|e| panic!("{e:?}"));
         at(&interp1_eval(&inp))
     }
 
@@ -417,7 +408,16 @@ mod tests {
         assert!(run(&x, &v, -1.0, Method::Linear).is_nan());
         assert!(run(&x, &v, 3.5, Method::Linear).is_nan());
         // نزولی → معکوس می‌شود و همان جواب
-        assert!((run(&[3.0, 2.0, 1.0, 0.0], &[6.0, 4.0, 2.0, 0.0], 1.5, Method::Linear) - 3.0).abs() < 1e-15);
+        assert!(
+            (run(
+                &[3.0, 2.0, 1.0, 0.0],
+                &[6.0, 4.0, 2.0, 0.0],
+                1.5,
+                Method::Linear
+            ) - 3.0)
+                .abs()
+                < 1e-15
+        );
     }
 
     #[test]
@@ -434,14 +434,33 @@ mod tests {
         // داده اکیداً صعودی → pchip نباید overshoot کند (فراتر از بازهٔ مقادیر)
         let x = [0.0, 1.0, 2.0, 3.0, 4.0];
         let v = [0.0, 0.1, 5.0, 5.1, 5.2];
-        let inp = prepare_interp1(&row(&x), &row(&v), &row(&[0.5, 1.5, 2.5]), Method::Pchip, false, None).unwrap();
+        let inp = prepare_interp1(
+            &row(&x),
+            &row(&v),
+            &row(&[0.5, 1.5, 2.5]),
+            Method::Pchip,
+            false,
+            None,
+        )
+        .unwrap();
         let out = interp1_eval(&inp);
         for i in 0..3 {
             let t = out.get_linear(i);
-            assert!(t >= v[i] - 1e-12 && t <= v[i + 1] + 1e-12, "overshoot at {i}: {t}");
+            assert!(
+                t >= v[i] - 1e-12 && t <= v[i + 1] + 1e-12,
+                "overshoot at {i}: {t}"
+            );
         }
         // در گره‌ها دقیقاً مقدار گره
-        let inp = prepare_interp1(&row(&x), &row(&v), &row(&[1.0, 3.0]), Method::Pchip, false, None).unwrap();
+        let inp = prepare_interp1(
+            &row(&x),
+            &row(&v),
+            &row(&[1.0, 3.0]),
+            Method::Pchip,
+            false,
+            None,
+        )
+        .unwrap();
         let out = interp1_eval(&inp);
         assert!((out.get_linear(0) - 0.1).abs() < 1e-12);
         assert!((out.get_linear(1) - 5.1).abs() < 1e-12);
@@ -481,7 +500,11 @@ mod tests {
         let x3 = [-2.0, -1.0, 0.0, 1.0, 2.0];
         let v3: Vec<f64> = x3.iter().map(|&t| f(t)).collect();
         let got = run(&x3, &v3, 2.5, Method::Spline);
-        assert!((got - f(2.5)).abs() < 1e-9, "spline extrap: {got} vs {}", f(2.5));
+        assert!(
+            (got - f(2.5)).abs() < 1e-9,
+            "spline extrap: {got} vs {}",
+            f(2.5)
+        );
     }
 
     #[test]
