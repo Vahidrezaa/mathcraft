@@ -130,7 +130,7 @@ void main() {
     expect(Theme.of(context).brightness, Brightness.light);
   });
 
-  testWidgets('long-press on a console entry copies it and confirms',
+  testWidgets('console entries live inside a themed SelectionArea (FB-2)',
       (tester) async {
     _mockClipboard(tester);
     await _pumpApp(tester);
@@ -139,14 +139,13 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    // long-press روی اکوی ورودی — متن بدون پرامپت «>>»
-    await tester.longPress(find.text('1+1'));
-    await tester.pumpAndSettle();
-
-    // تأیید کوتاه با زبان فعال (پیش‌فرض فارسی — D-06)
-    expect(find.text('در حافظه کپی شد'), findsOneWidget);
-    final read = await Clipboard.getData('text/plain');
-    expect(read?.text, '1+1');
+    // FB-2: انتخاب تم‌دار — SelectionArea حول خروجی‌ها + رنگ‌های CDS
+    expect(find.byType(SelectionArea), findsOneWidget);
+    final context = tester.element(find.byType(TextField));
+    final sel = Theme.of(context).textSelectionTheme;
+    expect(sel.selectionHandleColor,
+        Theme.of(context).colorScheme.primary);
+    expect(sel.cursorColor, Theme.of(context).colorScheme.primary);
   });
 
   testWidgets('copy button on a result block copies the rendered text',
@@ -158,16 +157,16 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    // دکمه کپی محو کنار بلوک نتیجه (ans = 2) — تنها دکمه کپی روی صفحه
+    // دکمه کپی محو کنار بلوک نتیجه — چیدمان متلب FB-1: «ans =» سطر بعد مقدار
     await tester.tap(find.byTooltip('کپی'));
     await tester.pumpAndSettle();
 
     expect(find.text('در حافظه کپی شد'), findsOneWidget);
     final read = await Clipboard.getData('text/plain');
-    expect(read?.text, 'ans = 2');
+    expect(read?.text, 'ans =\n     2\n');
   });
 
-  testWidgets('long-press on an error card copies the raw engine message',
+  testWidgets('error card copy button copies the raw engine message',
       (tester) async {
     _mockClipboard(tester);
     await _pumpApp(tester);
@@ -176,11 +175,12 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.textContaining('تعریف نشده'));
+    // FB-2: انتخابِ بخشی از متن با long-press انجام می‌شود؛ کپی کل پیام
+    // خام موتور (messageEn) از دکمهٔ کارت خطا می‌آید.
+    await tester.tap(find.byTooltip('کپی').last);
     await tester.pumpAndSettle();
 
     expect(find.text('در حافظه کپی شد'), findsOneWidget);
-    // پیام خام موتور (messageEn — متن LTR کنسول)، نه عنوان/پیشنهاد کارت
     final read = await Clipboard.getData('text/plain');
     expect(read?.text, "Undefined variable 'zz'.");
   });

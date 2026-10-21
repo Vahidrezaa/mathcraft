@@ -146,21 +146,21 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
             textDirection: TextDirection.ltr,
             child: isEmpty
                 ? _EmptyState(onSample: _run)
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: CdsDimens.gutterPortrait,
-                      vertical: 12,
-                    ),
-                    itemCount: _entries.length,
-                    itemBuilder: (context, i) {
-                      final entry = _entries[i];
-                      // کپی هر سطر با long-press (بازخورد P0.2) — متن همیشه
-                      // همان رشته LTR کنسول است، بدون عناصر تزئینی.
-                      return GestureDetector(
-                        onLongPress: () =>
-                            _copyToClipboard(_copyTextOf(entry)),
-                        child: switch (entry) {
+                // FB-2: انتخاب تم‌دار بخشی از خروجی (SelectionArea) —
+                // دستگیره‌ها/هایلایت از TextSelectionTheme تم CDS می‌آیند و
+                // منوی سیستمی «کپی» همان بخش انتخابی را کپی می‌کند.
+                // کپی کل خط با دکمهٔ همیشه‌نمایان باقی است (بازخورد P0.2).
+                : SelectionArea(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: CdsDimens.gutterPortrait,
+                        vertical: 12,
+                      ),
+                      itemCount: _entries.length,
+                      itemBuilder: (context, i) {
+                        final entry = _entries[i];
+                        return switch (entry) {
                           InputEntry e => _InputLine(code: e.code),
                           OutputEntry e => _OutputLine(
                               text: e.text,
@@ -170,9 +170,9 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
                               error: e.error,
                               onCopy: () => _copyToClipboard(_copyTextOf(e)),
                             ),
-                        },
-                      );
-                    },
+                        };
+                      },
+                    ),
                   ),
           ),
         ),

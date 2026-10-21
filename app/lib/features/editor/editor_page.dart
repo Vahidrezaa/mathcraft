@@ -255,19 +255,19 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      controller: _outputScroll,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: CdsDimens.gutterPortrait,
-                        vertical: 10,
-                      ),
-                      itemCount: _entries.length,
-                      itemBuilder: (context, i) {
-                        final entry = _entries[i];
-                        return GestureDetector(
-                          onLongPress: () =>
-                              _copyToClipboard(_copyTextOf(entry)),
-                          child: switch (entry) {
+                  // FB-2: انتخاب تم‌دار بخشی از خروجی + کپی همان بخش؛
+                  // کپی کل خط با دکمه/long-press خط باقی می‌ماند.
+                  : SelectionArea(
+                      child: ListView.builder(
+                        controller: _outputScroll,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: CdsDimens.gutterPortrait,
+                          vertical: 10,
+                        ),
+                        itemCount: _entries.length,
+                        itemBuilder: (context, i) {
+                          final entry = _entries[i];
+                          return switch (entry) {
                             TextEntry e => Text(
                                 e.text,
                                 style: CdsTheme.codeStyle(
@@ -280,9 +280,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                                 onCopy: () =>
                                     _copyToClipboard(_copyTextOf(e)),
                               ),
-                          },
-                        );
-                      },
+                          };
+                        },
+                      ),
                     ),
             ),
           ),

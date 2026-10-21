@@ -23,18 +23,19 @@
 | ستون‌محوری (column-major): اندیس خطی، reshape، find | exact | corpus 35/44 |
 | قانون اولین بعدِ غیرتک‌عضوی (sort/sum/cumsum/diff/...) | exact | corpus 31-37 |
 | NaN: آخرِ sort، نادیده در max/min، انتشار در sum | exact | corpus 38 |
-| اشباع صحیح (uint8) | n/a | P2 — نوع‌های صحیح هنوز نیستند |
-| اندیس‌گذاری منطقی `A(A>0)` | n/a | P2 |
-| چندخروجی builtin مثل `[V,D]=eig` | n/a | P2 — multi-assign تابع کاربر exact است |
-| مختلط (`3i`, eig نامتقارن) | n/a | P2 — خطای صادقانه فعلی |
-| **چیدمان نمایش خروجی کنسول (format short)** | deviation | فعلاً سبک لفظی `x = [1; 2; …]` — مقدارها exact (تأیید دستگاه 2026-10-21: ۵×۵)؛ چیدمان ستونی متلب (`x =` + راست‌چین) = FB-1، اولین آیتم P2 |
+| اشباع صحیح (uint8) | n/a | P2-b — نوع‌های صحیح هنوز نیستند |
+| اندیس‌گذاری منطقی `A(A>0)` | n/a | P2-b |
+| چندخروجی builtin مثل `[V,D]=eig` | exact | ✅ P2: [V,D]=eig، [T,Y]=ode45/ode23، [q,r]=deconv — مکانیزم lookup_multi |
+| مختلط (`3i`, eig نامتقارن) | exact/tol | ✅ P2: literal موهومی، عنصری/ماتریسی، `'` مزدوج، ==/~، بک‌اسلش بلوکی، roots، [V,D]=eig — real/imag/abs/angle همیشه REAL (رفتار متلب) |
+| **چیدمان نمایش خروجی کنسول (format short)** | exact* | ✅ FB-1 در P2 رفع شد: «name =» سطر بعد بدنه، ستون‌ها راست‌چین، عرض ستون max(6, len+4) — کالیبره روی خروجی واقعی متلب کاربر (۵×۵، 2026-10-21)؛ *قاعدهٔ رقم: ۵ رقم معنادار سند ۰۳ §11.4 (متلب فرمت short عدد صحیح را بدون اعشار می‌دهد ✓) — کالیبراسیون نهایی اجزای اعشاری = دستگاه کاربر |
 
 ## ۲. ثابت‌ها
 
 | نام | وضعیت |
 |---|---|
 | `pi`، `eps`، `Inf/inf`، `NaN/nan` | exact (سایه‌پذیر توسط متغیر کاربر) |
-| `i`، `j`، `realmax/realmin`، `intmax` | n/a (P2) |
+| `i`، `j` | exact | ✅ P2 — سایه‌پذیر مثل pi؛ اعداد موهومی `4i`/`2.5j` |
+| `realmax/realmin`، `intmax` | n/a | P2-b |
 
 ## ۳. رجیستری توابع (۹۱ builtin فعلی)
 
@@ -59,7 +60,22 @@
               CI: octave-differential job → مقایسه Octave واقعی با expected/ (tol 1e-9)
 ```
 هر باگ سازگاری یافته‌شده = تست رگرسیون دائمی در کورپوس (قاعده R2 سند ۰۷).
-تاریخ آخرین بازبینی: 2026-10-21 · ۶۰/۶۰ اسکریپت کورپوس P1 سبز در موتور · تأیید عملی ۵×۵ روی دستگاه کاربر (APK از CI)
+تاریخ آخرین بازبینی: 2026-10-21 · ۶۰/۶۰ کورپوس P1 + ۱۳ کورپوس P2 سبز · تأیید عملی ۵×۵ روی دستگاه کاربر (APK از CI) · P2 هستهٔ عددی کامل
+
+## ۴.۵ — توابع عددی/آمار P2 (سند ۰۴ §4-7)
+
+**exact / tol (کورپوس p2_* با مرجع Octave 9.4 / تحلیلی):** fzero (Brent + براکت خودکار) · roots (ماتریس همبند، مختلط) · polyfit (Householder QR — هرگز normal equations) · polyval (Horner) · conv · deconv ([q,r]) · interp1 (linear/nearest/pchip/spline not-a-knot؛ برون‌یابی پیش‌فرض برای pchip/spline مثل متلب) · median · std/var (پرچم w + omitnan) · cov/corrcoef (n−1) · integral (G7/K15 تطبیقی + بازه‌های بی‌نهایت با تبدیل متغیر) · ode45 (DP54 + FSAL + Hermite dense) · ode23 (BS32) · [T,Y] شکل ستونی · rng(seed)/rand/randn/randi/randperm · complex-aware: real/imag/conj/abs/angle/isreal/complex
+
+**انحراف/محدودیت مستندشدهٔ P2:**
+| مورد | توضیح |
+|---|---|
+| `rng(seed)` خروجی | متلب struct وضعیت می‌دهد؛ MathCraft مقدار seed (ساختار در P2-b با Value::Struct) |
+| دنبالهٔ RNG | عمداً مستقل از Mersenne Twister متلب (سند ۰۴ §7) — PCG64+Ziggurat؛ نتایج آماری معادل؛ `rng(42)` تکرارپذیر |
+| گزینه‌های ode | به‌جای `odeset` جفت نام/مقدار مستقیم: `ode45(f, tspan, y0, 'RelTol', 1e-6)` — odeset ساختاریافته = P2-b |
+| dense output ode | Hermite مکعبی بین گام‌های پذیرفته‌شده (درون‌یابی درجه-۴ خود DP = P2-b) — دقت در حد تلورانس گام‌ها |
+| integral گزینه‌ها | RelTol/AbsTol/Waypoints نامی = P2-b؛ فعلاً پیش‌فرض متلب (1e-10) |
+| vdp1000 مرجع نقطه‌ای | ساختاری (چرخهٔ حدی/فاز آهسته) سبز؛ مرجع نقطه‌ای Octave کند است — متلب کاربر = اوراکل نهایی |
+| `qr/svd` چندخروجی | هنوز تک‌خروجی (P1) — [Q,R]/[U,S,V] در P2-b با lookup_multi |
 
 ## ۵. توابع فایلی و اسکریپت‌ها — انحراف‌های مستند (P1)
 
