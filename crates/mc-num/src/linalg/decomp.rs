@@ -286,3 +286,48 @@ pub fn eig(a: &Matrix) -> Result<(Vec<f64>, Matrix), mc_core::error::McError> {
     }
     Ok((values_re, vectors))
 }
+
+/// eig کامل مختلط (P2 — سند ۰۳ §12): مقادیر و بردارهای ویژه مختلط برای ماتریس عمومی.
+///
+/// - متقارن → همان `eig_sym` (مقادیر صعودی، بردارهای حقیقی در پوشِ مختلط).
+/// - عمومی → فرم شرور حقیقی faer؛ زوج‌های مختلط به‌صورت (re، im) برگردانده می‌شوند.
+/// - مصرف‌ها: `roots` (ماتریس همبند) و `[V,D] = eig` (رجیستری P2).
+pub fn eig_complex(
+    a: &Matrix,
+) -> Result<(Vec<(f64, f64)>, mc_core::ComplexMatrix), mc_core::error::McError> {
+    convert::require_square(a, "eig", "eig")?;
+    let n = a.rows();
+    if n == 0 {
+        return Ok((Vec::new(), mc_core::ComplexMatrix::full(0, 0, 0.0, 0.0)));
+    }
+    if convert::is_exactly_symmetric(a) {
+        let (vals, vecs) = eig_sym(a)?;
+        return Ok((
+            vals.into_iter().map(|v| (v, 0.0)).collect(),
+            mc_core::ComplexMatrix::from_real(&vecs),
+        ));
+    }
+    let af = convert::to_faer(a);
+    let e = af.eigen().map_err(|_| {
+        num_error(
+            ids::UNSUPPORTED,
+            "eigen decomposition did not converge for this matrix.",
+            "تجزیه ویژه برای این ماتریس همگرا نشد.",
+        )
+    })?;
+    let values: Vec<(f64, f64)> = e
+        .S()
+        .column_vector()
+        .iter()
+        .map(|c| (c.re, c.im))
+        .collect();
+    let mut re = vec![0.0f64; n * n];
+    let mut im = vec![0.0f64; n * n];
+    for c in 0..n {
+        for r in 0..n {
+            re[c * n + r] = e.U()[(r, c)].re;
+            im[c * n + r] = e.U()[(r, c)].im;
+        }
+    }
+    Ok((values, mc_core::ComplexMatrix::from_columns(n, n, re, im)))
+}

@@ -22,10 +22,12 @@
     )
 )]
 
+pub mod complex;
 pub mod error;
 pub mod matrix;
 pub mod value;
 
+pub use complex::ComplexMatrix;
 pub use error::{ids, McError};
 pub use matrix::Matrix;
 pub use value::{AnonCall, AnonFn, Value};

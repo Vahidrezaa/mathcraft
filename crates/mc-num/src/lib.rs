@@ -27,7 +27,12 @@
     )
 )]
 
+pub mod interp;
 pub mod linalg;
+pub mod poly;
+pub mod rng;
+pub mod solvers;
+pub mod stats;
 
 /// تشخیص تقارن دقیق — عمومی برای لایه‌های بالا (dispatch متقارن سند ۰۴ §3.2).
 pub fn is_exactly_symmetric(a: &mc_core::matrix::Matrix) -> bool {
@@ -35,7 +40,7 @@ pub fn is_exactly_symmetric(a: &mc_core::matrix::Matrix) -> bool {
 }
 
 pub use linalg::{
-    chol, cond, det, eig, eig_sym, inv, is_permuted_triangular, is_triangular, is_tridiagonal, lu,
-    mldivide, mrdivide, norm, qr, qr_pivoted, rank, rref, svd, thomas_solve, trisolve_lower,
-    trisolve_upper, DispatchStep,
+    chol, cond, det, eig, eig_complex, eig_sym, inv, is_permuted_triangular, is_triangular,
+    is_tridiagonal, lu, mldivide, mrdivide, norm, qr, qr_pivoted, rank, rref, svd, thomas_solve,
+    trisolve_lower, trisolve_upper, DispatchStep,
 };

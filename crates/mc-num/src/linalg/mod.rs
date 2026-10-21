@@ -48,7 +48,7 @@ pub(crate) fn num_error(
     McError::new(id, 0, 0, message_en, message_fa)
 }
 
-pub use decomp::{chol, det, eig, eig_sym, inv, lu, qr, qr_pivoted, svd};
+pub use decomp::{chol, det, eig, eig_complex, eig_sym, inv, lu, qr, qr_pivoted, svd};
 pub use dispatch::{mldivide, mrdivide};
 pub use norm_func::{cond, norm, rank, rref};
 pub use solve::{thomas_solve, trisolve_lower, trisolve_upper};

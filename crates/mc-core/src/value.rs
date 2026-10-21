@@ -5,6 +5,7 @@
 //! واریانت‌های بعدی طبق سند ۰۲ بخش ۵ در P2+ اضافه می‌شوند:
 //! `Logical`، `String`، `Complex`، `Cell`، `Struct`، `Sym`.
 
+use crate::complex::ComplexMatrix;
 use crate::error::McError;
 use crate::matrix::Matrix;
 use std::fmt;
@@ -43,6 +44,9 @@ impl fmt::Debug for AnonFn {
 pub enum Value {
     /// ماتریس ۰×۰ هم با `Matrix::full(0, 0, 0.0)` ساخته می‌شود (سمانتیک `[]` — سند ۰۳ بخش ۴).
     Double(Matrix),
+    /// ماتریس مختلط — در متلب کلاس جدا ندارد (`class(1+2i)` = double)؛
+    /// نمایش و `isreal` لایهٔ بالا تصمیم می‌گیرد (سند ۰۳ بخش ۳ — P2).
+    Complex(ComplexMatrix),
     /// رشته کاراکتری `'abc'` (سند ۰۳ §10 — کلاس char؛ یونیکد صحیح).
     Char(String),
     /// تابع بی‌نام (function handle).
@@ -55,6 +59,11 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Value::Double(a), Value::Double(b)) => a == b,
+            (Value::Complex(a), Value::Complex(b)) => a == b,
+            // `isequal(1, 1+0i)` در متلب true است — از راه is_all_real برابر می‌کنیم
+            (Value::Double(a), Value::Complex(b)) | (Value::Complex(b), Value::Double(a)) => {
+                b.is_all_real() && a == &b.real_part()
+            }
             (Value::Char(a), Value::Char(b)) => a == b,
             _ => false,
         }
@@ -65,7 +74,8 @@ impl Value {
     /// نام کلاس به سبک متلب — برای بازرس متغیرها و `workspace_delta` (سند ۰۲ بخش ۳).
     pub fn class_name(&self) -> &'static str {
         match self {
-            Value::Double(_) => "double",
+            // مختلط هم کلاس double است (رفتار متلب)
+            Value::Double(_) | Value::Complex(_) => "double",
             Value::Char(_) => "char",
             Value::Anon(_) => "function_handle",
         }
@@ -82,6 +92,7 @@ impl Value {
     pub fn shape(&self) -> (usize, usize) {
         match self {
             Value::Double(m) => (m.rows(), m.cols()),
+            Value::Complex(m) => (m.rows(), m.cols()),
             Value::Char(s) => (1, s.chars().count()),
             Value::Anon(_) => (1, 1),
         }
