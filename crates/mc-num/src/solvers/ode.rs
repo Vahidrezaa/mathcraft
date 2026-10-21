@@ -318,7 +318,8 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
             let factor = (0.9 * err.powf(-exponent)).clamp(0.1, 1.0);
             h = h_step * factor;
         }
-        if f_evals > 5_000_000 {
+        // سقف ایمنی: vdp1000 روی [0,3000] (مرجع سند ۰۷) ~۱M گام × ۶ ارزیابی می‌خواهد
+        if f_evals > 30_000_000 {
             return Err(solver_error(
                 ids::PARSE_ERROR,
                 "ODE solver exceeded the function evaluation budget.",

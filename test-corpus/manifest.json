@@ -440,6 +440,64 @@
     "ni",
     "nf"
    ]
+  },
+  {
+   "script": "p2_04_integral_gaussian.m",
+   "vars": [
+    "q"
+   ]
+  },
+  {
+   "script": "p2_05_integral_infinite.m",
+   "vars": [
+    "q"
+   ]
+  },
+  {
+   "script": "p2_06_fzero_sqrt2.m",
+   "vars": [
+    "x"
+   ]
+  },
+  {
+   "script": "p2_07_roots_quartic.m",
+   "vars": [
+    "rre",
+    "rim"
+   ]
+  },
+  {
+   "script": "p2_08_roots_complex.m",
+   "vars": [
+    "rim"
+   ]
+  },
+  {
+   "script": "p2_09_interp1_linear.m",
+   "vars": [
+    "vq"
+   ]
+  },
+  {
+   "script": "p2_10_polyfit_quad.m",
+   "vars": [
+    "p"
+   ]
+  },
+  {
+   "script": "p2_11_conv_deconv.m",
+   "vars": [
+    "q",
+    "r"
+   ]
+  },
+  {
+   "script": "p2_12_stats_basic.m",
+   "vars": [
+    "med",
+    "sd",
+    "rho"
+   ]
   }
  ]
 }

@@ -565,22 +565,22 @@ fn bi_corrcoef(args: &[Value], _n: usize) -> Result<Value, McError> {
 
 // ---------- مختلط: عنصری مختلط-آگاه ----------
 
-/// عنصری روی Value (حقیقی یا مختلط) — خروجی حقیقی یا مختلط.
-fn elem_apply_value(
+/// عنصری روی Value (حقیقی یا مختلط) با خروجی حقیقی — real/imag/abs/angle
+/// (رفتار متلب: این‌ها همیشه REAL برمی‌گردانند، حتی روی ورودی مختلط).
+fn elem_apply_real(
     args: &[Value],
     fr: fn(f64) -> f64,
-    fc: impl Fn(f64, f64) -> (f64, f64),
+    fc: impl Fn(f64, f64) -> f64,
 ) -> Result<Value, McError> {
-    let name = "elementwise";
+    const NAME: &str = "elementwise";
     match args.first() {
         Some(Value::Complex(z)) => {
-            let mut out = ComplexMatrix::full(z.rows(), z.cols(), 0.0, 0.0);
+            let mut out = Matrix::full(z.rows(), z.cols(), 0.0);
             for idx in 0..z.numel() {
                 let (re, im) = z.get_linear(idx);
-                let (ore, oim) = fc(re, im);
-                out.set_linear(idx, ore, oim);
+                out.set_linear(idx, fc(re, im));
             }
-            Ok(Value::Complex(out))
+            Ok(Value::Double(out))
         }
         Some(Value::Double(m)) => {
             let mut out = Matrix::full(m.rows(), m.cols(), 0.0);
@@ -600,37 +600,69 @@ fn elem_apply_value(
             }
         }
         _ => Err(err(
-            &format!("{name}: numeric argument expected."),
-            &format!("{name}: آرگومان عددی انتظار می‌رود."),
+            &format!("{NAME}: numeric argument expected."),
+            &format!("{NAME}: آرگومان عددی انتظار می‌رود."),
+        )),
+    }
+}
+
+/// عنصری با خروجی مختلط — فقط conj (و آینده: توابع مختلط دیگر).
+fn elem_apply_complex(
+    args: &[Value],
+    fr: fn(f64) -> f64,
+    fc: impl Fn(f64, f64) -> (f64, f64),
+) -> Result<Value, McError> {
+    match args.first() {
+        Some(Value::Complex(z)) => {
+            let mut out = ComplexMatrix::full(z.rows(), z.cols(), 0.0, 0.0);
+            for idx in 0..z.numel() {
+                let (re, im) = z.get_linear(idx);
+                let (ore, oim) = fc(re, im);
+                out.set_linear(idx, ore, oim);
+            }
+            Ok(Value::Complex(out))
+        }
+        Some(Value::Double(m)) => {
+            let mut out = Matrix::full(m.rows(), m.cols(), 0.0);
+            for idx in 0..m.numel() {
+                out.set_linear(idx, fr(m.get_linear(idx)));
+            }
+            Ok(Value::Double(out))
+        }
+        _ => Err(err(
+            "elementwise: numeric argument expected.",
+            "elementwise: آرگومان عددی انتظار می‌رود.",
         )),
     }
 }
 
 fn bi_real(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(args, |x| x, |re, _| (re, 0.0))
+    elem_apply_real(args, |x| x, |re, _| re)
 }
 
 fn bi_imag(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(args, |_| 0.0, |_, im| (im, 0.0))
+    elem_apply_real(args, |_| 0.0, |_, im| im)
 }
 
 fn bi_conj(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(args, |x| x, |re, im| (re, -im))
+    elem_apply_complex(args, |x| x, |re, im| (re, -im))
 }
 
 fn bi_abs(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(
-        args,
-        |x| x.abs(),
-        |re, im| ((re * re + im * im).sqrt(), 0.0),
-    )
+    elem_apply_real(args, |x| x.abs(), |re, im| (re * re + im * im).sqrt())
 }
 
 fn bi_angle(args: &[Value], _n: usize) -> Result<Value, McError> {
-    elem_apply_value(
+    elem_apply_real(
         args,
-        |x| if x < 0.0 { std::f64::consts::PI } else { 0.0 },
-        |re, im| (im.atan2(re), 0.0),
+        |x| {
+            if x < 0.0 {
+                std::f64::consts::PI
+            } else {
+                0.0
+            }
+        },
+        |re, im| im.atan2(re),
     )
 }
 
