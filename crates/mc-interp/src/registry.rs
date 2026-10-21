@@ -12,9 +12,12 @@ use mc_num as num;
 /// امضای توابع داخلی — آرگومان‌ها + تعداد خروجی خواسته‌شده.
 pub type Builtin = fn(&[Value], usize) -> Result<Value, McError>;
 
-/// یافتن builtin به نام — None یعنی در رجیستری نیست (متغیر؟ خطا؟).
+/// یافتن builtin به نام — REGISTRY اصلی + P2 (سند ۰۴ §4-7).
 pub fn lookup(name: &str) -> Option<Builtin> {
-    REGISTRY.iter().find(|(n, _)| *n == name).map(|(_, f)| *f)
+    if let Some(f) = REGISTRY.iter().find(|(n, _)| *n == name).map(|(_, f)| *f) {
+        return Some(f);
+    }
+    crate::registry_p2::lookup(name)
 }
 
 /// آیا نام در رجیستری هست؟ — برای did-you-mean و پیام‌های آموزشی.
@@ -69,7 +72,6 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("cross", bi_cross),
     ("kron", bi_kron),
     // ---- عنصری (سند ۰۳ §12 «توابع عنصری») ----
-    ("abs", el_abs),
     ("sqrt", el_sqrt),
     ("exp", el_exp),
     ("log", el_log),
@@ -92,10 +94,6 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("fix", el_fix),
     ("mod", bi_mod),
     ("rem", bi_rem),
-    ("real", el_real), // روی حقیقی = همانی (سند ۰۳ §12)
-    ("imag", el_imag),
-    ("conj", el_conj),
-    ("angle", el_angle),
     // ---- کاهشی/آمار پایه ----
     ("sum", bi_sum),
     ("prod", bi_prod),
@@ -116,7 +114,6 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("isinf", el_isinf),
     ("isfinite", el_isfinite),
     ("isequal", bi_isequal),
-    ("isreal", el_isreal),
 ];
 
 /// هسته مشترک توابع عنصری ۱-آرگومانی — روی همه عناصر ماتریس.

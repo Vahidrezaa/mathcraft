@@ -15,10 +15,12 @@
     )
 )]
 
+pub mod complex_ops;
 pub mod env;
 pub mod eval;
 pub mod format;
 pub mod registry;
+pub mod registry_p2;
 pub mod source;
 
 pub use env::Environment;

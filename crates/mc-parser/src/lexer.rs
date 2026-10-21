@@ -20,6 +20,8 @@ use mc_core::{ids, McError};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
     Num(f64),
+    /// عدد موهومی `4i`/`2.5j` — اندیس فقط اندازه؛ علامت با Unary مینوس می‌آید
+    Imag(f64),
     Ident(String),
     Str(String),
     Plus,
@@ -72,7 +74,7 @@ impl Token {
     /// توصیف کوتاه برای پیام‌های خطا (سند ۰۳ بخش ۱۴: «'x' غیرمنتظره»).
     pub fn describe(&self) -> String {
         match &self.tok {
-            Tok::Num(_) => "number".to_owned(),
+            Tok::Num(_) | Tok::Imag(_) => "number".to_owned(),
             Tok::Ident(n) => format!("'{n}'"),
             Tok::Str(_) => "string".to_owned(),
             Tok::Plus => "'+'".to_owned(),
@@ -475,19 +477,23 @@ impl Lexer {
             }
         }
 
-        // پسوند موهومی i/j — کامل در نسخه ۱ (سند ۰۳ بخش ۳) اما نه در P1: خطای صریح.
-        if matches!(self.peek(), Some('i') | Some('j')) {
-            return Err(McError::new(
-                ids::UNSUPPORTED,
-                start_line,
-                start_col,
-                "Complex literals (like 3i) arrive with P2 complex support.",
-                "اعداد مختلط (مثل 3i) با پشتیبانی مختلط P2 می‌آیند.",
-            ));
+        // پسوند موهومی i/j — سند ۰۳ بخش ۳ (P2): `4i` توکن Imag(4) می‌دهد.
+        // `i` برهنه همچنان Ident است (متغیر/ثابت) — این مسیر فقط پس از رقم می‌آید.
+        let imag = matches!(self.peek(), Some('i') | Some('j'));
+        if imag {
+            self.advance();
         }
 
         let value: f64 = text.parse().unwrap_or(f64::INFINITY); // سرریز مثل 1e999 → Inf (رفتار IEEE، سند ۰۳ بخش ۱۱)
         self.last_was_operand_end = true;
+        if imag {
+            return Ok(Token {
+                tok: Tok::Imag(value),
+                line: start_line,
+                col: start_col,
+                space_before,
+            });
+        }
         Ok(Token {
             tok: Tok::Num(value),
             line: start_line,
@@ -678,9 +684,16 @@ mod tests {
     }
 
     #[test]
-    fn complex_literal_is_explicitly_unsupported() {
-        let err = tokenize("3i").unwrap_err();
-        assert_eq!(err.id, ids::UNSUPPORTED);
+    fn complex_literal_is_tokenized_as_imag() {
+        // P2: `3i` توکن Imag(3) می‌دهد (سند ۰۳ بخش ۳)
+        let toks = tokenize("3i").unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(matches!(toks[0].tok, Tok::Imag(v) if v == 3.0));
+        // `2.5j` هم همین‌طور
+        let toks = tokenize("2.5j").unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(matches!(toks[0].tok, Tok::Imag(v) if v == 2.5));
+        // `i` برهنه هنوز Ident است (ثابت/متغیر)
+        let toks = tokenize("i").unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(matches!(toks[0].tok, Tok::Ident(_)));
     }
 
     #[test]

@@ -12,6 +12,6 @@ pub mod integral;
 pub mod ode;
 pub mod root;
 
-pub use integral::{integrate, integrate_transformed, Bounds, QuadResult};
+pub use integral::{bounds_from, integrate, Bounds, QuadResult};
 pub use ode::{ode23, ode45, OdeOpts, OdeResult};
 pub use root::{fzero_bracket, fzero_scalar, BrentResult};

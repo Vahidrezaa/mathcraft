@@ -88,13 +88,13 @@ mod tests {
     fn print_goes_to_stdout_verbatim() {
         let r = sample_result(
             vec![ConsoleEvent::Print {
-                text: "ans = 2".to_owned(),
+                text: "ans =\n     2\n".to_owned(),
             }],
             JobStatus::Done,
         );
         assert_eq!(
             render_result(&r, Lang::En),
-            vec![(Stream::Out, "ans = 2".to_owned())]
+            vec![(Stream::Out, "ans =\n     2\n".to_owned())]
         );
     }
 

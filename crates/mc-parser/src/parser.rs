@@ -744,6 +744,10 @@ impl Parser {
                 self.bump();
                 Ok(Expr::Num(v))
             }
+            Tok::Imag(v) => {
+                self.bump();
+                Ok(Expr::Imag(v))
+            }
             Tok::Str(s) => {
                 self.bump();
                 Ok(Expr::Str(s))

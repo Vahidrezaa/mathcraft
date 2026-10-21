@@ -550,7 +550,8 @@ mod tests {
         assert_eq!(
             r.console_events,
             vec![ConsoleEvent::Print {
-                text: "ans = 2".to_owned()
+                text: "ans =\n     2
+".to_owned()
             }]
         );
         assert_eq!(r.workspace_delta.changed.len(), 1);
@@ -572,7 +573,7 @@ mod tests {
         assert_eq!(r.console_events.len(), 2);
         assert!(matches!(
             &r.console_events[0],
-            ConsoleEvent::Print { text } if text == "x = 3"
+            ConsoleEvent::Print { text } if text == "x =\n     3\n"
         ));
         assert!(matches!(
             &r.console_events[1],
@@ -586,7 +587,7 @@ mod tests {
         assert!(r.workspace_delta.changed.iter().all(|v| v.name == "ans"));
         assert!(matches!(
             &r.console_events[0],
-            ConsoleEvent::Print { text } if text == "ans = 84"
+            ConsoleEvent::Print { text } if text == "ans =\n    84\n"
         ));
 
         // -- سقف پیش‌نمایش (سند ۰۲ بخش ۳: ≤ ۲۵۶ مقدار اول)
@@ -624,7 +625,7 @@ mod tests {
         assert_eq!(r.status, JobStatus::Done);
         assert!(matches!(
             &r.console_events[0],
-            ConsoleEvent::Print { text } if text == "ans = 81"
+            ConsoleEvent::Print { text } if text == "ans =\n    81\n"
         ));
 
         // اسکریپت: ثبت بدون اجرا، اجرا با نام در فضای کاری
@@ -638,7 +639,7 @@ mod tests {
         let r = evaluate_line("j".to_owned());
         assert!(matches!(
             &r.console_events[0],
-            ConsoleEvent::Print { text } if text == "ans = 10"
+            ConsoleEvent::Print { text } if text == "ans =\n    10\n"
         ));
 
         // مغایرت نام فایل/تابع اصلی = خطای آموزشی (سمانتیک متلب)

@@ -20,7 +20,7 @@ pub enum Method {
 }
 
 impl Method {
-    fn from_name(name: &str) -> Option<Self> {
+    pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "linear" => Some(Method::Linear),
             "nearest" | "nearest neighbour" | "nearest neighbor" => Some(Method::Nearest),

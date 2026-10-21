@@ -50,6 +50,8 @@ pub enum LogicOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Num(f64),
+    /// عدد موهومی `4i` — یعنی 0+4i (سند ۰۳ بخش ۳ — P2)
+    Imag(f64),
     Str(String),
     Var {
         name: String,

@@ -304,6 +304,14 @@ pub fn permutation(n: usize, k: usize) -> Vec<f64> {
 mod tests {
     use super::*;
 
+    /// تست‌های state-دار باید سریال اجرا شوند (هارنس Rust موازی است و
+    /// همه از یک state سراسری استفاده می‌کنند — تداخل دنباله‌ها).
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// erf تقریبی Abramowitz–Stegun 7.1.26 — فقط برای انتظارات GoF در تست‌ها.
     fn erf_approx(x: f64) -> f64 {
         let t = 1.0 / (1.0 + 0.327_591_1 * x.abs());
@@ -373,6 +381,7 @@ mod tests {
 
     #[test]
     fn ziggurat_moments_and_support() {
+        let _guard = test_lock();
         reseed(123);
         let n = 1_000_000u64;
         let mut sum = 0.0;
@@ -393,6 +402,7 @@ mod tests {
 
     #[test]
     fn ziggurat_chi_square_gof() {
+        let _guard = test_lock();
         // goodness-of-fit سند ۰۴ §7: ۱۱ سطل + دم‌ها (۵۰۰k نمونه، آستانهٔ 0.1%)
         reseed(999);
         let n = 500_000u64;
@@ -422,6 +432,7 @@ mod tests {
 
     #[test]
     fn permutation_is_bijective_and_reproducible() {
+        let _guard = test_lock();
         reseed(5);
         let p1 = permutation(10, 10);
         let mut sorted = p1.clone();
@@ -434,6 +445,7 @@ mod tests {
 
     #[test]
     fn global_reseed_is_deterministic() {
+        let _guard = test_lock();
         reseed(42);
         let a: Vec<f64> = (0..5).map(|_| uniform()).collect();
         let an: Vec<f64> = (0..5).map(|_| normal()).collect();

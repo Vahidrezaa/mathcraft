@@ -13,8 +13,8 @@ use std::sync::Arc;
 use mc_core::{ids, AnonFn, Matrix, McError, Value};
 use mc_parser::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
 
+use crate::complex_ops as cx;
 use crate::env::{Environment, StoredItem, UserFnDef};
-use crate::format::format_value;
 use crate::registry::{self, broadcast2};
 
 /// خروجی یک دستور برای کنسول — متن زبان‌خنثی (نمایش متلب؛ خطاها جداگانه FA/EN می‌آیند).
@@ -146,12 +146,7 @@ fn exec_stmt(
                             None => return Ok((Flow::Normal, Vec::new())),
                         };
                         if !*suppress {
-                            let text = match &value {
-                                v @ (Value::Double(_) | Value::Char(_)) => {
-                                    format!("ans = {}", format_value(v))
-                                }
-                                Value::Anon(_) => "ans = function_handle".to_owned(),
-                            };
+                            let text = crate::format::format_ans(&value);
                             env.set("ans", value);
                             return Ok((Flow::Normal, vec![text]));
                         }
@@ -196,7 +191,7 @@ fn exec_stmt(
                             )?;
                             if let Some(v) = outs.into_iter().next() {
                                 if !*suppress {
-                                    let text = "ans = ".to_owned() + &format_value(&v);
+                                    let text = crate::format::format_ans(&v);
                                     env.set("ans", v);
                                     return Ok((Flow::Normal, vec![text]));
                                 }
@@ -209,12 +204,7 @@ fn exec_stmt(
             }
             let value = eval_expr(expr, env, depth)?;
             if !*suppress {
-                let text = match &value {
-                    v @ (Value::Double(_) | Value::Char(_)) => {
-                        format!("ans = {}", format_value(v))
-                    }
-                    Value::Anon(_) => "ans = function_handle".to_owned(),
-                };
+                let text = crate::format::format_ans(&value);
                 env.set("ans", value);
                 return Ok((Flow::Normal, vec![text]));
             }
@@ -230,12 +220,10 @@ fn exec_stmt(
                 AssignTarget::Var { name, .. } => {
                     env.set(name.clone(), value);
                     if !*suppress {
-                        let text = format!(
-                            "{name} = {}",
-                            format_value(
-                                env.get(name)
-                                    .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0)))
-                            )
+                        let text = crate::format::format_assignment(
+                            name,
+                            env.get(name)
+                                .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
                         );
                         Ok((Flow::Normal, vec![text]))
                     } else {
@@ -320,6 +308,22 @@ fn exec_stmt(
                                     col.set(r, 0, m.get(r, c));
                                 }
                                 Value::Double(col)
+                            })
+                            .collect()
+                    }
+                }
+                Value::Complex(z) => {
+                    if z.is_scalar() {
+                        vec![iter_val.clone()]
+                    } else {
+                        (0..z.cols())
+                            .map(|c| {
+                                let mut col = mc_core::ComplexMatrix::full(z.rows(), 1, 0.0, 0.0);
+                                for r in 0..z.rows() {
+                                    let (re, im) = z.get(r, c);
+                                    col.set(r, 0, re, im);
+                                }
+                                Value::Complex(col)
                             })
                             .collect()
                     }
@@ -799,6 +803,8 @@ fn eval_expr_end(
 ) -> Result<Value, McError> {
     match expr {
         Expr::Num(v) => Ok(Value::Double(Matrix::scalar(*v))),
+        // عدد موهومی `4i` — اسکالر مختلط 0+4i (سند ۰۳ بخش ۳ — P2)
+        Expr::Imag(v) => Ok(Value::Complex(mc_core::ComplexMatrix::scalar(0.0, *v))),
         Expr::Str(s) => Ok(Value::Char(s.clone())),
         Expr::End { line, col } => {
             if target.is_empty() {
@@ -828,6 +834,8 @@ fn eval_expr_end(
                     "eps" => Ok(Value::Double(Matrix::scalar(f64::EPSILON))),
                     "Inf" | "inf" => Ok(Value::Double(Matrix::scalar(f64::INFINITY))),
                     "NaN" | "nan" => Ok(Value::Double(Matrix::scalar(f64::NAN))),
+                    // واحد موهومی — سایه‌پذیر مثل pi (سند ۰۳ §3 — P2)
+                    "i" | "j" => Ok(Value::Complex(mc_core::ComplexMatrix::imaginary_unit())),
                     _ => {
                         // نام ثبت‌شده بدون فراخوانی؟ — سمانتیک متلب §9
                         match env.lookup_item(name) {
@@ -946,7 +954,7 @@ fn eval_expr_end(
         }
         Expr::Transpose {
             operand,
-            conj: _,
+            conj,
             line,
             col,
         } => {
@@ -962,6 +970,8 @@ fn eval_expr_end(
                     }
                     Ok(Value::Double(out))
                 }
+                // مختلط: `'` ترانهادهٔ مزدوج، `.'` ترانهادهٔ ساده (سند ۰۳ §5 — P2)
+                Value::Complex(z) => Ok(Value::Complex(cx::c_transpose(&z, *conj))),
                 Value::Char(s) => Ok(Value::Char(s.chars().rev().collect())),
                 Value::Anon(_) => Err(McError::new(
                     ids::PARSE_ERROR,
@@ -1320,7 +1330,7 @@ fn eval_multi_assign(
             for (t, v) in targets.iter().zip(outs) {
                 env.set(t.name.clone(), v.clone());
                 if !suppress {
-                    texts.push(format!("{} = {}", t.name, format_value(&v)));
+                    texts.push(crate::format::format_assignment(&t.name, &v));
                 }
             }
             Ok(texts)
@@ -1333,6 +1343,37 @@ fn eval_multi_assign(
             format!("اسکریپت «{name}» داخل عبارت یا با آرگومان قابل استفاده نیست."),
         )),
         None => {
+            // چندخروجی builtin P2: [T,Y] = ode45، [q,r] = deconv، [V,D] = eig (سند ۰۳ §9)
+            if targets.len() > 1 {
+                if let Some(mf) = crate::registry_p2::lookup_multi(name) {
+                    let vals: Vec<Value> = args
+                        .iter()
+                        .map(|a| eval_expr(a, env, depth))
+                        .collect::<Result<_, _>>()?;
+                    let outs = mf(&vals, targets.len()).map_err(|mut e| {
+                        e.line = line;
+                        e.col = col;
+                        e
+                    })?;
+                    if outs.len() != targets.len() {
+                        return Err(McError::new(
+                            ids::PARSE_ERROR,
+                            line,
+                            col,
+                            format!("'{name}' produced {} outputs, {} requested.", outs.len(), targets.len()),
+                            format!("«{name}» {} خروجی داد، {} خواسته شده بود.", outs.len(), targets.len()),
+                        ));
+                    }
+                    let mut texts = Vec::new();
+                    for (t, v) in targets.iter().zip(outs) {
+                        env.set(t.name.clone(), v.clone());
+                        if !suppress {
+                            texts.push(crate::format::format_assignment(&t.name, &v));
+                        }
+                    }
+                    return Ok(texts);
+                }
+            }
             if let Some(f) = registry::lookup(name) {
                 if targets.len() > 1 {
                     return Err(McError::new(
@@ -1355,7 +1396,7 @@ fn eval_multi_assign(
                 let t = &targets[0];
                 env.set(t.name.clone(), v.clone());
                 if !suppress {
-                    return Ok(vec![format!("{} = {}", t.name, format_value(&v))]);
+                    return Ok(vec![crate::format::format_assignment(&t.name, &v)]);
                 }
                 return Ok(Vec::new());
             }
@@ -1374,13 +1415,19 @@ fn build_matrix(
     line: u32,
     col: u32,
 ) -> Result<Value, McError> {
-    fn as_cell(v: Value, line: u32, col: u32) -> Result<Matrix, McError> {
+    // سلول ماتریس لفظی — حقیقی یا مختلط (سند ۰۳ بخش ۳ — P2)
+    enum Cell {
+        Real(Matrix),
+        Complex(mc_core::ComplexMatrix),
+    }
+    fn as_cell(v: Value, line: u32, col: u32) -> Result<Cell, McError> {
         match v {
-            Value::Double(m) => Ok(m),
+            Value::Double(m) => Ok(Cell::Real(m)),
+            Value::Complex(z) => Ok(Cell::Complex(z)),
             Value::Char(s) => {
                 // 'abc' → سطر کدها (سمانتیک متلب ['ab' 'c'])
                 let codes: Vec<f64> = s.chars().map(|c| c as u32 as f64).collect();
-                Ok(Matrix::from_columns(1, codes.len(), codes))
+                Ok(Cell::Real(Matrix::from_columns(1, codes.len(), codes)))
             }
             Value::Anon(_) => Err(McError::new(
                 ids::PARSE_ERROR,
@@ -1391,9 +1438,14 @@ fn build_matrix(
             )),
         }
     }
-    fn hcat(parts: &[Matrix], line: u32, col: u32) -> Result<Matrix, McError> {
-        let r = parts.first().map(|m| m.rows()).unwrap_or(0);
-        if parts.iter().any(|m| m.rows() != r) {
+    // تلفیق افقی/عمودی روی (re، im) — برای سلول حقیقی im صفر است
+    fn hcat(parts: &[Cell], line: u32, col: u32) -> Result<Cell, McError> {
+        let dims = |c: &Cell| match c {
+            Cell::Real(m) => (m.rows(), m.cols()),
+            Cell::Complex(z) => (z.rows(), z.cols()),
+        };
+        let r = parts.first().map(dims).unwrap_or((0, 0)).0;
+        if parts.iter().map(dims).any(|(rr, _)| rr != r) {
             return Err(McError::new(
                 ids::SIZE_MISMATCH,
                 line,
@@ -1402,23 +1454,46 @@ fn build_matrix(
                 "تلفیق افقی نیاز به تعداد ردیف برابر دارد.",
             ));
         }
-        let c: usize = parts.iter().map(|m| m.cols()).sum();
-        let mut out = Matrix::full(r, c, 0.0);
+        let any_complex = parts
+            .iter()
+            .any(|c| matches!(c, Cell::Complex(z) if !z.is_all_real()));
+        let c: usize = parts.iter().map(|p| dims(p).1).sum();
+        let mut re = Matrix::full(r, c, 0.0);
+        let mut im = Matrix::full(r, c, 0.0);
         let mut off = 0usize;
-        for m in parts {
-            for cc in 0..m.cols() {
-                for rr in 0..m.rows() {
-                    out.set(rr, off + cc, m.get(rr, cc));
+        for p in parts {
+            let w = dims(p).1;
+            for cc in 0..w {
+                for rr in 0..r {
+                    match p {
+                        Cell::Real(m) => {
+                            re.set(rr, off + cc, m.get(rr, cc));
+                        }
+                        Cell::Complex(z) => {
+                            let (vr, vi) = z.get(rr, cc);
+                            re.set(rr, off + cc, vr);
+                            im.set(rr, off + cc, vi);
+                        }
+                    }
                 }
             }
-            off += m.cols();
+            off += w;
         }
-        Ok(out)
+        if any_complex {
+            Ok(Cell::Complex(mc_core::ComplexMatrix::from_columns(
+                r,
+                c,
+                re.as_column_slice().to_vec(),
+                im.as_column_slice().to_vec(),
+            )))
+        } else {
+            Ok(Cell::Real(re))
+        }
     }
 
-    let mut row_mats: Vec<Matrix> = Vec::with_capacity(rows.len());
+    let mut row_cells: Vec<Cell> = Vec::with_capacity(rows.len());
     for row in rows {
-        let mut parts: Vec<Matrix> = Vec::with_capacity(row.len());
+        let mut parts: Vec<Cell> = Vec::with_capacity(row.len());
         for e in row {
             let v = eval_expr_end(e, env, depth, &Matrix::full(0, 0, 0.0), 0)?;
             parts.push(as_cell(v, line, col)?);
@@ -1426,14 +1501,18 @@ fn build_matrix(
         if parts.is_empty() {
             continue;
         }
-        row_mats.push(hcat(&parts, line, col)?);
+        row_cells.push(hcat(&parts, line, col)?);
     }
-    if row_mats.is_empty() {
+    if row_cells.is_empty() {
         return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
     }
     // تلفیق عمودی ردیف‌ها
-    let c = row_mats[0].cols();
-    if row_mats.iter().any(|m| m.cols() != c) {
+    let dims = |c: &Cell| match c {
+        Cell::Real(m) => (m.rows(), m.cols()),
+        Cell::Complex(z) => (z.rows(), z.cols()),
+    };
+    let c = dims(&row_cells[0]).1;
+    if row_cells.iter().map(dims).any(|(_, cc)| cc != c) {
         return Err(McError::new(
             ids::SIZE_MISMATCH,
             line,
@@ -1442,18 +1521,39 @@ fn build_matrix(
             "تلفیق عمودی نیاز به تعداد ستون برابر دارد.",
         ));
     }
-    let r: usize = row_mats.iter().map(|m| m.rows()).sum();
-    let mut out = Matrix::full(r, c, 0.0);
+    let r: usize = row_cells.iter().map(|m| dims(m).0).sum();
+    let any_complex = row_cells
+        .iter()
+        .any(|c| matches!(c, Cell::Complex(z) if !z.is_all_real()));
+    let mut re = Matrix::full(r, c, 0.0);
+    let mut im = Matrix::full(r, c, 0.0);
     let mut off = 0usize;
-    for m in &row_mats {
-        for cc in 0..m.cols() {
-            for rr in 0..m.rows() {
-                out.set(off + rr, cc, m.get(rr, cc));
+    for m in &row_cells {
+        let h = dims(m).0;
+        for cc in 0..c {
+            for rr in 0..h {
+                match m {
+                    Cell::Real(mm) => re.set(off + rr, cc, mm.get(rr, cc)),
+                    Cell::Complex(z) => {
+                        let (vr, vi) = z.get(rr, cc);
+                        re.set(off + rr, cc, vr);
+                        im.set(off + rr, cc, vi);
+                    }
+                }
             }
         }
-        off += m.rows();
+        off += h;
     }
-    Ok(Value::Double(out))
+    if any_complex {
+        Ok(Value::Complex(mc_core::ComplexMatrix::from_columns(
+            r,
+            c,
+            re.as_column_slice().to_vec(),
+            im.as_column_slice().to_vec(),
+        )))
+    } else {
+        Ok(Value::Double(re))
+    }
 }
 
 /// سمانتیک دقیق کولن (سند ۰۳ §7): عناصر a, a+s, ... و تعداد
@@ -1517,6 +1617,14 @@ fn negate(v: &Value) -> Result<Value, McError> {
             }
             Ok(Value::Double(out))
         }
+        Value::Complex(z) => {
+            let mut out = z.clone();
+            for idx in 0..out.numel() {
+                let (re, im) = out.get_linear(idx);
+                out.set_linear(idx, -re, -im);
+            }
+            Ok(Value::Complex(out))
+        }
         _ => Err(McError::new(
             ids::PARSE_ERROR,
             0,
@@ -1528,6 +1636,33 @@ fn negate(v: &Value) -> Result<Value, McError> {
 }
 
 fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    // مختلط: == و ~= عنصری؛ ترتیبی (< > <= >=) خطای صادقانه متلب
+    let complex_involved =
+        matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
+    if complex_involved {
+        if !matches!(op, CmpOp::Eq | CmpOp::Ne) {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "Ordered comparison (<, <=, >, >=) is not defined for complex values.",
+                "مقایسهٔ ترتیبی (<، <=، >، >=) برای مقدارهای مختلط تعریف ندارد.",
+            ));
+        }
+        let a = cx::to_complex(l, line, col)?;
+        let b = cx::to_complex(r, line, col)?;
+        let m = cx::c_eq(&a, &b)?;
+        return Ok(Value::Double(if matches!(op, CmpOp::Eq) {
+            m
+        } else {
+            let mut out = m.clone();
+            for idx in 0..out.numel() {
+                let v = out.get_linear(idx);
+                out.set_linear(idx, if v == 0.0 { 1.0 } else { 0.0 });
+            }
+            out
+        }));
+    }
     let (a, b) = (as_num(l, line, col)?, as_num(r, line, col)?);
     let m = broadcast2(&a, &b, "comparison", |x, y| match op {
         CmpOp::Eq => (x == y) as i32 as f64,
@@ -1543,6 +1678,14 @@ fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result
 fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
     match v {
         Value::Double(m) => Ok(m.clone()),
+        Value::Complex(z) if z.is_all_real() => Ok(z.real_part()),
+        Value::Complex(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "Complex value in a real-only context (e.g. indexing or loop bounds).",
+            "مقدار مختلط در زمینهٔ فقط-حقیقی (مثل اندیس‌گذاری یا مرز حلقه).",
+        )),
         Value::Char(s) => {
             // رشته در مقایسه عددی — متلب کاراکترها را عدد می‌بیند؛ P1: تک‌کاراکتر
             let mut ch = s.chars();
@@ -1568,6 +1711,12 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
 }
 
 fn apply_binary(op: BinOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    // مختلط: هر عملوندی که مختلط باشد کل مسیر مختلط می‌رود (رفتار متلب)
+    let complex_involved =
+        matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
+    if complex_involved {
+        return apply_binary_complex(op, l, r, line, col);
+    }
     let (a, b) = (as_num(l, line, col)?, as_num(r, line, col)?);
     let m = match op {
         BinOp::Add | BinOp::Sub => {
@@ -1663,6 +1812,55 @@ fn apply_binary(op: BinOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<
         }
     };
     Ok(Value::Double(m))
+}
+
+/// مسیر مختلط عملگرهای دوتایی (سند ۰۳ بخش ۳ — P2).
+fn apply_binary_complex(
+    op: BinOp,
+    l: &Value,
+    r: &Value,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    let a = cx::to_complex(l, line, col)?;
+    let b = cx::to_complex(r, line, col)?;
+    let z = match op {
+        BinOp::Add => cx::c_add(&a, &b)?,
+        BinOp::Sub => cx::c_sub(&a, &b)?,
+        BinOp::Mul => {
+            if a.is_scalar() || b.is_scalar() {
+                cx::c_elem_mul(&a, &b)? // اسکالر ← ضرب عنصری = بروزکست
+            } else {
+                cx::c_matmul(&a, &b)?
+            }
+        }
+        BinOp::ElemMul => cx::c_elem_mul(&a, &b)?,
+        BinOp::ElemDiv => cx::c_elem_div(&a, &b)?,
+        BinOp::ElemPow => cx::c_elem_pow(&a, &b)?,
+        BinOp::Div => {
+            if a.is_scalar() && b.is_scalar() {
+                cx::c_elem_div(&a, &b)?
+            } else {
+                cx::c_mrdivide(&a, &b)?
+            }
+        }
+        BinOp::Backslash => cx::c_backslash(&a, &b)?,
+        BinOp::Pow => {
+            // A^z فقط اسکالر↔اسکالر (توان ماتریسی مختلط در P2-b)
+            if a.is_scalar() && b.is_scalar() {
+                cx::c_elem_pow(&a, &b)?
+            } else {
+                return Err(McError::new(
+                    ids::UNSUPPORTED,
+                    line,
+                    col,
+                    "Complex matrix power is not supported yet; use .^ for elementwise.",
+                    "توان ماتریسی مختلط هنوز پشتیبانی نمی‌شود؛ برای عنصری از .^ استفاده کنید.",
+                ));
+            }
+        }
+    };
+    Ok(Value::Complex(z))
 }
 
 fn matmul(a: &Matrix, b: &Matrix) -> Matrix {
