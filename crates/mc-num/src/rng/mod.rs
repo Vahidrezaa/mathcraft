@@ -379,6 +379,9 @@ mod tests {
 
     #[test]
     fn uniform_in_range_and_bounds() {
+        // reseed/uniform از GLOBAL سراسری مصرف می‌کنند — بدون این قفل، با
+        // تست‌های state-دار دیگر موازی می‌دود و دنباله را خراب می‌کند (نژاد flaky).
+        let _guard = test_lock();
         reseed(7);
         for _ in 0..10_000 {
             let v = uniform();
