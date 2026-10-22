@@ -69,6 +69,38 @@ impl Matrix {
         self.rows == 0 || self.cols == 0
     }
 
+    /// حذف سطرها (اندیس‌های ۰-پایه) — `A(i,:)=[]` و حذف «سطر» با اندیس خطی
+    /// (رفتار متلب). ورودی باید در محدوده باشد؛ یکتاسازی/مرتب‌سازی با تماس‌گیرنده.
+    pub fn remove_rows(&self, rows: &[usize]) -> Matrix {
+        let drop: std::collections::HashSet<usize> = rows.iter().copied().collect();
+        let new_rows = self.rows - rows.len();
+        let mut data = Vec::with_capacity(new_rows * self.cols);
+        for c in 0..self.cols {
+            for r in 0..self.rows {
+                if !drop.contains(&r) {
+                    data.push(self.data[c * self.rows + r]);
+                }
+            }
+        }
+        Matrix::from_columns(new_rows, self.cols, data)
+    }
+
+    /// حذف ستون‌ها (اندیس‌های ۰-پایه) — `A(:,j)=[]` و حذف المان بردار سطری.
+    pub fn remove_cols(&self, cols: &[usize]) -> Matrix {
+        let drop: std::collections::HashSet<usize> = cols.iter().copied().collect();
+        let new_cols = self.cols - cols.len();
+        let mut data = Vec::with_capacity(self.rows * new_cols);
+        for c in 0..self.cols {
+            if drop.contains(&c) {
+                continue;
+            }
+            for r in 0..self.rows {
+                data.push(self.data[c * self.rows + r]);
+            }
+        }
+        Matrix::from_columns(self.rows, new_cols, data)
+    }
+
     /// دسترسی با subscripts — اندیس‌ها ۰-پایه داخلی‌اند (لایه زبان ۱-پایه را می‌سازد).
     pub fn get(&self, r: usize, c: usize) -> f64 {
         debug_assert!(r < self.rows && c < self.cols, "index out of bounds");

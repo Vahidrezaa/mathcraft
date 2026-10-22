@@ -187,9 +187,10 @@ fn corpus_17_ans_suppression() {
 
 #[test]
 fn corpus_18_indexed_growth() {
+    // متلب/اکتاو: `x=[]; x(3)=5` → سطری 1×3 (جهت رشد خطی حفظ می‌شود)
     assert_mat(
         &run_mat(src!("p1_18_indexed_growth.m"), "x"),
-        &[&[0.0], &[0.0], &[5.0]],
+        &[&[0.0, 0.0, 5.0]],
     );
 }
 

@@ -353,28 +353,56 @@ pub fn evaluate_line(code: String) -> EvalResult {
     let job_id = engine.jobs;
     let before: HashMap<String, Value> = engine.env.snapshot();
 
-    let (mut events, status) = match parse(&code) {
-        Err(e) => (
-            vec![ConsoleEvent::Error { err: e.into() }],
-            JobStatus::Failed,
-        ),
-        Ok(program) => {
-            let outcome = eval_program(&program, &mut engine.env);
-            let mut events: Vec<ConsoleEvent> = outcome
-                .outputs
-                .into_iter()
-                .map(|o| ConsoleEvent::Print { text: o.text })
-                .collect();
-            let status = match outcome.error {
-                None => JobStatus::Done,
-                Some(err) => {
-                    events.push(ConsoleEvent::Error { err: err.into() });
-                    JobStatus::Failed
-                }
-            };
-            (events, status)
-        }
-    };
+    // گارد مرزی: هر panic داخلی موتور هرگز نباید از مرز FFI بگذرد (کرش اپ
+    // اندروید). به خطای موتور نگاشت می‌شود؛ وضعیت env بعد از panic ناسازگار
+    // ممکن است بماند — نشست باید ادامه یابد (بند ۱۵ گزارش ممیزی خارجی).
+    let (mut events, status) =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match parse(&code) {
+            Err(e) => (
+                vec![ConsoleEvent::Error { err: e.into() }],
+                JobStatus::Failed,
+            ),
+            Ok(program) => {
+                let outcome = eval_program(&program, &mut engine.env);
+                let mut events: Vec<ConsoleEvent> = outcome
+                    .outputs
+                    .into_iter()
+                    .map(|o| ConsoleEvent::Print { text: o.text })
+                    .collect();
+                let status = match outcome.error {
+                    None => JobStatus::Done,
+                    Some(err) => {
+                        events.push(ConsoleEvent::Error { err: err.into() });
+                        JobStatus::Failed
+                    }
+                };
+                (events, status)
+            }
+        })) {
+            Ok(pair) => pair,
+            Err(payload) => {
+                let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic".to_string()
+                };
+                (
+                    vec![ConsoleEvent::Error {
+                        err: CoreMcError::new(
+                            mc_core::ids::UNSUPPORTED,
+                            0,
+                            0,
+                            format!("Internal engine panic — please report this input. ({msg})"),
+                            format!("پنیک داخلی موتور — لطفاً این ورودی را گزارش کنید. ({msg})"),
+                        )
+                        .into(),
+                    }],
+                    JobStatus::Failed,
+                )
+            }
+        };
 
     // هیچ رویدادی گم نمی‌شود: اگر خطا وسط خط بود، خروجی‌های قبل از خطا چاپ شده‌اند.
     if status == JobStatus::Failed && events.is_empty() {

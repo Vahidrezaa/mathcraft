@@ -1,16 +1,12 @@
 {
  "script": "p1_18_indexed_growth.m",
  "tol": 1e-09,
- "generator": "numpy-2.1.3-seed",
+ "generator": "manual-matlab-semantics-2026-10-22 (numpy row-major error fixed; octave cross-check pending via CI octave-differential)",
  "vars": {
   "x": [
    [
-    0.0
-   ],
-   [
-    0.0
-   ],
-   [
+    0.0,
+    0.0,
     5.0
    ]
   ]

@@ -237,7 +237,17 @@ fn exec_stmt(
                     col,
                 } => {
                     indexed_assign(env, name, subs, value, *line, *col)?;
-                    Ok((Flow::Normal, Vec::new()))
+                    // متلب نتیجهٔ انتساب اندیس‌دار بدون «;» را هم نمایش می‌دهد
+                    if !*suppress {
+                        let text = crate::format::format_assignment(
+                            name,
+                            env.get(name)
+                                .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
+                        );
+                        Ok((Flow::Normal, vec![text]))
+                    } else {
+                        Ok((Flow::Normal, Vec::new()))
+                    }
                 }
             }
         }
@@ -280,7 +290,7 @@ fn exec_stmt(
         } => {
             for (cond, body) in branches {
                 let c = eval_expr(cond, env, depth)?;
-                if truthy_scalar(&c)? {
+                if truthy_condition(&c)? {
                     return exec_block(body, env, depth).map(|f| (f, Vec::new()));
                 }
             }
@@ -350,7 +360,7 @@ fn exec_stmt(
         Stmt::While { cond, body, .. } => {
             loop {
                 let c = eval_expr(cond, env, depth)?;
-                if !truthy_scalar(&c)? {
+                if !truthy_condition(&c)? {
                     break;
                 }
                 if matches!(exec_block(body, env, depth)?, Flow::Break) {
@@ -369,7 +379,38 @@ fn exec_block(body: &[Stmt], env: &mut Environment, depth: usize) -> Result<Flow
     exec_stmts(body, env, depth, &mut sink)
 }
 
-/// شرط if/while — فقط اسکالر غیرصفر (سند ۰۳ §8: ماتریس = خطای آموزشی).
+/// شرط if/while با سمانتیک متلب: «غیرخالی و همهٔ عناصر ناصفر» — برخلاف
+/// `&&`/`||` (که اسکالر می‌خواهند)، آرایه هم مجاز است؛ NaN ناصفر است → درست؛
+/// شرط خالی `[]` یعنی نادرست (بند ۷ گزارش ممیزی خارجی).
+fn truthy_condition(v: &Value) -> Result<bool, McError> {
+    match v {
+        Value::Double(m) => {
+            if m.is_empty() {
+                return Ok(false);
+            }
+            for k in 0..m.numel() {
+                if m.get_linear(k) == 0.0 {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        Value::Complex(cm) => {
+            if cm.is_empty() {
+                return Ok(false);
+            }
+            for k in 0..cm.rows() * cm.cols() {
+                let (re, im) = cm.get_linear(k);
+                if re == 0.0 && im == 0.0 {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        other => truthy_scalar(other),
+    }
+}
+
 fn truthy_scalar(v: &Value) -> Result<bool, McError> {
     match v.as_scalar() {
         Some(x) if x.is_nan() => Err(McError::new(
@@ -431,6 +472,13 @@ fn indexed_assign(
         }
     };
     let resolved = resolve_subs(&cur, subs, env, depth_of(line))?;
+    // انتساب خالی `x(i)=[]` — سمانتیک حذف متلب: المان بردار (با حفظ جهت)،
+    // حذف «سطر» با اندیس خطی روی ماتریس، و حذف سطر/ستون با دونقطه A(i,:)/A(:,j).
+    if vmat.is_empty() {
+        let out = delete_subscripts(&cur, &resolved, line, col)?;
+        env.set(name.to_string(), Value::Double(out));
+        return Ok(());
+    }
     let mut out = cur.clone();
     match resolved.len() {
         1 => linear_assign(&mut out, &resolved[0], &vmat)?,
@@ -629,6 +677,121 @@ fn linear_read(m: &Matrix, i: usize, line: u32, col: u32) -> Result<f64, McError
     Ok(m.get_linear(i - 1))
 }
 
+/// حذف با انتساب خالی — `x(i)=[]` / `A(i)=[]` / `A(i,:)=[]` / `A(:,j)=[]`.
+/// متلب: روی بردار المان حذف می‌شود (جهت حفظ می‌شود)؛ اندیس خطی روی ماتریس
+/// «سطرِ» حاوی المان را حذف می‌کند؛ `x(:)=[]` همه‌چیز را حذف می‌کند (0×0).
+fn delete_subscripts(
+    cur: &Matrix,
+    resolved: &[Idx],
+    line: u32,
+    col: u32,
+) -> Result<Matrix, McError> {
+    let out_of_range = |i: usize, hi: usize| {
+        McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            format!("Deletion index {i} out of range 1..={hi}."),
+            format!("اندیس حذف {i} خارج از بازهٔ ۱ تا {hi} است."),
+        )
+    };
+    match resolved {
+        // x(:)=[] → 0×0 خالی (رفتار متلب/اکتاو)
+        [Idx::All] => Ok(Matrix::full(0, 0, 0.0)),
+        // حذف با اندیس خطی (تک‌زیرنویس)
+        [idx] => {
+            let mut list: Vec<usize> = match idx {
+                Idx::Scalar(i) => vec![*i],
+                Idx::Vector(l) => l.clone(),
+                Idx::All => (1..=cur.numel()).collect(),
+            };
+            if list.is_empty() {
+                // x([])=[] بی‌اثر است (رفتار متلب)
+                return Ok(cur.clone());
+            }
+            let numel = cur.numel();
+            for &i in &list {
+                if i == 0 || i > numel {
+                    return Err(out_of_range(i, numel));
+                }
+            }
+            let mut idxs: Vec<usize> = list.drain(..).map(|i| i - 1).collect();
+            idxs.sort_unstable();
+            idxs.dedup();
+            if cur.rows() == 1 {
+                Ok(cur.remove_cols(&idxs))
+            } else if cur.cols() == 1 {
+                Ok(cur.remove_rows(&idxs))
+            } else {
+                // متلب: اندیس خطی روی ماتریس → حذف سطرِ حاوی المان
+                // (column-major: سطرِ المان k ام = k % rows)
+                let rows: Vec<usize> = idxs.iter().map(|&k| k % cur.rows()).collect();
+                Ok(cur.remove_rows(&rows))
+            }
+        }
+        // A(i,:)=[] — حذف سطر(ها)
+        [ri, Idx::All] => {
+            let mut rows: Vec<usize> = match ri {
+                Idx::All => (0..cur.rows()).collect(),
+                Idx::Scalar(i) => {
+                    if *i == 0 || *i > cur.rows() {
+                        return Err(out_of_range(*i, cur.rows()));
+                    }
+                    vec![*i - 1]
+                }
+                Idx::Vector(l) => {
+                    for &i in l {
+                        if i == 0 || i > cur.rows() {
+                            return Err(out_of_range(i, cur.rows()));
+                        }
+                    }
+                    l.iter().map(|&i| i - 1).collect()
+                }
+            };
+            if rows.is_empty() {
+                return Ok(cur.clone());
+            }
+            rows.sort_unstable();
+            rows.dedup();
+            Ok(cur.remove_rows(&rows))
+        }
+        // A(:,j)=[] — حذف ستون(ها)
+        [Idx::All, ci] => {
+            let mut cols: Vec<usize> = match ci {
+                Idx::All => (0..cur.cols()).collect(),
+                Idx::Scalar(i) => {
+                    if *i == 0 || *i > cur.cols() {
+                        return Err(out_of_range(*i, cur.cols()));
+                    }
+                    vec![*i - 1]
+                }
+                Idx::Vector(l) => {
+                    for &i in l {
+                        if i == 0 || i > cur.cols() {
+                            return Err(out_of_range(i, cur.cols()));
+                        }
+                    }
+                    l.iter().map(|&i| i - 1).collect()
+                }
+            };
+            if cols.is_empty() {
+                return Ok(cur.clone());
+            }
+            cols.sort_unstable();
+            cols.dedup();
+            Ok(cur.remove_cols(&cols))
+        }
+        _ => Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "Empty ([]) assignment on 2-D subscripts requires a colon: A(i,:)=[] or A(:,j)=[]."
+                .to_string(),
+            "انتساب خالی به زیرنویس دوبعدی نیازمند دونقطه است: A(i,:)=[] یا A(:,j)=[].".to_string(),
+        )),
+    }
+}
+
 fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
     match idx {
         Idx::Scalar(i) => {
@@ -667,10 +830,28 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
 }
 
 fn grow_linear(m: &mut Matrix, new_len: usize) {
+    // رشد با اندیس خطی — جهت حفظ می‌شود (رفتار متلب): بردار سطری سطری
+    // می‌ماند (`x=10; x(3)=5` → 1×3)، ستونی ستونی؛ ماتریس با افزایش سطر
+    // رشد می‌کند (A(5)=9 روی 2×2 → 3×2).
     let mut data: Vec<f64> = (0..m.numel()).map(|i| m.get_linear(i)).collect();
-    data.resize(new_len, 0.0);
-    // رشد به ستونی بلند (رفتار متلب برای اندیس خطی)
-    *m = Matrix::from_columns(new_len, 1, data);
+    if m.rows() == 1 {
+        data.resize(new_len, 0.0);
+        *m = Matrix::from_columns(1, new_len, data);
+    } else if m.cols() == 1 {
+        data.resize(new_len, 0.0);
+        *m = Matrix::from_columns(new_len, 1, data);
+    } else {
+        let cols = m.cols();
+        if cols == 0 {
+            // رشد از خالی (مثل `A=[]; A(3)=5`) → سطر 1×new_len (رفتار متلب)
+            data.resize(new_len, 0.0);
+            *m = Matrix::from_columns(1, new_len, data);
+            return;
+        }
+        let new_rows = new_len.div_ceil(cols);
+        data.resize(new_rows * cols, 0.0);
+        *m = Matrix::from_columns(new_rows, cols, data);
+    }
 }
 
 fn matrix_assign(
