@@ -668,7 +668,8 @@ mod tests {
         let r = evaluate_line("j".to_owned());
         assert!(matches!(
             &r.console_events[0],
-            ConsoleEvent::Print { text } if text == "ans =\n    10\n"
+            // بند ۳ ممیزی خارجی: اکوی متغیر برهنه با «نام =» است (رفتار متلب)
+            ConsoleEvent::Print { text } if text == "j =\n    10\n"
         ));
 
         // مغایرت نام فایل/تابع اصلی = خطای آموزشی (سمانتیک متلب)

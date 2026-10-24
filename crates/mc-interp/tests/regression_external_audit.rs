@@ -1,4 +1,5 @@
-//! رگرسیون‌های گزارش ممیزی خارجی روی P1-v0.6 (بندهای ۱، ۴، ۷، ۱۵) —
+//! رگرسیون‌های گزارش ممیزی خارجی روی P1-v0.6 (بندهای ۱، ۳، ۴، ۷، ۱۵ + اکوی
+//! compound/return-داخل-حلقه از batch 1.5) —
 //! رفتار مرجع: متلب R2026b. همهٔ موارد قبل از فیکس، بازتولیدِ خرابی بودند.
 
 use mc_core::Value;
@@ -139,6 +140,63 @@ fn deletion_without_semicolon_displays_too() {
         texts.iter().any(|t| t.contains("x =")),
         "deletion must display 'x =': {texts:?}"
     );
+}
+
+// ---------- بند ۳ (batch 1.5): اکوی متغیر برهنه با «نام =» + ست‌شدن ans ----------
+
+#[test]
+fn bare_variable_echo_uses_var_name_and_sets_ans() {
+    let (env, texts, err) = run("x = 5; x");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["x =\n     5\n".to_string()]);
+    // متلب: ارجاع برهنه هم ans را ست می‌کند
+    let (_, _, d) = mat(&env, "ans");
+    assert_eq!(d, vec![5.0]);
+}
+
+#[test]
+fn bare_variable_suppressed_does_not_set_ans() {
+    let (_, texts, err) = run("x = 5; x; ans");
+    // متلب: «x;» سرکوب‌شده ans را ست نمی‌کند ← ans تعریف‌نشده می‌ماند
+    assert!(err.is_some(), "ans must stay undefined after 'x;'");
+    assert!(texts.is_empty());
+}
+
+// ---------- batch 1.5: اکوی گزاره‌های داخل بلاک‌های compound ----------
+
+#[test]
+fn if_branch_assignment_echoes_like_matlab() {
+    let (env, texts, err) = run("if [], a = 1, else, a = 0, end");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["a =\n     0\n".to_string()]);
+    let (_, _, d) = mat(&env, "a");
+    assert_eq!(d, vec![0.0]);
+}
+
+#[test]
+fn for_body_echoes_each_iteration() {
+    let (_, texts, err) = run("for k = 1:3, k, end");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts.len(), 3, "each iteration echoes: {texts:?}");
+    assert!(texts[0].starts_with("k ="));
+    assert!(texts[2].contains('3'));
+}
+
+#[test]
+fn while_body_echoes_each_iteration() {
+    let (_, texts, err) = run("n = 0; while n < 2, n = n + 1, end");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts.len(), 2, "each iteration echoes: {texts:?}");
+    assert!(texts[1].contains('2'));
+}
+
+#[test]
+fn return_inside_for_loop_exits_early() {
+    // سمانتیک متلب: return داخل حلقه فوراً از تابع/اسکریپت خارج می‌شود
+    let (env, _, err) = run("for k = 1:3, if k == 2, return, end, end");
+    assert!(err.is_none(), "engine error: {err:?}");
+    let (_, _, d) = mat(&env, "k");
+    assert_eq!(d, vec![2.0], "loop must stop at k == 2, not run to 3");
 }
 
 // ---------- بند ۷: شرط خالی/آرایه‌ای if-while (سمانتیک متلب) ----------

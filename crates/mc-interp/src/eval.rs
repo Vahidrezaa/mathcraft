@@ -204,7 +204,12 @@ fn exec_stmt(
             }
             let value = eval_expr(expr, env, depth)?;
             if !*suppress {
-                let text = crate::format::format_ans(&value);
+                // بند ۳ گزارش ممیزی خارجی — متلب: ارجاع برهنهٔ متغیر با «نام =»
+                // اکو می‌شود (نه «ans =»)؛ مقدار ans هم مثل متلب همان مقدار می‌شود.
+                let text = match expr {
+                    Expr::Var { name, .. } => crate::format::format_assignment(name, &value),
+                    _ => crate::format::format_ans(&value),
+                };
                 env.set("ans", value);
                 return Ok((Flow::Normal, vec![text]));
             }
@@ -291,11 +296,12 @@ fn exec_stmt(
             for (cond, body) in branches {
                 let c = eval_expr(cond, env, depth)?;
                 if truthy_condition(&c)? {
-                    return exec_block(body, env, depth).map(|f| (f, Vec::new()));
+                    // اکوی متلب: گزاره‌های نمایش‌دار داخل شاخه هم به کنسول می‌روند
+                    return exec_block(body, env, depth);
                 }
             }
             if let Some(body) = else_body {
-                return exec_block(body, env, depth).map(|f| (f, Vec::new()));
+                return exec_block(body, env, depth);
             }
             Ok((Flow::Normal, Vec::new()))
         }
@@ -349,34 +355,53 @@ fn exec_stmt(
                     ))
                 }
             };
+            let mut texts = Vec::new();
             for col in columns {
                 env.set(var.clone(), col);
-                if matches!(exec_block(body, env, depth)?, Flow::Break) {
-                    break;
+                let (flow, mut t) = exec_block(body, env, depth)?;
+                texts.append(&mut t);
+                match flow {
+                    Flow::Break => break,
+                    // return داخل بدنهٔ حلقه باید فوراً خارج شود (سمانتیک متلب)
+                    Flow::Return => return Ok((Flow::Return, texts)),
+                    Flow::Normal | Flow::Continue => {}
                 }
             }
-            Ok((Flow::Normal, Vec::new()))
+            Ok((Flow::Normal, texts))
         }
         Stmt::While { cond, body, .. } => {
+            let mut texts = Vec::new();
             loop {
                 let c = eval_expr(cond, env, depth)?;
                 if !truthy_condition(&c)? {
                     break;
                 }
-                if matches!(exec_block(body, env, depth)?, Flow::Break) {
-                    break;
+                let (flow, mut t) = exec_block(body, env, depth)?;
+                texts.append(&mut t);
+                match flow {
+                    Flow::Break => break,
+                    Flow::Return => return Ok((Flow::Return, texts)),
+                    Flow::Normal | Flow::Continue => {}
                 }
             }
-            Ok((Flow::Normal, Vec::new()))
+            Ok((Flow::Normal, texts))
         }
         Stmt::Break { .. } => Ok((Flow::Break, Vec::new())),
         Stmt::Continue { .. } => Ok((Flow::Continue, Vec::new())),
     }
 }
 
-fn exec_block(body: &[Stmt], env: &mut Environment, depth: usize) -> Result<Flow, McError> {
+/// بلوک = دنبالهٔ گزاره‌ها + متن‌های نمایش آن‌ها (اکوی متلب). در بدنهٔ توابع
+/// متن‌ها توسط call_user_fn دور ریخته می‌شوند (توابع مثل متلب بی‌اکو هستند)؛
+/// در کنسول/اسکریپت/شاخه‌های if و بدنهٔ حلقه‌ها اکو به بالا منتقل می‌شود.
+fn exec_block(
+    body: &[Stmt],
+    env: &mut Environment,
+    depth: usize,
+) -> Result<(Flow, Vec<String>), McError> {
     let mut sink = Vec::new();
-    exec_stmts(body, env, depth, &mut sink)
+    let flow = exec_stmts(body, env, depth, &mut sink)?;
+    Ok((flow, sink))
 }
 
 /// شرط if/while با سمانتیک متلب: «غیرخالی و همهٔ عناصر ناصفر» — برخلاف
@@ -1447,7 +1472,9 @@ fn call_user_fn(
     // nargin/nargout — سمانتیک متلب (سایه‌پذیر مثل هر متغیر دیگر)
     child.set("nargin", Value::Double(Matrix::scalar(args.len() as f64)));
     child.set("nargout", Value::Double(Matrix::scalar(nargout as f64)));
-    let flow = exec_block(&def.body.stmts, &mut child, depth + 1)?;
+    // متن‌های نمایش بدنهٔ تابع عمداً دور ریخته می‌شوند — متلب در فراخوانی تابع
+    // اکو نمی‌کند (فقط disp/fprintf چاپ می‌کنند).
+    let (flow, _body_texts) = exec_block(&def.body.stmts, &mut child, depth + 1)?;
     match flow {
         Flow::Break | Flow::Continue => {
             return Err(McError::new(
