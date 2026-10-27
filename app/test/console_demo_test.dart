@@ -157,13 +157,13 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    // دکمه کپی محو کنار بلوک نتیجه — چیدمان متلب FB-1: «ans =» سطر بعد مقدار
+    // دکمه کپی محو کنار بلوک نتیجه — متن کپی = همان متن رندرشده ('ans = 2' از موتور ساختگی؛ چیدمان موتور واقعی تستِ Rust را دارد)
     await tester.tap(find.byTooltip('کپی'));
     await tester.pumpAndSettle();
 
     expect(find.text('در حافظه کپی شد'), findsOneWidget);
     final read = await Clipboard.getData('text/plain');
-    expect(read?.text, 'ans =\n     2\n');
+    expect(read?.text, 'ans = 2');
   });
 
   testWidgets('error card copy button copies the raw engine message',
