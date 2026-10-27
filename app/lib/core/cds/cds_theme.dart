@@ -116,7 +116,7 @@ class CdsTheme {
       // FB-2 (بازخورد دستگاه 2026-10-21): انتخاب متن با رنگ تم CDS —
       // هایلایت accent با شفافیت ۲۵٪ و دستگیره‌ها هم‌رنگ accent (سند ۰۶ §7.1)
       textSelectionTheme: TextSelectionThemeData(
-        selectionColor: accent.withValues(alpha: 0.25),
+        selectionColor: accent.withOpacity(0.25),
         cursorColor: accent,
         selectionHandleColor: accent,
       ),
