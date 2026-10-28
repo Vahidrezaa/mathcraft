@@ -457,7 +457,7 @@ shipping a plotter on top of a half-language would force rework.
 | # | Item | Status | Step |
 |---|---|---|---|
 | 1 | `x(2)=[]` panic | ✅ fixed (batch 1) | — |
-| 2 | OOM abort (`zeros(1e10)`, `1:1e9`) | 🔶 open | 2.5 |
+| 2 | OOM abort (`zeros(1e10)`, `1:1e9`) | ✅ closed (2.5) | — |
 | 3 | bare-var echo `x = 5` + `ans` | ✅ fixed (batch 1.5) | — |
 | 4 | indexed-assign display | ✅ fixed (batch 1) | — |
 | 5 | index orientation | ✅ closed (2.4) | — |
@@ -469,21 +469,30 @@ shipping a plotter on top of a half-language would force rework.
 | 11 | format short decimals + scale factor | ✅ closed (2.4) | — |
 | 13 | chained indexing | 🔶 open | 2.10 |
 | 14 | error IDs + positions | 🔶 open | 2.11 |
-| 15 | panic across FFI boundary | 🔶 half-closed (`catch_unwind` in FFI; `panic="abort"` decision) | 2.3 + 2.5 |
+| 15 | panic across FFI boundary | ✅ closed (2.3 Option A + 2.5 panic audit) | — |
 
 ## 11. Current focus
 
-**Step 2.4 executed (2026-10-28) — per-item commit series, sandbox gates green**
-(item 5 index orientation · item 11 format engine with 4-decimal short +
-scale factor + `format` command · item 10 empty display text · item 8
-disp/fprintf/class/num2str + intmax/realmax/realmin · `%{ %}` block comments
-(part of item 9) · docs/COMPATIBILITY ledger updated with per-case oracles).
-Display-only change: short now prints 4 decimals (`0.1000` not `0.1`) — FB-1
-goldens untouched (integers). Display-format thresholds are flagged for
-one-time user-MATLAB pinning (COMPATIBILITY §4.8). Still open from 2.3: the
-on-device pendulum/Stop demo + Option A acknowledgement. **Next: 2.5 after
-user confirms this delivery on device.** No session may start any other step
-without the user explicitly reordering (§ Governance).
+**Step 2.5 executed (2026-10-28) — per-item commit series, sandbox gates green**
+(task 1 allocation budget: `mc-core::budget` one documented place — default
+1e8 elements = 800 MB decimal for f64 + `MATHCRAFT_MAX_ELEMENTS` override;
+`MC:E4003_OUT_OF_MEMORY` bilingual error with remedy, doc 03 §14 · task 2
+range materialization + every user-dimension builtin guarded — zeros/ones/
+eye/linspace/rand/randi/diag(k)/repmat/kron/hcat/vcat/indexed & scalar grow
+via `Matrix::try_full`/`check_elements` with checked arithmetic · task 3
+CI panic audit guard = `scripts/panic_audit.py` over all non-test product
+code incl. mc-cli; parser `expect`→`expect_tok` so zero `.expect(` remain).
+DoD verified in sandbox: `zeros(100000,100000);` and `x=1:1e9` → clean
+error, `mc -e` exit 1, process alive; **346 tests green** (≥ 315), fmt /
+clippy -D warnings / panic-audit clean; Cargo.lock + app/ untouched.
+Audit ledger: item 2 ✅, item 15 ✅ (both halves) — COMPATIBILITY §4.8.
+Also closed this session: step 2.3 officially done (user confirmed the
+push + on-device demo: «همه چیز مورد انتظار و موفق بود»).
+**Next: 2.6 (numeric extras & structured options, STATUS §3.1 leftovers)**
+— includes the user-action item: pin one real-MATLAB van der Pol μ=1000
+point reference + optional display-threshold paste (2.4 pin flags).
+No session may start any other step without the user explicitly reordering
+(§ Governance).
 
 ## 12. Change log
 
@@ -491,3 +500,4 @@ without the user explicitly reordering (§ Governance).
 |---|---|---|---|
 | 1.0 | 2026-10-25 | Initial binding plan: baseline P0/P1/P2 recorded; steps 2.3–2.11, 3.1–3.6, 4.1–4.4, 5.1–5.6, 6.1–6.3, v1.0 close defined; expansion E1–E8 named; audit cross-map added | User (scope answers, this session) |
 | 1.0 | 2026-10-28 | Step 2.4 executed per plan (§2.4 tasks 1-5): ledger rows 5/8/10/11 → closed, row 9 split (block comments closed, hold on → 3.2); §11 updated. User approval: «اوکی بود. برو مرحله بعدی» | User (chat) |
+| 1.0 | 2026-10-28 | Step 2.3 closed (user confirmed push + device demo) and Step 2.5 executed per plan (§2.5 tasks 1-3): ledger rows 2 and 15 → closed; doc 03 §14 row MC:E4003 added; §11 updated. User approval: «همه چیز مورد انتظار و موفق بود. من مشکلی ندیدم. میتونیم بریم گام بعدی» | User (chat) |

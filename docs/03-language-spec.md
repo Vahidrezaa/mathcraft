@@ -259,6 +259,7 @@ capture-by-value در لحظه ساخت (رفتار MATLAB). recursive anonymous
 | MC:E3001 | parse error | Unexpected ')': expected expression. | ')' غیرمنتظره: عبارت انتظار می‌رفت. |
 | MC:E4001 | ode integration | ODE solver failed to meet tolerance (RelTol=1e-3) at t=…; result flagged. | حلگر به تحمل خطا نرسید؛ نتیجه با برچسب «مشکوک» برگردانده شد. |
 | MC:E4002 | cancelled | Operation terminated by user. | عملیات به درخواست کاربر متوقف شد. |
+| MC:E4003 | out of memory | Out of memory: requested 100000x100000 array (80000.0 MB) exceeds the allocation budget (800 MB). Reduce the problem size. | خارج از حافظه: آرایهٔ 100000×100000 (80000.0 مگابایت) از بودجهٔ تخصیص (۸۰۰ مگابایت) فراتر می‌رود. اندازهٔ مسئله را کاهش دهید. |
 
 قاعده: هر خطا حتماً یکی از: (الف) راه اصلاح، (ب) لینک مستند، (ج) توضیح مفهومی کوتاه داشته باشد. خطای خالی ممنوع.
 
