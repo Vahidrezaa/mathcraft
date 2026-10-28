@@ -460,28 +460,34 @@ shipping a plotter on top of a half-language would force rework.
 | 2 | OOM abort (`zeros(1e10)`, `1:1e9`) | 🔶 open | 2.5 |
 | 3 | bare-var echo `x = 5` + `ans` | ✅ fixed (batch 1.5) | — |
 | 4 | indexed-assign display | ✅ fixed (batch 1) | — |
-| 5 | index orientation | 🔶 open | 2.4 |
+| 5 | index orientation | ✅ closed (2.4) | — |
 | 6/12 | char/string model (`[65 'a']`, `'abc'+1`) | 🔶 open | 2.8 |
 | 7 | `[]`/array conditions | ✅ fixed (batch 1) | — |
-| 8 | `disp/fprintf/class` | 🔶 open | 2.4 |
-| 9 | `hold on` / block comments | 🔶 open | 3.2 / 2.4 |
-| 10 | empty shape `1:0` display | 🔶 open | 2.4 |
-| 11 | format short decimals + scale factor | 🔶 open | 2.4 |
+| 8 | `disp/fprintf/class` | ✅ closed (2.4) | — |
+| 9 | `hold on` / block comments | 🔶 hold on → 3.2 · block comments ✅ closed (2.4) | 3.2 |
+| 10 | empty shape `1:0` display | ✅ closed (2.4) | — |
+| 11 | format short decimals + scale factor | ✅ closed (2.4) | — |
 | 13 | chained indexing | 🔶 open | 2.10 |
 | 14 | error IDs + positions | 🔶 open | 2.11 |
 | 15 | panic across FFI boundary | 🔶 half-closed (`catch_unwind` in FFI; `panic="abort"` decision) | 2.3 + 2.5 |
 
 ## 11. Current focus
 
-**Step 2.3 executed (2026-10-27) — code complete, all sandbox gates green** (contract v2 +
-run_script/cancel_job/active_job_id; cooperative cancel in loops + ode45/ode23/integral;
-panic policy = Option A recorded in COMPATIBILITY §4.8 row 15). Remaining DoD for closure:
-the on-device pendulum demo (progress bar + Stop + consistent workspace) and
-`while(1) end` cancel from the UI — user verification. **After user confirms: next step is
-2.4.** No session may start any other step without the user explicitly reordering (§ Governance).
+**Step 2.4 executed (2026-10-28) — per-item commit series, sandbox gates green**
+(item 5 index orientation · item 11 format engine with 4-decimal short +
+scale factor + `format` command · item 10 empty display text · item 8
+disp/fprintf/class/num2str + intmax/realmax/realmin · `%{ %}` block comments
+(part of item 9) · docs/COMPATIBILITY ledger updated with per-case oracles).
+Display-only change: short now prints 4 decimals (`0.1000` not `0.1`) — FB-1
+goldens untouched (integers). Display-format thresholds are flagged for
+one-time user-MATLAB pinning (COMPATIBILITY §4.8). Still open from 2.3: the
+on-device pendulum/Stop demo + Option A acknowledgement. **Next: 2.5 after
+user confirms this delivery on device.** No session may start any other step
+without the user explicitly reordering (§ Governance).
 
 ## 12. Change log
 
 | Doc version | Date | Change | Approved by |
 |---|---|---|---|
 | 1.0 | 2026-10-25 | Initial binding plan: baseline P0/P1/P2 recorded; steps 2.3–2.11, 3.1–3.6, 4.1–4.4, 5.1–5.6, 6.1–6.3, v1.0 close defined; expansion E1–E8 named; audit cross-map added | User (scope answers, this session) |
+| 1.0 | 2026-10-28 | Step 2.4 executed per plan (§2.4 tasks 1-5): ledger rows 5/8/10/11 → closed, row 9 split (block comments closed, hold on → 3.2); §11 updated. User approval: «اوکی بود. برو مرحله بعدی» | User (chat) |
