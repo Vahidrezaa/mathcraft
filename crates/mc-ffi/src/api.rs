@@ -3,17 +3,26 @@
 //!
 //! این فایل «قرارداد نسخه‌دار» بین UI و موتور است؛ تغییر شکانده در هر نوع =
 //! افزایش `API_CONTRACT_VERSION` و پیام واضح در startup (سند ۰۲ بخش ۳ بند ۴).
+//!
+//! **قرارداد v2 (ROADMAP 2.3 — افزایشی):** رویدادهای job-scope
+//! (`ScriptEvent::Progress/Cancelled/Done`) با `run_script` stream می‌شوند؛
+//! `evaluate_line` و همهٔ انواع v1 دست‌نخورده‌اند (mc-cli همان مسیر قدیم).
+//! لغو با `cancel_job(job_id)` از نخ دیگر (CancellationToken سند ۰۲ §4).
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use mc_core::{McError as CoreMcError, Value};
+use mc_core::{JobSignals, McError as CoreMcError, Value};
 use mc_interp::{eval_program, Environment};
 use mc_parser::parse;
 
+use crate::frb_generated::StreamSink;
+
 /// نسخه قرارداد API — UI در startup با `api_version()` مقایسه می‌کند.
-pub const API_CONTRACT_VERSION: u32 = 1;
+/// v2: افزودن ScriptEvent + run_script/cancel_job/active_job_id (ROADMAP 2.3).
+pub const API_CONTRACT_VERSION: u32 = 2;
 
 /// نسخه قرارداد رسم (DTO) رسم‌ها — سند ۰۴ بخش ۸، سند ۰۷ بخش ۳ بند ۲.
 pub const PLOT_CONTRACT_VERSION: u32 = 1;
@@ -329,6 +338,44 @@ fn engine() -> &'static Mutex<Engine> {
     })
 }
 
+/// job فعال فعلی — فقط صاحب قفل موتور آن را ست/پاک می‌کند؛ `cancel_job`
+/// بدون قفل موتور (فقط پرچم اتمیک) تا از نخ دیگر قابل فراخوانی باشد.
+static ACTIVE_JOB: Mutex<Option<(u64, Arc<JobSignals>)>> = Mutex::new(None);
+
+fn set_active(job_id: u64, ctx: &Arc<JobSignals>) {
+    *ACTIVE_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((job_id, Arc::clone(ctx)));
+}
+
+fn clear_active() {
+    *ACTIVE_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+}
+
+/// گارد کانتکست job — حتی در panic (گرفته‌شده با catch_unwind) کانتکست پاک
+/// می‌ماند؛ invariant «یک job فعال» هرگز نشت نمی‌کند.
+struct JobGuard {
+    ctx: Arc<JobSignals>,
+}
+
+impl JobGuard {
+    fn new(job_id: u64) -> Self {
+        let ctx = Arc::new(JobSignals::new(job_id));
+        mc_core::job::install(Arc::clone(&ctx));
+        set_active(job_id, &ctx);
+        Self { ctx }
+    }
+}
+
+impl Drop for JobGuard {
+    fn drop(&mut self) {
+        mc_core::job::clear();
+        clear_active();
+    }
+}
+
 /// نسخه قرارداد — UI در startup چک می‌کند (سند ۰۲ بخش ۳ بند ۴).
 pub fn api_version() -> u32 {
     API_CONTRACT_VERSION
@@ -339,11 +386,65 @@ pub fn plot_contract_version() -> u32 {
     PLOT_CONTRACT_VERSION
 }
 
+/// هستهٔ ارزیابی مشترک evaluate_line/run_script — پارس + ارزیابی + نگاشت
+/// رویدادها. لغو (`MC:E4002_CANCELLED`) به `JobStatus::Cancelled` نگاشت
+/// می‌شود (نه Failed) — سمانتیک stop متلب (ROADMAP 2.3).
+fn eval_core(env: &mut Environment, code: &str) -> (Vec<ConsoleEvent>, JobStatus) {
+    match parse(code) {
+        Err(e) => (
+            vec![ConsoleEvent::Error { err: e.into() }],
+            JobStatus::Failed,
+        ),
+        Ok(program) => {
+            let outcome = eval_program(&program, env);
+            let mut events: Vec<ConsoleEvent> = outcome
+                .outputs
+                .into_iter()
+                .map(|o| ConsoleEvent::Print { text: o.text })
+                .collect();
+            let status = match outcome.error {
+                None => JobStatus::Done,
+                Some(err) => {
+                    let cancelled = err.id == mc_core::ids::CANCELLED;
+                    events.push(ConsoleEvent::Error { err: err.into() });
+                    if cancelled {
+                        JobStatus::Cancelled
+                    } else {
+                        JobStatus::Failed
+                    }
+                }
+            };
+            (events, status)
+        }
+    }
+}
+
+/// نگاشت payload پنیک به خطای ساختاریافته (بند ۱۵ ممیزی خارجی).
+fn panic_error(payload: Box<dyn std::any::Any + Send>) -> mc_core::McError {
+    let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    };
+    mc_core::McError::new(
+        mc_core::ids::UNSUPPORTED,
+        0,
+        0,
+        format!("Internal engine panic — please report this input. ({msg})"),
+        format!("پنیک داخلی موتور — لطفاً این ورودی را گزارش کنید. ({msg})"),
+    )
+}
+
 /// ارزیابی یک خط کنسول — دمو رسمی P0 (سند ۰۷):
 /// `evaluateLine("1+1")` از UI فارسی تا Rust و برگشت، با event های تایپ‌دار.
 ///
 /// سمانتیک متلب: اجرای دستورها به ترتیب، توقف در اولین خطا؛ خروجی‌های
 /// دستورهای قبلی حفظ می‌شوند (سند ۰۲ بخش ۹).
+///
+/// v2: کانتکست job هم نصب می‌شود (لغو/پیشرفت یکنواخت با run_script)؛
+/// رفتار v1 کاملاً حفظ شده — mc-cli بدون تغییر سبز می‌ماند.
 pub fn evaluate_line(code: String) -> EvalResult {
     let t0 = Instant::now();
     let mut engine = engine()
@@ -356,53 +457,18 @@ pub fn evaluate_line(code: String) -> EvalResult {
     // گارد مرزی: هر panic داخلی موتور هرگز نباید از مرز FFI بگذرد (کرش اپ
     // اندروید). به خطای موتور نگاشت می‌شود؛ وضعیت env بعد از panic ناسازگار
     // ممکن است بماند — نشست باید ادامه یابد (بند ۱۵ گزارش ممیزی خارجی).
-    let (mut events, status) =
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match parse(&code) {
-            Err(e) => (
-                vec![ConsoleEvent::Error { err: e.into() }],
-                JobStatus::Failed,
-            ),
-            Ok(program) => {
-                let outcome = eval_program(&program, &mut engine.env);
-                let mut events: Vec<ConsoleEvent> = outcome
-                    .outputs
-                    .into_iter()
-                    .map(|o| ConsoleEvent::Print { text: o.text })
-                    .collect();
-                let status = match outcome.error {
-                    None => JobStatus::Done,
-                    Some(err) => {
-                        events.push(ConsoleEvent::Error { err: err.into() });
-                        JobStatus::Failed
-                    }
-                };
-                (events, status)
-            }
-        })) {
-            Ok(pair) => pair,
-            Err(payload) => {
-                let msg = if let Some(s) = payload.downcast_ref::<&str>() {
-                    (*s).to_string()
-                } else if let Some(s) = payload.downcast_ref::<String>() {
-                    s.clone()
-                } else {
-                    "unknown panic".to_string()
-                };
-                (
-                    vec![ConsoleEvent::Error {
-                        err: CoreMcError::new(
-                            mc_core::ids::UNSUPPORTED,
-                            0,
-                            0,
-                            format!("Internal engine panic — please report this input. ({msg})"),
-                            format!("پنیک داخلی موتور — لطفاً این ورودی را گزارش کنید. ({msg})"),
-                        )
-                        .into(),
-                    }],
-                    JobStatus::Failed,
-                )
-            }
-        };
+    let _guard = JobGuard::new(job_id);
+    let (mut events, status) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        eval_core(&mut engine.env, &code)
+    })) {
+        Ok(pair) => pair,
+        Err(payload) => (
+            vec![ConsoleEvent::Error {
+                err: panic_error(payload).into(),
+            }],
+            JobStatus::Failed,
+        ),
+    };
 
     // هیچ رویدادی گم نمی‌شود: اگر خطا وسط خط بود، خروجی‌های قبل از خطا چاپ شده‌اند.
     if status == JobStatus::Failed && events.is_empty() {
@@ -420,6 +486,145 @@ pub fn evaluate_line(code: String) -> EvalResult {
         status,
         duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
     }
+}
+
+// ---------------------------------------------------------------------------
+// قرارداد v2 — FFI رویدادی: progress + cancel (ROADMAP 2.3، سند ۰۲ §3–4)
+// ---------------------------------------------------------------------------
+
+/// رویدادهای جریان یک job — payload سمت Dartِ `runScript`.
+/// در FRB 2.12 پارامتر `StreamSink` از امضای Dart حذف و تابع به
+/// `Stream<ScriptEvent> runScript({required String code})` تبدیل می‌شود؛
+/// مقدار بازگشتی Rust فقط برای تست‌های داخلی است (Dart آن را نمی‌بیند) —
+/// نتیجهٔ نهایی از طریق [`ScriptEvent::Done`] می‌آید.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScriptEvent {
+    /// پیشرفت حلگرهای طولانی (ode45/ode23/integral). `percent` = None یعنی
+    /// نامعین (نوار نامعین UI)؛ در غیر این صورت 0.0..=1.0.
+    Progress {
+        job_id: u64,
+        stage: String,
+        percent: Option<f32>,
+    },
+    /// درخواست لغو پذیرفته شد — پیش از Done صادر می‌شود (UX فوری).
+    Cancelled { job_id: u64 },
+    /// پایان job (مسیر پایان یکتا) — نتیجهٔ کامل v1 (همان EvalResult).
+    Done { result: EvalResult },
+}
+
+/// اجرای زندهٔ یک خط/اسکریپت با رویدادهای پیشرفت — مسیر UI گام 2.3.
+///
+/// - قفل موتور کل اجرا را می‌پوشاند (سمانتیک سریالی سند ۰۲ §4)؛
+/// - نخ ticker هر ~100ms اسنپ‌شات کانتکست job را به صورت
+///   `ScriptEvent::Progress` (فقط در تغییر) پخش می‌کند؛
+/// - در لغو: `ScriptEvent::Cancelled` سپس `Done{result: status=Cancelled}`؛
+/// - stream با پایان تابع بسته می‌شود (Drop کلوزر FRB) — مسیر پایان یکتا.
+pub fn run_script(code: String, sink: StreamSink<ScriptEvent>) -> EvalResult {
+    let t0 = Instant::now();
+    let mut engine = engine()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    engine.jobs += 1;
+    let job_id = engine.jobs;
+    let before: HashMap<String, Value> = engine.env.snapshot();
+    let guard = JobGuard::new(job_id);
+
+    // ticker پیشرفت — park_timeout برای خروج فوری در پایان job
+    let done = Arc::new(AtomicBool::new(false));
+    let ticker = {
+        let sink = sink.clone();
+        let ctx = Arc::clone(&guard.ctx);
+        let done = Arc::clone(&done);
+        std::thread::Builder::new()
+            .name("mc-progress".to_owned())
+            .spawn(move || {
+                let mut last_stage = String::new();
+                let mut last_bp = mc_core::INDETERMINATE_BP;
+                loop {
+                    if done.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let snap = ctx.snapshot();
+                    if snap.stage != last_stage || snap.percent_bp != last_bp {
+                        let _ = sink.add(ScriptEvent::Progress {
+                            job_id,
+                            stage: snap.stage.clone(),
+                            percent: snap.fraction().map(|f| f as f32),
+                        });
+                        last_stage = snap.stage;
+                        last_bp = snap.percent_bp;
+                    }
+                    std::thread::park_timeout(std::time::Duration::from_millis(100));
+                }
+            })
+            .ok() // بدون ticker هم پیشرفت از دست نمی‌رود؛ نتیجهٔ نهایی سالم است
+    };
+
+    let (mut events, status) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        eval_core(&mut engine.env, &code)
+    })) {
+        Ok(pair) => pair,
+        Err(payload) => (
+            vec![ConsoleEvent::Error {
+                err: panic_error(payload).into(),
+            }],
+            JobStatus::Failed,
+        ),
+    };
+
+    // هیچ رویدادی گم نمی‌شود (همان قاعدهٔ v1)
+    if status == JobStatus::Failed && events.is_empty() {
+        events.push(ConsoleEvent::Print {
+            text: String::new(),
+        });
+    }
+
+    done.store(true, Ordering::Relaxed);
+    if let Some(t) = ticker {
+        t.thread().unpark();
+        let _ = t.join();
+    }
+    drop(guard); // کانتکست/رکورد فعال پیش از رویداد Done پاک شود
+
+    if status == JobStatus::Cancelled {
+        let _ = sink.add(ScriptEvent::Cancelled { job_id });
+    }
+    let result = EvalResult {
+        job_id,
+        console_events: events,
+        plots: Vec::new(),
+        workspace_delta: build_delta(&before, &engine.env),
+        status,
+        duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
+    };
+    let _ = sink.add(ScriptEvent::Done {
+        result: result.clone(),
+    });
+    result
+}
+
+/// درخواست لغو job فعال — بدون قفل موتور (از نخ FRB دیگر امن است).
+/// true = یک job فعال با این id پیدا و پرچمش ست شد.
+pub fn cancel_job(job_id: u64) -> bool {
+    let active = ACTIVE_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match active.as_ref() {
+        Some((id, ctx)) if *id == job_id => {
+            ctx.cancel.store(true, Ordering::Relaxed);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// شناسهٔ job در حال اجرا (برای دکمهٔ Stop: پرس‌وجو + cancel) — None = بی‌کار.
+pub fn active_job_id() -> Option<u64> {
+    ACTIVE_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+        .map(|(id, _)| *id)
 }
 
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
@@ -566,11 +771,26 @@ fn build_delta(before: &HashMap<String, Value>, env: &Environment) -> WorkspaceD
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
+
+    /// قفل سریال‌سازی آزمون‌های موتور — کانتکست job و رکورد فعال سراسری‌اند
+    /// (invariant سند ۰۲ §4)؛ بدون این قفل، لغو cross-thread ممکن است job
+    /// آزمون موازی را بگیرد.
+    static SERIAL: OnceLock<Mutex<()>> = OnceLock::new();
+
+    fn serial_guard() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 
     /// نشست موتور جهانی است (سمانتیک سریالی سند ۰۲ بخش ۴)؛ پس آزمون‌های آن
     /// باید **ترتیبی** اجرا شوند — همه سناریوها در یک #[test] پشت سر هم.
     #[test]
     fn engine_session_end_to_end_scenarios() {
+        let _guard = serial_guard();
         // -- دمو رسمی P0 (سند ۰۷): 1+1 از قرارداد تا خروجی
         let r = evaluate_line("1+1".to_owned());
         assert_eq!(r.status, JobStatus::Done);
@@ -627,7 +847,7 @@ mod tests {
         assert!(r.workspace_delta.changed[0].preview.len() <= 256);
 
         // -- ثبات نسخه‌های قرارداد
-        assert_eq!(api_version(), 1);
+        assert_eq!(api_version(), 2);
         assert_eq!(plot_contract_version(), 1);
 
         // -- بازرسی نشست (P0.1): workspace_vars مرتب و clear_workspace سمانتیک clear
@@ -712,5 +932,79 @@ mod tests {
         assert!(m_functions().is_empty());
         let r = evaluate_line("sq(1)".to_owned());
         assert_eq!(r.status, JobStatus::Failed);
+    }
+
+    /// قرارداد v2 (ROADMAP 2.3): لغو cross-thread روی مسیر evaluate_line
+    /// (که حالا کانتکست job نصب می‌کند) + سقوط تمیز به Cancelled + workspace
+    /// consistent + رفتار cancel_job بیرون از بازهٔ فعال.
+    #[test]
+    fn engine_v2_cancel_cross_thread() {
+        let _guard = serial_guard();
+
+        // job بی‌نهایت در نخ جدا — قفل موتور را می‌گیرد و حلقه می‌چرخد
+        let worker = std::thread::spawn(|| evaluate_line("while 1, x = 1; end".to_owned()));
+
+        // منتظر فعال‌شدن job (حداکثر ۵ ثانیه — جلوگیری از هنگ CI)
+        let mut job_id = None;
+        for _ in 0..500 {
+            if let Some(id) = active_job_id() {
+                job_id = Some(id);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let job_id = job_id.expect("running job must be observable via active_job_id");
+
+        // لغو پذیرفته می‌شود؛ id ناموجود رد می‌شود
+        assert!(cancel_job(job_id));
+        assert!(!cancel_job(job_id + 1));
+
+        let result = worker.join().expect("worker must not panic");
+        assert_eq!(result.job_id, job_id);
+        assert_eq!(result.status, JobStatus::Cancelled);
+        // پیام لغو به کنسول رفت (سطح ۴ سند ۰۲ §9 — هرگز silent)
+        assert!(matches!(
+            result.console_events.last(),
+            Some(ConsoleEvent::Error { err }) if err.id == mc_core::ids::CANCELLED
+        ));
+        // workspace consistent (مثل stop متلب): x با مقدار کامل باقی است
+        let vars = workspace_vars();
+        assert!(vars.iter().any(|v| v.name == "x" && v.shape == vec![1, 1]));
+
+        // پس از پایان job: رکورد فعال خالی است و cancel رد می‌شود
+        assert!(active_job_id().is_none());
+        assert!(!cancel_job(job_id));
+
+        // نشست پس از لغو سالم ادامه می‌یابد
+        let r = evaluate_line("2 * 21".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Print { text } if text == "ans =\n    42\n"
+        ));
+    }
+
+    /// اسنپ‌شات کانتکست/رویدادها: ScriptEvent باید بسازدنی و مقایسه‌پذیر باشد
+    /// (قرارداد round-trip v2 — سمت wire با codegen + CI Dart طرف می‌شود).
+    #[test]
+    fn contract_v2_script_event_shapes() {
+        let progress = ScriptEvent::Progress {
+            job_id: 7,
+            stage: "ode45".to_owned(),
+            percent: Some(0.5),
+        };
+        assert_eq!(progress.clone(), progress);
+        let cancelled = ScriptEvent::Cancelled { job_id: 7 };
+        assert_ne!(progress, cancelled);
+        let done = ScriptEvent::Done {
+            result: EvalResult {
+                job_id: 7,
+                status: JobStatus::Cancelled,
+                ..Default::default()
+            },
+        };
+        assert!(
+            matches!(done, ScriptEvent::Done { result } if result.status == JobStatus::Cancelled)
+        );
     }
 }
