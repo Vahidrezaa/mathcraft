@@ -8,6 +8,9 @@ use std::sync::Arc;
 
 use thin_vec::ThinVec;
 
+use crate::budget;
+use crate::error::McError;
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Matrix {
     rows: usize,
@@ -17,12 +20,30 @@ pub struct Matrix {
 
 impl Matrix {
     /// ماتریس پُر از یک مقدار.
+    ///
+    /// ⚠️ فقط برای مسیرهایی که ابعادشان «مشتق از ماتریس موجود» است (transpose،
+    /// استخراج ستون و…). هر جا ابعاد از **ورودی کاربر** می‌آید، [`Matrix::try_full`]
+    /// اجباری است (ROADMAP 2.5 — بودجهٔ حافظه).
     pub fn full(rows: usize, cols: usize, value: f64) -> Self {
         Self {
             rows,
             cols,
             data: Arc::new(vec![value; rows * cols].into()),
         }
+    }
+
+    /// نسخهٔ بودجه‌دارِ `full` — چکِ **قبل از تخصیص** (ROADMAP 2.5، بند ۲ ممیزی).
+    ///
+    /// ابعادی که مستقیم از اسکالرهای کاربر می‌آیند (`zeros(m,n)`، `1:1e9`،
+    /// رشد اندیس‌دار و…) باید از این مسیر بروند تا به‌جای abort پروسه،
+    /// خطای MATLAB-گونه `MC:E4003_OUT_OF_MEMORY` بدهند.
+    pub fn try_full(rows: usize, cols: usize, value: f64) -> Result<Self, McError> {
+        let n = budget::check_elements(rows, cols)?;
+        Ok(Self {
+            rows,
+            cols,
+            data: Arc::new(vec![value; n].into()),
+        })
     }
 
     /// ماتریس اسکالر ۱×۱.

@@ -22,12 +22,14 @@
     )
 )]
 
+pub mod budget;
 pub mod complex;
 pub mod error;
 pub mod job;
 pub mod matrix;
 pub mod value;
 
+pub use budget::{check_elements, max_elements, DEFAULT_MAX_ELEMENTS, ENV_OVERRIDE};
 pub use complex::ComplexMatrix;
 pub use error::{ids, McError};
 pub use job::{JobSignals, JobSnapshot, INDETERMINATE_BP};
