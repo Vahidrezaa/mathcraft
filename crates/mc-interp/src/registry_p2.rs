@@ -801,6 +801,12 @@ fn ode_driver(args: &[Value], nargout: usize, method: OdeMethod) -> Result<Vec<V
         ((tspan[0], tspan[tspan.len() - 1]), Some(tspan.clone()))
     };
 
+    // پرچم لغو از کانتکست job (ROADMAP 2.3، سند ۰۲ §3–4): mc-ffi پیش از
+    // ارزیابی کانتکست نصب می‌کند؛ بدون نشست فعال (تست‌ها/CLI) None می‌ماند.
+    // Arc تا پایان تابع زنده است → استقراض Option<&AtomicBool> امن است.
+    let job_ctx = mc_core::job::current();
+    let stop = job_ctx.as_ref().map(|j| &j.cancel);
+
     let res = match method {
         OdeMethod::Dp54 => num::solvers::ode45(
             &mut rhs,
@@ -808,7 +814,7 @@ fn ode_driver(args: &[Value], nargout: usize, method: OdeMethod) -> Result<Vec<V
             y0,
             tout.as_deref(),
             &opts,
-            None,
+            stop,
         )?,
         OdeMethod::Bs32 => num::solvers::ode23(
             &mut rhs,
@@ -816,7 +822,7 @@ fn ode_driver(args: &[Value], nargout: usize, method: OdeMethod) -> Result<Vec<V
             y0,
             tout.as_deref(),
             &opts,
-            None,
+            stop,
         )?,
     };
 

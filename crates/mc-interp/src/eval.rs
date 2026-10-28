@@ -8,9 +8,10 @@
 //! - `for` روی ماتریس = پیمایش ستون‌ها (سند ۰۳ §8).
 //! - `end` فقط در زمینهٔ اندیس معتبر است؛ کولن سمانتیک دقیق سند ۰۳ §7.
 
+use std::cell::Cell;
 use std::sync::Arc;
 
-use mc_core::{ids, AnonFn, Matrix, McError, Value};
+use mc_core::{ids, job, AnonFn, Matrix, McError, Value};
 use mc_parser::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
 
 use crate::complex_ops as cx;
@@ -42,6 +43,50 @@ enum Flow {
 /// عمق مجاز فراخوانی توابع بی‌نام (جلوگیری از بی‌نهایت — سند ۰۳ §9:
 /// recursive anonymous ممنوع است؛ خطای آموزشی).
 const MAX_CALL_DEPTH: usize = 128;
+
+/// ---------------- لغو همکاری‌گر (ROADMAP 2.3، سند ۰۲ §3–4) ----------------
+/// چک لغو هر N گزاره در کد خطی (N مستند: ROADMAP 2.3 task 2)؛ حلقه‌های
+/// for/while علاوه بر این، «هر تکرار» چک می‌شوند تا `while(1) end` و
+/// `for i=1:1e9; end` هم‌زمان قابل لغو باشند. هزینه: یک load اتمیک هر N
+/// گزاره / هر تکرار — نامحسوس (DoD ≥295 تست).
+pub const CANCEL_CHECK_EVERY: u64 = 128;
+
+thread_local! {
+    static STMT_TICK: Cell<u64> = const { Cell::new(0) };
+}
+
+/// خطای لغو — نگاشت به `JobStatus::Cancelled` در mc-ffi (نه Failed).
+fn cancel_error() -> McError {
+    McError::new(
+        ids::CANCELLED,
+        0,
+        0,
+        "Operation terminated by user.",
+        "عملیات به درخواست کاربر متوقف شد.",
+    )
+}
+
+/// چک لغو گزاره‌ای: هر N گزاره یک load اتمیک (بدون کانتکست job = no-op).
+fn stmt_cancel_checkpoint() -> Result<(), McError> {
+    STMT_TICK.with(|t| {
+        let n = t.get() + 1;
+        t.set(n);
+        if n % CANCEL_CHECK_EVERY == 0 && job::cancel_requested() {
+            Err(cancel_error())
+        } else {
+            Ok(())
+        }
+    })
+}
+
+/// چک لغو هر تکرار حلقه (for/while).
+fn loop_cancel_checkpoint() -> Result<(), McError> {
+    if job::cancel_requested() {
+        Err(cancel_error())
+    } else {
+        Ok(())
+    }
+}
 
 pub fn eval_program(program: &Program, env: &mut Environment) -> EvalOutcome {
     eval_program_depth(program, env, 0)
@@ -80,6 +125,7 @@ fn exec_stmts(
     texts: &mut Vec<String>,
 ) -> Result<Flow, McError> {
     for stmt in stmts {
+        stmt_cancel_checkpoint()?;
         let (flow, mut t) = exec_stmt(stmt, env, depth)?;
         texts.append(&mut t);
         if !matches!(flow, Flow::Normal) {
@@ -357,6 +403,7 @@ fn exec_stmt(
             };
             let mut texts = Vec::new();
             for col in columns {
+                loop_cancel_checkpoint()?;
                 env.set(var.clone(), col);
                 let (flow, mut t) = exec_block(body, env, depth)?;
                 texts.append(&mut t);
@@ -372,6 +419,7 @@ fn exec_stmt(
         Stmt::While { cond, body, .. } => {
             let mut texts = Vec::new();
             loop {
+                loop_cancel_checkpoint()?;
                 let c = eval_expr(cond, env, depth)?;
                 if !truthy_condition(&c)? {
                     break;
