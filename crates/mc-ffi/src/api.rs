@@ -791,10 +791,26 @@ mod tests {
     #[test]
     fn engine_session_end_to_end_scenarios() {
         let _guard = serial_guard();
+
+        // مقاوم‌سازی ترتیبی (درس flake نسخهٔ CI): این سناریو رفتار end-to-end
+        // را می‌سنجد، نه وراثت state از آزمون‌های دیگر پروسهٔ مشترک (مثلاً ans
+        // یا متغیرهای جاگذاری‌شده). خالی‌کردن ابتدایی هیچ job مصرف نمی‌کند و
+        // شمارنده job_id را هم لمس نمی‌کند — فقط env و فهرست توابع .m را.
+        let _ = clear_workspace();
+        let _ = clear_m_functions();
+
         // -- دمو رسمی P0 (سند ۰۷): 1+1 از قرارداد تا خروجی
         let r = evaluate_line("1+1".to_owned());
         assert_eq!(r.status, JobStatus::Done);
-        assert_eq!(r.job_id, 1);
+        // قرارداد سند ۰۲ §4: job_id شمارنده‌ای سراسری و اکیداً صعودی است و در
+        // طول عمر پروسه reset نمی‌شود (clear فقط env را خالی می‌کند). ترتیب
+        // اجرای آزمون‌ها در harness قطعی نیست و سه آزمون موتوری فقط با
+        // SERIAL سریال می‌شوند — شواهد CI: اگر cancel/oom اول قفل را بگیرند،
+        // «1+1» به‌جای ۱، id=۳ می‌گیرد و assert مطلق flaky می‌شود. پس
+        // قراردادِ قابل‌آزمون در پروسهٔ مشترک: id تخصیص‌یافته (نامتعادل با صفر)
+        // و صعودی برای هر اجرای بعدی (تحت گارد، قطعی).
+        assert!(r.job_id != 0, "job id must be assigned");
+        let first_job_id = r.job_id;
         assert_eq!(
             r.console_events,
             vec![ConsoleEvent::Print {
@@ -810,6 +826,9 @@ mod tests {
         // -- خطای پارس ساختاریافته
         let r = evaluate_line("1 +".to_owned());
         assert_eq!(r.status, JobStatus::Failed);
+        // شمارنده برای job ناموفق هم جلو می‌رود — هر evaluate_line دقیقاً یک
+        // job؛ تحت گارد SERIAL هیچ اجرای دیگری بین این دو نمی‌آید.
+        assert!(r.job_id > first_job_id);
         let [ConsoleEvent::Error { err }] = r.console_events.as_slice() else {
             panic!("error event expected");
         };
