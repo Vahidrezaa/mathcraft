@@ -574,12 +574,19 @@ fn depth_of(_line: u32) -> usize {
     0 // اندیس‌ها بدون تو در توی خاص ارزیابی می‌شوند
 }
 
-/// IndexKind: اسکالر 1-پایه یا تمام-بعد (:)
+/// IndexKind: اسکالر 1-پایه، تمام-بعد (:)، یا برداری با شکل اصلی اندیس.
+/// شکل (`rows`,`cols`) برای قاعدهٔ جهت‌گیری متلب (بند ۵ ممیزی — ROADMAP 2.4)
+/// حفظ می‌شود: نتیجهٔ اندیس‌گذاری خطی از جهتِ خود اندیس پیروی می‌کند
+/// (`a(end:-1:1)` روی بردار سطری سطری می‌ماند؛ `a([1;3])` ستونی می‌دهد).
 #[derive(Clone)]
 enum Idx {
     Scalar(usize),
     All,
-    Vector(Vec<usize>),
+    Vector {
+        idx: Vec<usize>,
+        rows: usize,
+        cols: usize,
+    },
 }
 
 /// ارزیابی زیرنویس‌ها با پشتیبانی `end` و `:` (سند ۰۳ §6).
@@ -628,7 +635,11 @@ fn resolve_subs(
                         }
                         list.push(idx as usize);
                     }
-                    Ok(Idx::Vector(list))
+                    Ok(Idx::Vector {
+                        idx: list,
+                        rows: m.rows(),
+                        cols: m.cols(),
+                    })
                 }
                 _ => Err(McError::new(
                     ids::PARSE_ERROR,
@@ -694,10 +705,16 @@ fn index_read(
             Idx::Scalar(i) => {
                 linear_read(m, *i, line, col).map(|v| Value::Double(Matrix::scalar(v)))
             }
-            Idx::Vector(list) => {
-                let mut out = Matrix::full(list.len(), 1, 0.0);
+            // بند ۵ ممیزی (ROADMAP 2.4): نتیجهٔ اندیس‌گذاری خطی از جهتِ اندیس
+            // پیروی می‌کند — خروجی همان شکل خود اندیس است (متلب).
+            Idx::Vector {
+                idx: list,
+                rows,
+                cols,
+            } => {
+                let mut out = Matrix::full(*rows, *cols, 0.0);
                 for (k, i) in list.iter().enumerate() {
-                    out.set(k, 0, linear_read(m, *i, line, col)?);
+                    out.set_linear(k, linear_read(m, *i, line, col)?);
                 }
                 Ok(Value::Double(out))
             }
@@ -707,13 +724,23 @@ fn index_read(
             (ri, ci) => {
                 let rows = idx_list(ri, m.rows());
                 let cols = idx_list(ci, m.cols());
-                let mut out = Matrix::full(rows.len(), cols.len(), 0.0);
+                // بند ۵ ممیزی: اسکالر + زیرنویس برداری → نتیجه جهتِ زیرنویس
+                // برداری را می‌گیرد (`A(1,[1;2])` ستونی 2×1؛ `A([1 2],1)` سطری 1×2).
+                // در غیر این صورت شکل = طول‌ها (طبیعی ماتریسی).
+                let (out_rows, out_cols) = match (ri, ci) {
+                    (Idx::Scalar(_), Idx::Vector { rows, cols, .. }) => (*rows, *cols),
+                    (Idx::Vector { rows, cols, .. }, Idx::Scalar(_)) => (*rows, *cols),
+                    _ => (rows.len(), cols.len()),
+                };
+                let mut out = Matrix::full(out_rows, out_cols, 0.0);
+                // پرکردن خطیِ ستونیِ گرید اندیس — با شکل خروجیِ جهت‌دار هم‌خوان است
+                // (اسکالر×بردار: موقعیت k در گرید = جای ستونی واقعی نتیجه).
                 for (k, r) in rows.iter().enumerate() {
                     for (l, c) in cols.iter().enumerate() {
                         if r >= &m.rows() || c >= &m.cols() {
                             return Err(index_out_of_bounds(line, col, *r, *c));
                         }
-                        out.set(k, l, m.get(*r, *c));
+                        out.set_linear(k + l * rows.len(), m.get(*r, *c));
                     }
                 }
                 Ok(Value::Double(out))
@@ -733,7 +760,7 @@ fn idx_list(kind: &Idx, size: usize) -> Vec<usize> {
     match kind {
         Idx::All => (0..size).collect(),
         Idx::Scalar(i) => vec![i.saturating_sub(1)],
-        Idx::Vector(v) => v.iter().map(|i| i.saturating_sub(1)).collect(),
+        Idx::Vector { idx: v, .. } => v.iter().map(|i| i.saturating_sub(1)).collect(),
     }
 }
 
@@ -775,7 +802,7 @@ fn delete_subscripts(
         [idx] => {
             let mut list: Vec<usize> = match idx {
                 Idx::Scalar(i) => vec![*i],
-                Idx::Vector(l) => l.clone(),
+                Idx::Vector { idx: l, .. } => l.clone(),
                 Idx::All => (1..=cur.numel()).collect(),
             };
             if list.is_empty() {
@@ -812,7 +839,7 @@ fn delete_subscripts(
                     }
                     vec![*i - 1]
                 }
-                Idx::Vector(l) => {
+                Idx::Vector { idx: l, .. } => {
                     for &i in l {
                         if i == 0 || i > cur.rows() {
                             return Err(out_of_range(i, cur.rows()));
@@ -838,7 +865,7 @@ fn delete_subscripts(
                     }
                     vec![*i - 1]
                 }
-                Idx::Vector(l) => {
+                Idx::Vector { idx: l, .. } => {
                     for &i in l {
                         if i == 0 || i > cur.cols() {
                             return Err(out_of_range(i, cur.cols()));
@@ -885,7 +912,7 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
             }
             Ok(())
         }
-        Idx::Vector(list) => {
+        Idx::Vector { idx: list, .. } => {
             for (k, i) in list.iter().enumerate() {
                 if *i > m.numel() {
                     grow_linear(m, *i);
