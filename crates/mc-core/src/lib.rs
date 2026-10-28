@@ -24,10 +24,12 @@
 
 pub mod complex;
 pub mod error;
+pub mod job;
 pub mod matrix;
 pub mod value;
 
 pub use complex::ComplexMatrix;
 pub use error::{ids, McError};
+pub use job::{JobSignals, JobSnapshot, INDETERMINATE_BP};
 pub use matrix::Matrix;
 pub use value::{AnonCall, AnonFn, Value};

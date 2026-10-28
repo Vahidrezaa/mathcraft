@@ -10,11 +10,14 @@
 //!   روی نقاط خواسته‌شده با درون‌یابی Hermite مکعبی بین گام‌های پذیرفته‌شده
 //!   (انحراف مستند از درون‌یابی درجه-۴ DP — قرارداد dense-output کامل P2-b).
 //! - Cancel همکاری‌گر: هر ۵۰ گام پرچم `AtomicBool` چک می‌شود (سند ۰۲ §3)؛
-//!   خطا پیش از انتساب برمی‌گردد → workspace consistent (DoD فاز ۲).
+//!   خطا پیش از انتساب برمی‌گردد → workspace consistent (DoD فاز ۲). پرچم را
+//!   رجیستری mc-interp از کانتکست job (`mc_core::job`) می‌خواند (ROADMAP 2.3).
+//! - Progress همکاری‌گر: هر ۵۰ گام پذیرفته‌شده، کسر پیشرفت (t−t0)/(t1−t0) در
+//!   کانتکست job منتشر می‌شود — بدون کانتکست (تست‌ها/mc-cli) no-op.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use mc_core::{ids, McError};
+use mc_core::{ids, job, McError};
 
 use super::root::solver_error;
 
@@ -168,6 +171,7 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
     b_hat: [f64; N_STAGE],
     exponent: f64,
     stop: Option<&AtomicBool>,
+    stage: &'static str,
 ) -> Result<AdaptiveRun, McError> {
     let (t0, t1) = tspan;
     let neq = y0.len();
@@ -198,7 +202,7 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
     if let Some(flag) = stop {
         if flag.load(Ordering::Relaxed) {
             return Err(solver_error(
-                ids::PARSE_ERROR,
+                ids::CANCELLED,
                 "ODE solver was cancelled; workspace is unchanged.",
                 "حلگر ODE لغو شد؛ فضای کاری تغییر نکرده است.",
             ));
@@ -303,10 +307,13 @@ fn solve_adaptive<F: OdeFn, const N_STAGE: usize>(
             steps_since_cancel += 1;
             if steps_since_cancel >= 50 {
                 steps_since_cancel = 0;
+                // progress: کسر طی‌شده بازهٔ زمانی (قبل از چک لغو — آخرین وضعیت
+                // سالم منتشر شود؛ ROADMAP 2.3 task 2)
+                job::report(stage, Some(((t - t0) / (t1 - t0)).abs()));
                 if let Some(flag) = stop {
                     if flag.load(Ordering::Relaxed) {
                         return Err(solver_error(
-                            ids::PARSE_ERROR,
+                            ids::CANCELLED,
                             "ODE solver was cancelled; workspace is unchanged.",
                             "حلگر ODE لغو شد؛ فضای کاری تغییر نکرده است.",
                         ));
@@ -460,7 +467,19 @@ pub fn ode45<F: OdeFn>(
         187.0 / 2100.0,
         1.0 / 40.0,
     ];
-    let run = solve_adaptive::<F, 7>(f, (t0, t1), y0, opts, C, &A, B, B_HAT, 1.0 / 5.0, stop)?;
+    let run = solve_adaptive::<F, 7>(
+        f,
+        (t0, t1),
+        y0,
+        opts,
+        C,
+        &A,
+        B,
+        B_HAT,
+        1.0 / 5.0,
+        stop,
+        "ode45",
+    )?;
     finish_output(run, tout)
 }
 
@@ -492,7 +511,19 @@ pub fn ode23<F: OdeFn>(
     ];
     const B: [f64; 4] = [2.0 / 9.0, 1.0 / 3.0, 4.0 / 9.0, 0.0];
     const B_HAT: [f64; 4] = [7.0 / 24.0, 1.0 / 4.0, 1.0 / 3.0, 1.0 / 8.0];
-    let run = solve_adaptive::<F, 4>(f, (t0, t1), y0, opts, C, &A, B, B_HAT, 1.0 / 3.0, stop)?;
+    let run = solve_adaptive::<F, 4>(
+        f,
+        (t0, t1),
+        y0,
+        opts,
+        C,
+        &A,
+        B,
+        B_HAT,
+        1.0 / 3.0,
+        stop,
+        "ode23",
+    )?;
     finish_output(run, tout)
 }
 

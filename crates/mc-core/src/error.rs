@@ -14,6 +14,10 @@ pub mod ids {
     // MC:E2005 — شکست Cholesky: ماتریس متقارن مثبت معین نیست (سند ۰۴ §3.1).
     pub const NOT_POSITIVE_DEFINITE: &str = "MC:E2005_NOT_POSITIVE_DEFINITE";
     pub const PARSE_ERROR: &str = "MC:E3001_PARSE_ERROR";
+    // MC:E4001 — شکست تلورانس حلگر ODE (سند ۰۴ §4). MC:E4002 — لغو همکاری‌گر:
+    // سطح ۴ «منابع» سند ۰۲ §9 (timeout/cancel)؛ نتیجهٔ جزئی دور ریخته می‌شود
+    // و FFI آن را به JobStatus::Cancelled نگاشت می‌کند (ROADMAP 2.3).
+    pub const CANCELLED: &str = "MC:E4002_CANCELLED";
     pub const UNSUPPORTED: &str = "MC:E9xxx_UNSUPPORTED";
 }
 

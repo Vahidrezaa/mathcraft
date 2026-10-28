@@ -6,11 +6,13 @@
 //!   `[a, ∞)`: x = a + (1−t)/t · `(-∞, b]`: x = b − (1−t)/t · `(-∞, ∞)`: x = t/(1−t²)
 //! - خطای نهایی > tol → **خطای صادقانه** (قاعدهٔ سند ۰۴ §9: نتیجه هرگز
 //!   silent-مشکوک نیست؛ کانال هشدار ساختاریافته با FFI رویدادی در P2-b می‌آید).
+//! - لغو همکاری‌گر + گزارش پیشرفت هر تکرار تقسیم از کانتکست job
+//!   (`mc_core::job`، ROADMAP 2.3) — بدون کانتکست no-op است.
 //! - گره‌ها/وزن‌ها: جدول مرجع QUADPACK QK15.
 
 use std::collections::BinaryHeap;
 
-use mc_core::{ids, McError};
+use mc_core::{ids, job, McError};
 
 use super::root::solver_error;
 
@@ -155,6 +157,16 @@ fn adaptive<F: QuadFn>(
         if fcalls + 30 > budget {
             // بودجه تمام شد — با خطای فعلی تصمیم می‌گیریم
             break;
+        }
+        // لغو همکاری‌گر + پیشرفت (ROADMAP 2.3 task 2) — هر تکرار تقسیم،
+        // کسر = سهم بودجهٔ مصرف‌شده (محافظه‌کارانه ولی بی‌هزینه)
+        job::report("integral", Some(fcalls as f64 / budget as f64));
+        if job::cancel_requested() {
+            return Err(solver_error(
+                ids::CANCELLED,
+                "integral: cancelled; partial result discarded.",
+                "integral: لغو شد؛ نتیجهٔ جزئی دور ریخته شد.",
+            ));
         }
         let mid = 0.5 * (iv.a + iv.b);
         let (vl, el) = qk15(f, iv.a, mid)?;
