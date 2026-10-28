@@ -37,13 +37,11 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
-      - name: No todo!/unimplemented! in hand-written product code (doc 08 §1)
+      - name: Panic audit — no todo!/unimplemented!/panic!/unwrap/expect in non-test product code (doc 08 §1, ROADMAP 2.5)
         run: |
-          # frb_generated.rs is FRB-generated output and is exempt (doc 08 §1)
-          if grep -rn -E "todo!|unimplemented!" crates/*/src --exclude='frb_generated*.rs'; then
-            echo "::error::todo!/unimplemented! is forbidden in hand-written code"
-            exit 1
-          fi
+          # frb_generated.rs is FRB-generated output and is exempt (doc 08 §1);
+          # #[cfg(test)] modules are stripped (brace-matched) before scanning.
+          python3 scripts/panic_audit.py
 
       - name: cargo-deny (licenses + advisories — doc 02 §8)
         run: |

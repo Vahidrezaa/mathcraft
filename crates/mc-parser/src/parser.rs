@@ -73,7 +73,7 @@ impl Parser {
         }
     }
 
-    fn expect(&mut self, tok: &Tok, what_en: &str, what_fa: &str) -> Result<Token, McError> {
+    fn expect_tok(&mut self, tok: &Tok, what_en: &str, what_fa: &str) -> Result<Token, McError> {
         if self.at(tok) {
             Ok(self.bump())
         } else {
@@ -215,7 +215,7 @@ impl Parser {
                     self.bump();
                     break;
                 }
-                let ot = self.expect(&Tok::Ident("".into()), "output name", "نام خروجی")?;
+                let ot = self.expect_tok(&Tok::Ident("".into()), "output name", "نام خروجی")?;
                 if let Tok::Ident(n) = ot.tok.clone() {
                     if KEYWORDS.contains(&n.as_str()) {
                         return Err(self.err(
@@ -227,7 +227,7 @@ impl Parser {
                     outputs.push(n);
                 }
                 if !self.eat(&Tok::Comma) {
-                    self.expect(&Tok::RBracket, "']'", "«]»")?;
+                    self.expect_tok(&Tok::RBracket, "']'", "«]»")?;
                     break;
                 }
             }
@@ -239,13 +239,13 @@ impl Parser {
             }
         }
         if !outputs.is_empty() {
-            self.expect(
+            self.expect_tok(
                 &Tok::Assign,
                 "'=' between outputs and function name",
                 "«=» بین خروجی‌ها و نام تابع",
             )?;
         }
-        let name_tok = self.expect(&Tok::Ident("".into()), "function name", "نام تابع")?;
+        let name_tok = self.expect_tok(&Tok::Ident("".into()), "function name", "نام تابع")?;
         let name = match name_tok.tok.clone() {
             Tok::Ident(n) if !KEYWORDS.contains(&n.as_str()) => n,
             Tok::Ident(n) => {
@@ -262,7 +262,7 @@ impl Parser {
             if !self.at(&Tok::RParen) {
                 loop {
                     let pt =
-                        self.expect(&Tok::Ident("".into()), "parameter name", "نام پارامتر")?;
+                        self.expect_tok(&Tok::Ident("".into()), "parameter name", "نام پارامتر")?;
                     if let Tok::Ident(n) = pt.tok.clone() {
                         if KEYWORDS.contains(&n.as_str()) {
                             return Err(self.err(
@@ -278,7 +278,7 @@ impl Parser {
                     }
                 }
             }
-            self.expect(&Tok::RParen, "')' after parameters", "«)» بعد از پارامترها")?;
+            self.expect_tok(&Tok::RParen, "')' after parameters", "«)» بعد از پارامترها")?;
         }
         self.fn_depth += 1;
         let body = self.parse_block();
@@ -446,7 +446,7 @@ impl Parser {
 
     fn parse_for(&mut self) -> Result<Stmt, McError> {
         let t = self.bump(); // for
-        let var_tok = self.expect(&Tok::Ident("".into()), "loop variable", "متغیر حلقه")?;
+        let var_tok = self.expect_tok(&Tok::Ident("".into()), "loop variable", "متغیر حلقه")?;
         let var = match var_tok.tok.clone() {
             Tok::Ident(n) if !KEYWORDS.contains(&n.as_str()) => n,
             Tok::Ident(n) => {
@@ -458,7 +458,7 @@ impl Parser {
             }
             _ => unreachable!(),
         };
-        self.expect(
+        self.expect_tok(
             &Tok::Assign,
             "'=' after loop variable",
             "«=» بعد از متغیر حلقه",
@@ -756,7 +756,7 @@ impl Parser {
                             break;
                         }
                     }
-                    self.expect(&Tok::RParen, "')'", "«)»")?;
+                    self.expect_tok(&Tok::RParen, "')'", "«)»")?;
                     let _ = nargout;
                     nargout = 1;
                     expr = Expr::Call {
@@ -819,12 +819,15 @@ impl Parser {
                     });
                 }
                 // @(x,y) body — capture-by-value در eval (سند ۰۳ §9)
-                self.expect(&Tok::LParen, "'(' after @", "«(» بعد از @")?;
+                self.expect_tok(&Tok::LParen, "'(' after @", "«(» بعد از @")?;
                 let mut params = Vec::new();
                 if !self.at(&Tok::RParen) {
                     loop {
-                        let pt =
-                            self.expect(&Tok::Ident("".into()), "parameter name", "نام پارامتر")?;
+                        let pt = self.expect_tok(
+                            &Tok::Ident("".into()),
+                            "parameter name",
+                            "نام پارامتر",
+                        )?;
                         if let Tok::Ident(n) = pt.tok.clone() {
                             if KEYWORDS.contains(&n.as_str()) {
                                 return Err(self.err(
@@ -840,7 +843,7 @@ impl Parser {
                         }
                     }
                 }
-                self.expect(&Tok::RParen, "')' after @ params", "«)» بعد از پارامترها")?;
+                self.expect_tok(&Tok::RParen, "')' after @ params", "«)» بعد از پارامترها")?;
                 let body = self.parse_expr()?;
                 Ok(Expr::AnonFn {
                     params,
@@ -852,7 +855,7 @@ impl Parser {
             Tok::LParen => {
                 self.bump();
                 let e = self.parse_expr()?;
-                self.expect(&Tok::RParen, "')'", "«)»")?;
+                self.expect_tok(&Tok::RParen, "')'", "«)»")?;
                 Ok(e)
             }
             Tok::Ident(ref name) => {
