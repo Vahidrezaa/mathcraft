@@ -22,6 +22,7 @@ pub mod format;
 pub mod registry;
 pub mod registry_p2;
 pub mod source;
+pub mod stdio;
 
 pub use env::Environment;
 pub use eval::{eval_program, EvalOutcome, StmtOutput};

@@ -170,6 +170,35 @@ pub fn format_elem(x: f64, mode: NumFormat) -> String {
     }
 }
 
+/// قالب عضو `num2str` — متلب: ۴ اعشار در پنجرهٔ گسترده‌تر از short
+/// (|x| < 1e4)، همیشه بدون صفر انتهایی (اعشار و مانتیس). رفرنس‌های رفتاری:
+/// num2str(pi) → '3.1416'، num2str(0.1) → '0.1'، num2str(1000) → '1000'،
+/// num2str(1e10) → '1e+10'. (ریزقاعده‌ها برای پین با MATLAB واقعی علامت
+/// خورده‌اند — COMPATIBILITY §4.8 ردیف آیتم ۸.)
+pub fn format_num2str_elem(x: f64) -> String {
+    if x.is_nan() {
+        return "NaN".to_owned();
+    }
+    if x.is_infinite() {
+        return if x > 0.0 { "Inf" } else { "-Inf" }.to_owned();
+    }
+    if x == 0.0 {
+        return "0".to_owned();
+    }
+    let e = exp10_floor(x.abs());
+    if (-3..=3).contains(&e) {
+        format!("{x:.4}")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_owned()
+    } else {
+        match fmt_exp(x, 4).split_once('e') {
+            Some((m, tail)) => format!("{}e{tail}", m.trim_end_matches('0').trim_end_matches('.')),
+            None => String::new(),
+        }
+    }
+}
+
 /// جزء مختلط — مثل متلب برای مختلط‌ها همیشه ۴ اعشار در بازهٔ fixed
 /// (`1.0000`) و بیرون بازه نماد علمی (`1.2346e+05`).
 /// ثابت‌های این مسیر عمداً مثل قبل مانده‌اند — مختلط‌ها از تغییرات موتور

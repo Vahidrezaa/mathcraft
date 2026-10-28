@@ -281,6 +281,33 @@ fn exec_stmt(
                     return Ok((Flow::Normal, Vec::new()));
                 }
             }
+            // disp/fprintf — خروجی صریح کنسول (ROADMAP 2.4 — آیتم ۸ ممیزی).
+            // خروجی مستقل از «;» چاپ می‌شود (رفتار متلب)، ans را ست نمی‌کند
+            // و مقدار برنمی‌گرداند. متغیر/تابع هم‌نام تقدم دارد.
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if (name == "disp" || name == "fprintf")
+                    && env.get(name).is_none()
+                    && env.lookup_item(name).is_none()
+                {
+                    let vals: Vec<Value> = args
+                        .iter()
+                        .map(|a| eval_expr(a, env, depth))
+                        .collect::<Result<_, _>>()?;
+                    let text = if name == "disp" {
+                        crate::stdio::disp_text(&vals, *line, *col, &spec)?
+                    } else {
+                        crate::stdio::fprintf_text(&vals, *line, *col)?
+                    };
+                    return Ok((Flow::Normal, vec![text]));
+                }
+            }
             // `format` برهنه — بازگشت به پیش‌فرض short (رفتار متلب)
             if let Expr::Var { name, .. } = expr {
                 if name == "format" && env.get(name).is_none() && env.lookup_item(name).is_none() {

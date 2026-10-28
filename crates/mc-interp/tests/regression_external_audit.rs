@@ -455,3 +455,91 @@ fn empty_display_still_works_after_deletion() {
     assert_eq!(texts[0], "A =\n     0×3 empty double array\n");
     assert_eq!(texts[1], "x =\n[]\n");
 }
+
+// ---------- بند ۸ (ROADMAP 2.4): disp/class/fprintf/num2str + ثابت‌ها ----------
+
+#[test]
+fn disp_prints_without_name_or_quotes_even_with_semicolon() {
+    // متلب: خروجی disp مستقل از «;» است
+    let (_, texts, err) = run("disp('salam');");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["salam\n".to_string()]);
+    let (_, texts, err) = run("disp([1 2]);");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["     1     2\n".to_string()]);
+}
+
+#[test]
+fn disp_does_not_set_ans() {
+    let (env, _, err) = run("disp(5);");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert!(env.get("ans").is_none(), "disp must not set ans");
+}
+
+#[test]
+fn fprintf_prints_exactly_without_auto_newline() {
+    let (_, texts, err) = run("fprintf('x = %d\\n', 42);");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["x = 42\n".to_string()]);
+    // بدون \n — هیچ سطر جدیدی خودکار اضافه نمی‌شود
+    let (_, texts, err) = run("fprintf('hi');");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["hi".to_string()]);
+}
+
+#[test]
+fn fprintf_unsupported_specifier_is_honest_error() {
+    let (_, _, err) = run("fprintf('%e\\n', 1.5);");
+    assert!(err.is_some(), "unsupported specifier must error honestly");
+}
+
+#[test]
+fn class_returns_matlab_class_names() {
+    let (_, texts, err) = run("class(2)\nclass('ab')\nclass([1 2])");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(
+        texts,
+        vec![
+            "ans =\n'double'\n".to_string(),
+            "ans =\n'char'\n".to_string(),
+            "ans =\n'double'\n".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn num2str_matches_matlab_default_format() {
+    let (_, texts, err) = run("num2str(9.87654321)\nnum2str(0.1)\nnum2str(1000)");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(
+        texts,
+        vec![
+            "ans =\n'9.8765'\n".to_string(),
+            "ans =\n'0.1'\n".to_string(),
+            "ans =\n'1000'\n".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn intmax_realmax_realmin_values() {
+    let (env, _, err) = run("a = intmax; b = intmax('int8'); c = realmax; d = realmin;");
+    assert!(err.is_none(), "engine error: {err:?}");
+    let (_, _, d) = mat(&env, "a");
+    assert_eq!(d, vec![2147483647.0]);
+    let (_, _, d) = mat(&env, "b");
+    assert_eq!(d, vec![127.0]);
+    let (_, _, d) = mat(&env, "c");
+    assert_eq!(d, vec![f64::MAX]);
+    let (_, _, d) = mat(&env, "d");
+    assert_eq!(d, vec![f64::MIN_POSITIVE]);
+}
+
+#[test]
+fn display_output_cannot_be_used_in_expression() {
+    let (_, _, err) = run("x = disp(1);");
+    assert!(
+        err.is_some(),
+        "disp in expression context must error honestly"
+    );
+}

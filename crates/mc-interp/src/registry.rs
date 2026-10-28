@@ -114,6 +114,16 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("isinf", el_isinf),
     ("isfinite", el_isfinite),
     ("isequal", bi_isequal),
+    // ---- نمایش/متنی و ثابت‌ها (ROADMAP 2.4 — آیتم ۸ ممیزی) ----
+    ("class", bi_class),
+    ("num2str", bi_num2str),
+    ("intmax", bi_intmax),
+    ("realmax", bi_realmax),
+    ("realmin", bi_realmin),
+    // disp/fprintf به‌عنوان گزاره در eval.rs هندل می‌شوند (خروجی مستقل از
+    // «;» و بدون مقدار) — اینجا فقط برای خطای صادقانه در بافت عبارت:
+    ("disp", bi_display_no_value),
+    ("fprintf", bi_display_no_value),
 ];
 
 /// هسته مشترک توابع عنصری ۱-آرگومانی — روی همه عناصر ماتریس.
@@ -1172,6 +1182,141 @@ fn arg_char(v: &Value, fname: &str) -> Result<String, McError> {
             format!("{fname}: پرچم باید رشته کاراکتری مثل 'descend' باشد."),
         )),
     }
+}
+
+// ---------- نمایش/متنی و ثابت‌ها (ROADMAP 2.4 — آیتم ۸) ----------
+
+/// کلاس مقدار به سبک متلب — مختلط هم «double» است (رفتار متلب).
+fn bi_class(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("class", "1", args.len()));
+    }
+    let name = match &args[0] {
+        Value::Double(_) | Value::Complex(_) => "double",
+        Value::Char(_) => "char",
+        Value::Anon(_) => "function_handle",
+    };
+    Ok(Value::Char(name.to_owned()))
+}
+
+fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("num2str", "1", args.len()));
+    }
+    match &args[0] {
+        Value::Char(s) => Ok(Value::Char(s.clone())),
+        Value::Double(m) if m.is_scalar() => {
+            Ok(Value::Char(crate::format::format_num2str_elem(m.get(0, 0))))
+        }
+        Value::Double(m) if m.rows() == 1 || m.cols() == 1 => {
+            // بردار: اعضا با یک فاصله — ترازبندی ستونی متلب با مدل char دو‌بعدی
+            // (گام 2.8 آیتم ۶/۱۲) می‌آید؛ انحراف مستند (COMPATIBILITY §4.8)
+            let parts: Vec<String> = (0..m.numel())
+                .map(|i| crate::format::format_num2str_elem(m.get_linear(i)))
+                .collect();
+            Ok(Value::Char(parts.join(" ")))
+        }
+        Value::Double(_) => Err(McError::new(
+            ids::UNSUPPORTED,
+            0,
+            0,
+            "num2str: 2-D char arrays arrive with the char model step (2.8).",
+            "num2str: آرایهٔ کاراکتری دوبعدی با گام مدل char (2.8) می‌آید.",
+        )),
+        Value::Complex(_) => Err(McError::new(
+            ids::UNSUPPORTED,
+            0,
+            0,
+            "num2str: complex input is not supported yet.",
+            "num2str: ورودی مختلط هنوز پشتیبانی نمی‌شود.",
+        )),
+        Value::Anon(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "num2str: function handles have no numeric text form.",
+            "num2str: function_handle شکل متنی عددی ندارد.",
+        )),
+    }
+}
+
+/// سقف انواع صحیح متلب — مقدار به‌صورت double برمی‌گردد (موتور هنوز نوع
+/// صحیح ندارد — انحراف مستند COMPATIBILITY §4.8؛ نمایش رقمی یکسان است).
+fn int_max_of(cls: &str) -> Option<f64> {
+    match cls {
+        "int8" => Some(127.0),
+        "int16" => Some(32767.0),
+        "int32" => Some(2147483647.0),
+        "int64" => Some(9223372036854775807.0),
+        "uint8" => Some(255.0),
+        "uint16" => Some(65535.0),
+        "uint32" => Some(4294967295.0),
+        "uint64" => Some(18446744073709551615.0),
+        _ => None,
+    }
+}
+
+fn bi_intmax(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let cls = match args.len() {
+        0 => "int32".to_owned(), // پیش‌فرض متلب
+        1 => arg_char(&args[0], "intmax")?,
+        n => return Err(arity_err("intmax", "0..1", n)),
+    };
+    match int_max_of(&cls) {
+        Some(v) => Ok(scalar_val(v)),
+        None => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            format!("intmax: unknown integer class '{cls}' (int8..int64, uint8..uint64)."),
+            format!("intmax: کلاس صحیح ناشناخته «{cls}» (int8 تا int64، uint8 تا uint64)."),
+        )),
+    }
+}
+
+fn bi_realmax(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if let Some(a) = args.first() {
+        let cls = arg_char(a, "realmax")?;
+        if cls != "double" {
+            return Err(McError::new(
+                ids::UNSUPPORTED,
+                0,
+                0,
+                "realmax: only the 'double' class is supported.",
+                "realmax: فقط کلاس 'double' پشتیبانی می‌شود.",
+            ));
+        }
+    }
+    Ok(scalar_val(f64::MAX))
+}
+
+fn bi_realmin(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if let Some(a) = args.first() {
+        let cls = arg_char(a, "realmin")?;
+        if cls != "double" {
+            return Err(McError::new(
+                ids::UNSUPPORTED,
+                0,
+                0,
+                "realmin: only the 'double' class is supported.",
+                "realmin: فقط کلاس 'double' پشتیبانی می‌شود.",
+            ));
+        }
+    }
+    Ok(scalar_val(f64::MIN_POSITIVE))
+}
+
+/// disp/fprintf در بافت عبارت (مثل `x = disp(1)`) خطای صادقانه می‌دهند —
+/// خروجی کنسولی مقدار برنمی‌گردانند (رفتار متلب).
+fn bi_display_no_value(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let _ = args;
+    Err(McError::new(
+        ids::PARSE_ERROR,
+        0,
+        0,
+        "disp/fprintf produce console output and cannot be used inside an expression.",
+        "disp/fprintf خروجی کنسول می‌دهند و داخل عبارت قابل استفاده نیستند.",
+    ))
 }
 
 // ---------- منطقی ----------
