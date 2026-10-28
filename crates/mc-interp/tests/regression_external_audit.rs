@@ -427,3 +427,31 @@ fn format_variable_shadows_command() {
     let (_, _, d) = mat(&env, "format");
     assert_eq!(d, vec![5.0]);
 }
+
+// ---------- بند ۱۰ (ROADMAP 2.4): نمایش خالی‌ها ----------
+
+#[test]
+fn empty_range_display_is_matlab_text() {
+    // 1:0 → «1×0 empty double row vector» (آیتم ۱۰ ممیزی)
+    let (_, texts, err) = run("1:0");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts[0], "ans =\n     1×0 empty double row vector\n");
+}
+
+#[test]
+fn empty_matrix_shapes_display_matlab_text() {
+    let (_, texts, err) = run("A = zeros(0, 4)\nB = zeros(3, 0)\nC = []");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts[0], "A =\n     0×4 empty double array\n");
+    assert_eq!(texts[1], "B =\n     3×0 empty double array\n");
+    assert_eq!(texts[2], "C =\n[]\n");
+}
+
+#[test]
+fn empty_display_still_works_after_deletion() {
+    // حذف کامل سطرها → 0×3 خالی؛ 0×0 با [] (سمانتیک x(:)=[] حفظ شده)
+    let (_, texts, err) = run("A = [1 2 3; 4 5 6]; A(1:2, :) = []\nx = 1:3; x(:) = []");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts[0], "A =\n     0×3 empty double array\n");
+    assert_eq!(texts[1], "x =\n[]\n");
+}

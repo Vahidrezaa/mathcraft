@@ -258,13 +258,30 @@ pub fn format_ans_spec(v: &Value, spec: &DisplaySpec) -> String {
     }
 }
 
+/// متن نمایش ماتریس خالی به سبک متلب (ROADMAP 2.4 — آیتم ۱۰ ممیزی):
+/// 0×0 → `[]`؛ 1×0 → `1×0 empty double row vector`؛ 0×1 → ستونی؛
+/// بقیه → `m×n empty double array`. تورفتگی ۵ فاصله هم‌راستا با بدنهٔ
+/// اعداد FB-1 — برای پین‌شدن با خروجی واقعی متلب علامت‌گذاری شده
+/// (COMPATIBILITY §4.8 — ردیف آیتم ۱۰).
+fn empty_display_text(rows: usize, cols: usize) -> String {
+    if rows == 0 && cols == 0 {
+        return "[]".to_owned();
+    }
+    let kind = match (rows, cols) {
+        (1, 0) => "row vector",
+        (0, 1) => "column vector",
+        _ => "array",
+    };
+    format!("     {rows}×{cols} empty double {kind}")
+}
+
 /// چیدمان ماتریس حقیقی — راست‌چین ستونی با عرض مشترک.
 /// ROADMAP 2.4 (آیتم ۱۱): در حالت short اگر بزرگ‌ترین عضو ناصفر ≥ 1e3 یا
 /// کل اعضای ناصفر < 1e3 باشند، ضریب مقیاس مشترک متلب (`1.0e+03 *`) چاپ
 /// می‌شود و اعضا بر اثر تقسیم با ۴ اعشار اجباری نمایش داده می‌شوند.
 fn format_matrix(m: &Matrix, spec: &DisplaySpec) -> String {
     if m.is_empty() {
-        return "[]".to_owned();
+        return empty_display_text(m.rows(), m.cols());
     }
     if m.is_scalar() {
         return pad_column(&[format_elem(m.get(0, 0), spec.num)]);
@@ -330,7 +347,7 @@ fn scale_factor_of(m: &Matrix) -> Option<(f64, String)> {
 /// spec پذیرفته می‌شود ولی نادیده گرفته می‌شود.
 fn format_complex_matrix(z: &ComplexMatrix, _spec: &DisplaySpec) -> String {
     if z.is_empty() {
-        return "[]".to_owned();
+        return empty_display_text(z.rows(), z.cols());
     }
     if z.is_scalar() {
         let (re, im) = z.get(0, 0);
@@ -535,6 +552,7 @@ mod tests {
 
     #[test]
     fn empty_and_char_and_anon() {
+        // 0×0 مثل قبل [] (بند ۱۰: بقیهٔ شکل‌ها متن متلب می‌گیرند)
         assert_eq!(
             format_value(&Value::Double(Matrix::full(0, 0, 0.0))),
             "[]\n"
@@ -544,6 +562,27 @@ mod tests {
         assert_eq!(
             format_assignment("f", &Value::Char("x".into())),
             "f =\n'x'\n"
+        );
+    }
+
+    #[test]
+    fn empty_shape_display_matlab_style() {
+        // ROADMAP 2.4 — آیتم ۱۰: متن خالی‌های متلب
+        assert_eq!(
+            format_value(&Value::Double(Matrix::full(1, 0, 0.0))),
+            "     1×0 empty double row vector\n"
+        );
+        assert_eq!(
+            format_value(&Value::Double(Matrix::full(0, 1, 0.0))),
+            "     0×1 empty double column vector\n"
+        );
+        assert_eq!(
+            format_value(&Value::Double(Matrix::full(3, 0, 0.0))),
+            "     3×0 empty double array\n"
+        );
+        assert_eq!(
+            format_value(&Value::Double(Matrix::full(0, 4, 0.0))),
+            "     0×4 empty double array\n"
         );
     }
 }
