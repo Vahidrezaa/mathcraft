@@ -173,10 +173,80 @@ fn ode45_publishes_progress_into_job_ctx() {
 
 #[test]
 fn no_ctx_all_hooks_are_noop() {
-    // بدون نصب کانتکست: رفتار کاملاً مثل قبل (تست‌های بدون لغو مصون‌اند)
-    job::clear();
+    // بدون نصب کانتکست: رفتار کاملاً مثل قبل (تست‌های بدون لغو مصون‌اند).
+    // نکته: اینجا job::clear()/install ممنوع — کانتکست سراسری است و تست‌های
+    // نگه‌دارندهٔ قفل سریال را خراب می‌کند (رقابت موازی cargo test).
     let mut env = Environment::new();
     let out = run(&mut env, "for i = 1:300, s = i; end\ns");
     assert!(out.error.is_none(), "no-ctx loops must run freely");
     assert_eq!(out.outputs.len(), 1);
+}
+
+#[test]
+fn ode23_cancel_flag_plumbed_from_job_ctx() {
+    let _guard = serial_guard();
+    let _ctx = CtxGuard::install();
+    _ctx.0
+        .cancel
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // چک اولیهٔ ode23 با پرچم از پیش ست‌شده فوراً خطا می‌دهد
+    let mut env = Environment::new();
+    let out = run(&mut env, "[T, Y] = ode23(@(x, y) -y, [0 1e6], 1);");
+    let err = out.error.expect("pre-cancelled ode23 must error");
+    assert_eq!(err.id, "MC:E4002_CANCELLED");
+    assert!(env.get("T").is_none() && env.get("Y").is_none());
+}
+
+#[test]
+fn ode23_publishes_progress_into_job_ctx() {
+    let _guard = serial_guard();
+    let _ctx = CtxGuard::install();
+
+    let mut env = Environment::new();
+    let out = run(
+        &mut env,
+        "[T, Y] = ode23(@(x, y) -y, [0 100], 1, 'MaxStep', 0.01);",
+    );
+    assert!(out.error.is_none(), "ode23 must succeed: {:?}", out.error);
+    let snap = _ctx.0.snapshot();
+    assert_eq!(snap.stage, "ode23");
+    let frac = snap.fraction().expect("progress fraction must be set");
+    assert!((0.0..=1.0).contains(&frac) && frac > 0.0, "frac={frac}");
+}
+
+#[test]
+fn integral_cancelled_via_job_ctx() {
+    let _guard = serial_guard();
+    let _ctx = CtxGuard::install();
+    _ctx.0
+        .cancel
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // چک لغو هر تکرار تقسیم — پیش‌ست‌شده یعنی پیش از اولین qk15؛
+    // exp روی [0,20] چند تقسیم می‌خواهد (x² [0,1] یک‌ضرب دقیق است)
+    let mut env = Environment::new();
+    let out = run(&mut env, "q = integral(@(x) exp(x), 0, 20);");
+    let err = out.error.expect("pre-cancelled integral must error");
+    assert_eq!(err.id, "MC:E4002_CANCELLED");
+    assert!(env.get("q").is_none());
+}
+
+#[test]
+fn integral_publishes_progress_into_job_ctx() {
+    let _guard = serial_guard();
+    let _ctx = CtxGuard::install();
+
+    let mut env = Environment::new();
+    // انتگرال هم‌واگرا و هم قابل‌همگرایی (چند تقسیم، تلورانس سبز)
+    let out = run(&mut env, "q = integral(@(x) exp(x), 0, 20);");
+    assert!(
+        out.error.is_none(),
+        "integral must succeed: {:?}",
+        out.error
+    );
+    let snap = _ctx.0.snapshot();
+    assert_eq!(snap.stage, "integral");
+    let frac = snap.fraction().expect("progress fraction must be set");
+    assert!((0.0..=1.0).contains(&frac), "frac={frac}");
 }

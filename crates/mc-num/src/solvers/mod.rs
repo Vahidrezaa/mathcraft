@@ -15,3 +15,17 @@ pub mod root;
 pub use integral::{bounds_from, integrate, Bounds, QuadResult};
 pub use ode::{ode23, ode45, OdeOpts, OdeResult};
 pub use root::{fzero_bracket, fzero_scalar, BrentResult};
+
+/// سریال‌سازی آزمون‌های نصب‌کنندهٔ کانتکست job — قفل مشترک همهٔ فایل‌های تست
+/// این ماژول (نصب/پاک‌کردن کانتکست سراسری از دو نخ موازی = رقابت).
+#[cfg(test)]
+pub(crate) mod test_util {
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    pub(crate) fn ctx_serial() -> MutexGuard<'static, ()> {
+        static M: OnceLock<Mutex<()>> = OnceLock::new();
+        M.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}

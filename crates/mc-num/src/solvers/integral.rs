@@ -339,6 +339,24 @@ mod tests {
     }
 
     #[test]
+    fn integral_cancelled_via_job_ctx() {
+        use mc_core::job::{self, JobSignals};
+        use std::sync::Arc;
+        let _serial = super::super::test_util::ctx_serial();
+        let ctx = Arc::new(JobSignals::new(1));
+        job::install(ctx.clone());
+        ctx.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+
+        // exp روی [0,20] چند تقسیم می‌خواهد → حلقهٔ adaptive قطعاً می‌چرخد
+        // (x² روی [0,1] یک‌ضرب دقیق است و به حلقه نمی‌رسد)
+        let mut f = |x: f64| Ok(x.exp());
+        let err = integrate(&mut f, Bounds::Finite { a: 0.0, b: 20.0 }, 1e-10, 1e-10)
+            .expect_err("pre-cancelled integral must error");
+        assert_eq!(err.id, mc_core::ids::CANCELLED);
+        job::clear();
+    }
+
+    #[test]
     fn analytic_polynomial_exact() {
         // ∫₀¹ x² dx = 1/3 — G7/K15 با تلورانس پیش‌فرض متلب
         let mut f = call(|x| Ok(x * x));

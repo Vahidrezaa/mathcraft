@@ -530,6 +530,65 @@ pub fn ode23<F: OdeFn>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mc_core::job::{self, JobSignals};
+    use std::sync::Arc;
+
+    struct CtxGuard(Arc<JobSignals>);
+    impl CtxGuard {
+        fn install() -> Self {
+            let ctx = Arc::new(JobSignals::new(1));
+            job::install(ctx.clone());
+            Self(ctx)
+        }
+    }
+    impl Drop for CtxGuard {
+        fn drop(&mut self) {
+            job::clear();
+        }
+    }
+
+    #[test]
+    fn ode45_progress_fraction_published_in_range() {
+        let _serial = super::super::test_util::ctx_serial();
+        let _ctx = CtxGuard::install();
+
+        // اجرای کامل با گام‌های زیاد → گزارش هر-۵۰-گام قطعاً منتشر شده
+        let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
+        let opts = OdeOpts {
+            max_step: 0.01,
+            ..Default::default()
+        };
+        let r = ode45(&mut f, &[0.0, 100.0], vec![1.0], None, &opts, None)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(r.t.len() > 100);
+
+        let snap = _ctx.0.snapshot();
+        assert_eq!(snap.stage, "ode45");
+        let frac = snap.fraction().expect("fraction must be set");
+        assert!((0.0..=1.0).contains(&frac) && frac > 0.0, "frac={frac}");
+    }
+
+    #[test]
+    fn ode45_pre_cancelled_flag_errors_directly() {
+        let _serial = super::super::test_util::ctx_serial();
+        let _ctx = CtxGuard::install();
+        _ctx.0
+            .cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let mut f = |_t: f64, y: &[f64]| Ok(vec![-y[0]]);
+        let stop = &_ctx.0.cancel;
+        let err = ode45(
+            &mut f,
+            &[0.0, 1.0],
+            vec![1.0],
+            None,
+            &OdeOpts::default(),
+            Some(stop),
+        )
+        .expect_err("pre-cancelled run must error");
+        assert_eq!(err.id, mc_core::ids::CANCELLED);
+    }
 
     #[test]
     fn ode45_exponential_decay() {
