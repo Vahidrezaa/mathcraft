@@ -258,6 +258,7 @@ capture-by-value در لحظه ساخت (رفتار MATLAB). recursive anonymous
 | MC:E2003 | size mismatch | Inner matrix dimensions must agree: (2×3)*(4×3). | ابعاد داخلی ماتریس‌ها نمی‌خواند: (2×3)*(4×3). |
 | MC:E3001 | parse error | Unexpected ')': expected expression. | ')' غیرمنتظره: عبارت انتظار می‌رفت. |
 | MC:E4001 | ode integration | ODE solver failed to meet tolerance (RelTol=1e-3) at t=…; result flagged. | حلگر به تحمل خطا نرسید؛ نتیجه با برچسب «مشکوک» برگردانده شد. |
+| MC:E4002 | cancelled | Operation terminated by user. | عملیات به درخواست کاربر متوقف شد. |
 
 قاعده: هر خطا حتماً یکی از: (الف) راه اصلاح، (ب) لینک مستند، (ج) توضیح مفهومی کوتاه داشته باشد. خطای خالی ممنوع.
 

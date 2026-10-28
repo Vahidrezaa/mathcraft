@@ -94,7 +94,8 @@ pub enum ConsoleEvent {
     Print { text: String },
     Error  { err: McError },                  // ساختاریافته: کد، پیام FA/EN، خط، ستون، پیشنهاد
     Warning { code: String, text: String },
-    Progress { job_id: u64, fraction: f32 },  // برای حلگرهای طولانی
+    // v2 (ROADMAP 2.3): Progress/Cancelled به `ScriptEvent` جریانِ run_script
+    // منتقل شدند (با Done{result}) — COMPATIBILITY §4.9؛ این اسکیچ v1 است.
 }
 
 pub struct McError {

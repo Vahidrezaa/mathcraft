@@ -473,8 +473,12 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**Approved next step: 2.3 — Event-based FFI (progress + cancel + panic policy decision).**
-No session may start any other step without the user explicitly reordering (§ Governance).
+**Step 2.3 executed (2026-10-27) — code complete, all sandbox gates green** (contract v2 +
+run_script/cancel_job/active_job_id; cooperative cancel in loops + ode45/ode23/integral;
+panic policy = Option A recorded in COMPATIBILITY §4.8 row 15). Remaining DoD for closure:
+the on-device pendulum demo (progress bar + Stop + consistent workspace) and
+`while(1) end` cancel from the UI — user verification. **After user confirms: next step is
+2.4.** No session may start any other step without the user explicitly reordering (§ Governance).
 
 ## 12. Change log
 
