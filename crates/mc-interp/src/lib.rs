@@ -25,5 +25,5 @@ pub mod source;
 
 pub use env::Environment;
 pub use eval::{eval_program, EvalOutcome, StmtOutput};
-pub use format::{format_short, format_value};
+pub use format::{format_short, format_value, DisplaySpec, NumFormat};
 pub use source::{register_source, SourceReport};

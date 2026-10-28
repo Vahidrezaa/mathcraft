@@ -98,6 +98,10 @@ pub struct Environment {
     /// مخزن توابع — Arc مشترک: کپی Environment (snapshot بی‌نام و ...) آن را
     /// تکرار نمی‌کند و ورک‌اسپیس تازهٔ توابع فایلی هم تعریف‌ها را می‌بیند.
     funcs: Arc<FuncStore>,
+    /// حالت نمایش کنسول — `format` command (ROADMAP 2.4 — آیتم ۱۱ ممیزی).
+    /// جلسه‌محور است (در snapshot/workspace_delta نمی‌آید) مثل متلب که
+    /// `format` حالت پنجرهٔ فرمان است نه متغیر.
+    pub display: crate::format::DisplaySpec,
 }
 
 impl Environment {
@@ -111,6 +115,7 @@ impl Environment {
         Self {
             vars: HashMap::new(),
             funcs,
+            display: crate::format::DisplaySpec::default(),
         }
     }
 

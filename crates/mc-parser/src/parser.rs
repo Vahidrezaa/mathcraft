@@ -152,8 +152,53 @@ impl Parser {
                 }
                 self.parse_fn_def()
             }
+            Tok::Ident(name) if name == "format" => {
+                // فرمان متلب `format short` / `format short e` (ROADMAP 2.4 —
+                // آیتم ۱۱): فقط وقتی بعدش شناسهٔ غیرکلیدواژه بیاید (فرمان)؛
+                // `format = 5` و `format(2)` و متغیر هم‌نام مسیر عادی می‌روند.
+                if matches!(&self.peek_at(1).tok, Tok::Ident(n2) if !KEYWORDS.contains(&n2.as_str()))
+                {
+                    self.parse_format_command()
+                } else {
+                    self.parse_expr_stmt()
+                }
+            }
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    /// فرمان `format <mode...>` — کلمات حالت تا پایان گزاره آرگومان رشته‌ای
+    /// می‌شوند (`format short e` → format("short","e"))؛ معنا را ارزیاب می‌دهد
+    /// (eval.rs::parse_format_words). سینتکس فرمانی متلب — ROADMAP 2.4.
+    fn parse_format_command(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // format
+        let mut args = Vec::new();
+        while let Tok::Ident(n) = &self.peek().tok {
+            if KEYWORDS.contains(&n.as_str()) {
+                break;
+            }
+            let n = n.clone();
+            self.bump();
+            args.push(Expr::Str(n));
+        }
+        let suppress = self.eat(&Tok::Semicolon);
+        if args.is_empty() {
+            return Err(self.err(
+                &t,
+                "format: missing mode (usage: format short|long|short e|long e|short g|long g|compact|loose).",
+                "format: حالت داده نشده (استفاده: format short|long|short e|long e|short g|long g|compact|loose).",
+            ));
+        }
+        Ok(Stmt::Expr {
+            expr: Expr::Call {
+                name: "format".into(),
+                args,
+                nargout: 1,
+                line: t.line,
+                col: t.col,
+            },
+            suppress,
+        })
     }
 
     /// تعریف تابع فایلی — `function [out1,out2] = name(in1,in2) body end`.

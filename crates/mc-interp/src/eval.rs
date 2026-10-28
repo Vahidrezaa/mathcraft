@@ -142,6 +142,9 @@ fn exec_stmt(
     env: &mut Environment,
     depth: usize,
 ) -> Result<(Flow, Vec<String>), McError> {
+    // حالت نمایش در ورود گزاره ثابت می‌شود (Copy) — `format` وسط گزاره اثر
+    // گذشته‌گر ندارد (رفتار متلب).
+    let spec = env.display;
     match stmt {
         Stmt::Expr { expr, suppress } => {
             // اسکریپت/تابع فایلی ثبت‌شده — تقدم متلب: متغیر بر هر دو مقدم است.
@@ -192,7 +195,7 @@ fn exec_stmt(
                             None => return Ok((Flow::Normal, Vec::new())),
                         };
                         if !*suppress {
-                            let text = crate::format::format_ans(&value);
+                            let text = crate::format::format_ans_spec(&value, &spec);
                             env.set("ans", value);
                             return Ok((Flow::Normal, vec![text]));
                         }
@@ -237,7 +240,7 @@ fn exec_stmt(
                             )?;
                             if let Some(v) = outs.into_iter().next() {
                                 if !*suppress {
-                                    let text = crate::format::format_ans(&v);
+                                    let text = crate::format::format_ans_spec(&v, &spec);
                                     env.set("ans", v);
                                     return Ok((Flow::Normal, vec![text]));
                                 }
@@ -248,13 +251,52 @@ fn exec_stmt(
                     }
                 }
             }
+            // فرمان `format` — تغییر حالت نمایش (ROADMAP 2.4 — آیتم ۱۱ ممیزی).
+            // متغیر/تابع/اسکریپت هم‌نام تقدم دارند (الگوی بالای همین تابع).
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if name == "format" && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    let words: Vec<String> = args
+                        .iter()
+                        .map(|a| match a {
+                            Expr::Str(s) => Ok(s.clone()),
+                            _ => Err(McError::new(
+                                ids::PARSE_ERROR,
+                                *line,
+                                *col,
+                                "format: mode must be a literal word (e.g. format short).",
+                                "format: حالت باید کلمهٔ مستقیم باشد (مثل format short).",
+                            )),
+                        })
+                        .collect::<Result<_, _>>()?;
+                    if let Some(mode) = parse_format_words(&words, *line, *col)? {
+                        env.display.num = mode;
+                    }
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
+            // `format` برهنه — بازگشت به پیش‌فرض short (رفتار متلب)
+            if let Expr::Var { name, .. } = expr {
+                if name == "format" && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    env.display.num = crate::format::NumFormat::Short;
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
             let value = eval_expr(expr, env, depth)?;
             if !*suppress {
                 // بند ۳ گزارش ممیزی خارجی — متلب: ارجاع برهنهٔ متغیر با «نام =»
                 // اکو می‌شود (نه «ans =»)؛ مقدار ans هم مثل متلب همان مقدار می‌شود.
                 let text = match expr {
-                    Expr::Var { name, .. } => crate::format::format_assignment(name, &value),
-                    _ => crate::format::format_ans(&value),
+                    Expr::Var { name, .. } => {
+                        crate::format::format_assignment_spec(name, &value, &spec)
+                    }
+                    _ => crate::format::format_ans_spec(&value, &spec),
                 };
                 env.set("ans", value);
                 return Ok((Flow::Normal, vec![text]));
@@ -271,10 +313,11 @@ fn exec_stmt(
                 AssignTarget::Var { name, .. } => {
                     env.set(name.clone(), value);
                     if !*suppress {
-                        let text = crate::format::format_assignment(
+                        let text = crate::format::format_assignment_spec(
                             name,
                             env.get(name)
                                 .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
+                            &spec,
                         );
                         Ok((Flow::Normal, vec![text]))
                     } else {
@@ -290,10 +333,11 @@ fn exec_stmt(
                     indexed_assign(env, name, subs, value, *line, *col)?;
                     // متلب نتیجهٔ انتساب اندیس‌دار بدون «;» را هم نمایش می‌دهد
                     if !*suppress {
-                        let text = crate::format::format_assignment(
+                        let text = crate::format::format_assignment_spec(
                             name,
                             env.get(name)
                                 .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
+                            &spec,
                         );
                         Ok((Flow::Normal, vec![text]))
                     } else {
@@ -572,6 +616,39 @@ fn indexed_assign(
 
 fn depth_of(_line: u32) -> usize {
     0 // اندیس‌ها بدون تو در توی خاص ارزیابی می‌شوند
+}
+
+/// کلمات فرمان `format` → حالت نمایش (ROADMAP 2.4 — آیتم ۱۱).
+/// `None` = پذیرش بی‌اثر (`compact`/`loose` — فاصله‌گذاری سطح UI است و
+/// حالت عددی را تغییر نمی‌دهد، رفتار متلب). کلمهٔ ناشناخته → خطای صادقانه.
+fn parse_format_words(
+    words: &[String],
+    line: u32,
+    col: u32,
+) -> Result<Option<crate::format::NumFormat>, McError> {
+    use crate::format::NumFormat;
+    let joined = words.join(" ");
+    match joined.as_str() {
+        "" => Ok(Some(NumFormat::Short)), // `format` برهنه = بازگشت به پیش‌فرض
+        "short" => Ok(Some(NumFormat::Short)),
+        "long" => Ok(Some(NumFormat::Long)),
+        "short e" => Ok(Some(NumFormat::ShortE)),
+        "long e" => Ok(Some(NumFormat::LongE)),
+        "short g" => Ok(Some(NumFormat::ShortG)),
+        "long g" => Ok(Some(NumFormat::LongG)),
+        "compact" | "loose" => Ok(None),
+        other => Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            format!(
+                "format: unknown mode '{other}'. Supported: short, long, short e, long e, short g, long g, compact, loose."
+            ),
+            format!(
+                "format: حالت ناشناخته «{other}». حالت‌های پشتیبانی‌شده: short، long، short e، long e، short g، long g، compact، loose."
+            ),
+        )),
+    }
 }
 
 /// IndexKind: اسکالر 1-پایه، تمام-بعد (:)، یا برداری با شکل اصلی اندیس.
@@ -1618,6 +1695,7 @@ fn eval_multi_assign(
     depth: usize,
     suppress: bool,
 ) -> Result<Vec<String>, McError> {
+    let spec = env.display;
     let (name, args, line, col) = match expr {
         Expr::Call {
             name,
@@ -1655,7 +1733,7 @@ fn eval_multi_assign(
             for (t, v) in targets.iter().zip(outs) {
                 env.set(t.name.clone(), v.clone());
                 if !suppress {
-                    texts.push(crate::format::format_assignment(&t.name, &v));
+                    texts.push(crate::format::format_assignment_spec(&t.name, &v, &spec));
                 }
             }
             Ok(texts)

@@ -355,3 +355,75 @@ fn empty_index_shape_flows_to_result() {
     let (r, c, _) = mat(&env, "b");
     assert_eq!((r, c), (1, 0));
 }
+
+// ---------- بند ۱۱ (ROADMAP 2.4): موتور format ----------
+
+#[test]
+fn short_four_decimals_in_echo() {
+    // قاعدهٔ متلب: 0.1 → 0.1000 و 1/3 → 0.3333 (بدون حذف صفر انتهایی)
+    let (_, texts, err) = run("x = 0.1\ny = 1/3");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts[0], "x =\n    0.1000\n");
+    assert_eq!(texts[1], "y =\n    0.3333\n");
+}
+
+#[test]
+fn fb1_integer_layout_untouched() {
+    // گارد رگرسیون FB-1: اعداد صحیح مثل قبل — «ans =\n     2\n»
+    let (_, texts, err) = run("1 + 1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["ans =\n     2\n".to_string()]);
+}
+
+#[test]
+fn scale_factor_header_in_matrix_echo() {
+    let (_, texts, err) = run("A = [1000 2000]");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts[0], "A =\n   1.0e+03 *\n    1.0000    2.0000\n");
+}
+
+#[test]
+fn format_long_switches_mode() {
+    let (_, texts, err) = run("format long; x = 0.1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["x =\n    0.100000000000000\n"]);
+}
+
+#[test]
+fn format_short_e_always_scientific() {
+    let (_, texts, err) = run("format short e; x = 0.1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["x =\n    1.0000e-01\n"]);
+}
+
+#[test]
+fn format_bare_resets_to_short() {
+    let (_, texts, err) = run("format long; x = 0.1; format; y = 0.1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    // فقط y اکو دارد (x سرکوب شده) — format برهنه برگشت به short
+    assert_eq!(texts[0], "y =\n    0.1000\n");
+}
+
+#[test]
+fn format_compact_is_accepted_noop_on_mode() {
+    // compact/loose فاصله‌گذاری UI هستند — حالت عددی را عوض نمی‌کنند
+    let (_, texts, err) = run("format long; format compact; x = 0.1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["x =\n    0.100000000000000\n"]);
+}
+
+#[test]
+fn format_unknown_mode_is_honest_error() {
+    let (_, _, err) = run("format turbo;");
+    assert!(err.is_some(), "unknown format mode must error honestly");
+}
+
+#[test]
+fn format_variable_shadows_command() {
+    // متغیر هم‌نام تقدم دارد: format = 5 سپس format → اکوی متغیر
+    let (env, texts, err) = run("format = 5; format");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert_eq!(texts, vec!["format =\n     5\n".to_string()]);
+    let (_, _, d) = mat(&env, "format");
+    assert_eq!(d, vec![5.0]);
+}
