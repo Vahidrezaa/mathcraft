@@ -3715,3 +3715,547 @@ abstract class PlotSpec_Subplot extends PlotSpec {
   _$$PlotSpec_SubplotImplCopyWith<_$PlotSpec_SubplotImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
+
+/// @nodoc
+mixin _$ScriptEvent {
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(BigInt jobId, String stage, double? percent)
+        progress,
+    required TResult Function(BigInt jobId) cancelled,
+    required TResult Function(EvalResult result) done,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult? Function(BigInt jobId)? cancelled,
+    TResult? Function(EvalResult result)? done,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult Function(BigInt jobId)? cancelled,
+    TResult Function(EvalResult result)? done,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ScriptEvent_Progress value) progress,
+    required TResult Function(ScriptEvent_Cancelled value) cancelled,
+    required TResult Function(ScriptEvent_Done value) done,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ScriptEvent_Progress value)? progress,
+    TResult? Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult? Function(ScriptEvent_Done value)? done,
+  }) =>
+      throw _privateConstructorUsedError;
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ScriptEvent_Progress value)? progress,
+    TResult Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult Function(ScriptEvent_Done value)? done,
+    required TResult orElse(),
+  }) =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ScriptEventCopyWith<$Res> {
+  factory $ScriptEventCopyWith(
+          ScriptEvent value, $Res Function(ScriptEvent) then) =
+      _$ScriptEventCopyWithImpl<$Res, ScriptEvent>;
+}
+
+/// @nodoc
+class _$ScriptEventCopyWithImpl<$Res, $Val extends ScriptEvent>
+    implements $ScriptEventCopyWith<$Res> {
+  _$ScriptEventCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+abstract class _$$ScriptEvent_ProgressImplCopyWith<$Res> {
+  factory _$$ScriptEvent_ProgressImplCopyWith(_$ScriptEvent_ProgressImpl value,
+          $Res Function(_$ScriptEvent_ProgressImpl) then) =
+      __$$ScriptEvent_ProgressImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({BigInt jobId, String stage, double? percent});
+}
+
+/// @nodoc
+class __$$ScriptEvent_ProgressImplCopyWithImpl<$Res>
+    extends _$ScriptEventCopyWithImpl<$Res, _$ScriptEvent_ProgressImpl>
+    implements _$$ScriptEvent_ProgressImplCopyWith<$Res> {
+  __$$ScriptEvent_ProgressImplCopyWithImpl(_$ScriptEvent_ProgressImpl _value,
+      $Res Function(_$ScriptEvent_ProgressImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? jobId = null,
+    Object? stage = null,
+    Object? percent = freezed,
+  }) {
+    return _then(_$ScriptEvent_ProgressImpl(
+      jobId: null == jobId
+          ? _value.jobId
+          : jobId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+      stage: null == stage
+          ? _value.stage
+          : stage // ignore: cast_nullable_to_non_nullable
+              as String,
+      percent: freezed == percent
+          ? _value.percent
+          : percent // ignore: cast_nullable_to_non_nullable
+              as double?,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$ScriptEvent_ProgressImpl extends ScriptEvent_Progress {
+  const _$ScriptEvent_ProgressImpl(
+      {required this.jobId, required this.stage, this.percent})
+      : super._();
+
+  @override
+  final BigInt jobId;
+  @override
+  final String stage;
+  @override
+  final double? percent;
+
+  @override
+  String toString() {
+    return 'ScriptEvent.progress(jobId: $jobId, stage: $stage, percent: $percent)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ScriptEvent_ProgressImpl &&
+            (identical(other.jobId, jobId) || other.jobId == jobId) &&
+            (identical(other.stage, stage) || other.stage == stage) &&
+            (identical(other.percent, percent) || other.percent == percent));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, jobId, stage, percent);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ScriptEvent_ProgressImplCopyWith<_$ScriptEvent_ProgressImpl>
+      get copyWith =>
+          __$$ScriptEvent_ProgressImplCopyWithImpl<_$ScriptEvent_ProgressImpl>(
+              this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(BigInt jobId, String stage, double? percent)
+        progress,
+    required TResult Function(BigInt jobId) cancelled,
+    required TResult Function(EvalResult result) done,
+  }) {
+    return progress(jobId, stage, percent);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult? Function(BigInt jobId)? cancelled,
+    TResult? Function(EvalResult result)? done,
+  }) {
+    return progress?.call(jobId, stage, percent);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult Function(BigInt jobId)? cancelled,
+    TResult Function(EvalResult result)? done,
+    required TResult orElse(),
+  }) {
+    if (progress != null) {
+      return progress(jobId, stage, percent);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ScriptEvent_Progress value) progress,
+    required TResult Function(ScriptEvent_Cancelled value) cancelled,
+    required TResult Function(ScriptEvent_Done value) done,
+  }) {
+    return progress(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ScriptEvent_Progress value)? progress,
+    TResult? Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult? Function(ScriptEvent_Done value)? done,
+  }) {
+    return progress?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ScriptEvent_Progress value)? progress,
+    TResult Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult Function(ScriptEvent_Done value)? done,
+    required TResult orElse(),
+  }) {
+    if (progress != null) {
+      return progress(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class ScriptEvent_Progress extends ScriptEvent {
+  const factory ScriptEvent_Progress(
+      {required final BigInt jobId,
+      required final String stage,
+      final double? percent}) = _$ScriptEvent_ProgressImpl;
+  const ScriptEvent_Progress._() : super._();
+
+  BigInt get jobId;
+  String get stage;
+  double? get percent;
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ScriptEvent_ProgressImplCopyWith<_$ScriptEvent_ProgressImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$ScriptEvent_CancelledImplCopyWith<$Res> {
+  factory _$$ScriptEvent_CancelledImplCopyWith(
+          _$ScriptEvent_CancelledImpl value,
+          $Res Function(_$ScriptEvent_CancelledImpl) then) =
+      __$$ScriptEvent_CancelledImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({BigInt jobId});
+}
+
+/// @nodoc
+class __$$ScriptEvent_CancelledImplCopyWithImpl<$Res>
+    extends _$ScriptEventCopyWithImpl<$Res, _$ScriptEvent_CancelledImpl>
+    implements _$$ScriptEvent_CancelledImplCopyWith<$Res> {
+  __$$ScriptEvent_CancelledImplCopyWithImpl(_$ScriptEvent_CancelledImpl _value,
+      $Res Function(_$ScriptEvent_CancelledImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? jobId = null,
+  }) {
+    return _then(_$ScriptEvent_CancelledImpl(
+      jobId: null == jobId
+          ? _value.jobId
+          : jobId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$ScriptEvent_CancelledImpl extends ScriptEvent_Cancelled {
+  const _$ScriptEvent_CancelledImpl({required this.jobId}) : super._();
+
+  @override
+  final BigInt jobId;
+
+  @override
+  String toString() {
+    return 'ScriptEvent.cancelled(jobId: $jobId)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ScriptEvent_CancelledImpl &&
+            (identical(other.jobId, jobId) || other.jobId == jobId));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, jobId);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ScriptEvent_CancelledImplCopyWith<_$ScriptEvent_CancelledImpl>
+      get copyWith => __$$ScriptEvent_CancelledImplCopyWithImpl<
+          _$ScriptEvent_CancelledImpl>(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(BigInt jobId, String stage, double? percent)
+        progress,
+    required TResult Function(BigInt jobId) cancelled,
+    required TResult Function(EvalResult result) done,
+  }) {
+    return cancelled(jobId);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult? Function(BigInt jobId)? cancelled,
+    TResult? Function(EvalResult result)? done,
+  }) {
+    return cancelled?.call(jobId);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult Function(BigInt jobId)? cancelled,
+    TResult Function(EvalResult result)? done,
+    required TResult orElse(),
+  }) {
+    if (cancelled != null) {
+      return cancelled(jobId);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ScriptEvent_Progress value) progress,
+    required TResult Function(ScriptEvent_Cancelled value) cancelled,
+    required TResult Function(ScriptEvent_Done value) done,
+  }) {
+    return cancelled(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ScriptEvent_Progress value)? progress,
+    TResult? Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult? Function(ScriptEvent_Done value)? done,
+  }) {
+    return cancelled?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ScriptEvent_Progress value)? progress,
+    TResult Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult Function(ScriptEvent_Done value)? done,
+    required TResult orElse(),
+  }) {
+    if (cancelled != null) {
+      return cancelled(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class ScriptEvent_Cancelled extends ScriptEvent {
+  const factory ScriptEvent_Cancelled({required final BigInt jobId}) =
+      _$ScriptEvent_CancelledImpl;
+  const ScriptEvent_Cancelled._() : super._();
+
+  BigInt get jobId;
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ScriptEvent_CancelledImplCopyWith<_$ScriptEvent_CancelledImpl>
+      get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$ScriptEvent_DoneImplCopyWith<$Res> {
+  factory _$$ScriptEvent_DoneImplCopyWith(_$ScriptEvent_DoneImpl value,
+          $Res Function(_$ScriptEvent_DoneImpl) then) =
+      __$$ScriptEvent_DoneImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({EvalResult result});
+}
+
+/// @nodoc
+class __$$ScriptEvent_DoneImplCopyWithImpl<$Res>
+    extends _$ScriptEventCopyWithImpl<$Res, _$ScriptEvent_DoneImpl>
+    implements _$$ScriptEvent_DoneImplCopyWith<$Res> {
+  __$$ScriptEvent_DoneImplCopyWithImpl(_$ScriptEvent_DoneImpl _value,
+      $Res Function(_$ScriptEvent_DoneImpl) _then)
+      : super(_value, _then);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? result = null,
+  }) {
+    return _then(_$ScriptEvent_DoneImpl(
+      result: null == result
+          ? _value.result
+          : result // ignore: cast_nullable_to_non_nullable
+              as EvalResult,
+    ));
+  }
+}
+
+/// @nodoc
+
+class _$ScriptEvent_DoneImpl extends ScriptEvent_Done {
+  const _$ScriptEvent_DoneImpl({required this.result}) : super._();
+
+  @override
+  final EvalResult result;
+
+  @override
+  String toString() {
+    return 'ScriptEvent.done(result: $result)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ScriptEvent_DoneImpl &&
+            (identical(other.result, result) || other.result == result));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, result);
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ScriptEvent_DoneImplCopyWith<_$ScriptEvent_DoneImpl> get copyWith =>
+      __$$ScriptEvent_DoneImplCopyWithImpl<_$ScriptEvent_DoneImpl>(
+          this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(BigInt jobId, String stage, double? percent)
+        progress,
+    required TResult Function(BigInt jobId) cancelled,
+    required TResult Function(EvalResult result) done,
+  }) {
+    return done(result);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult? Function(BigInt jobId)? cancelled,
+    TResult? Function(EvalResult result)? done,
+  }) {
+    return done?.call(result);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(BigInt jobId, String stage, double? percent)? progress,
+    TResult Function(BigInt jobId)? cancelled,
+    TResult Function(EvalResult result)? done,
+    required TResult orElse(),
+  }) {
+    if (done != null) {
+      return done(result);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(ScriptEvent_Progress value) progress,
+    required TResult Function(ScriptEvent_Cancelled value) cancelled,
+    required TResult Function(ScriptEvent_Done value) done,
+  }) {
+    return done(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(ScriptEvent_Progress value)? progress,
+    TResult? Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult? Function(ScriptEvent_Done value)? done,
+  }) {
+    return done?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(ScriptEvent_Progress value)? progress,
+    TResult Function(ScriptEvent_Cancelled value)? cancelled,
+    TResult Function(ScriptEvent_Done value)? done,
+    required TResult orElse(),
+  }) {
+    if (done != null) {
+      return done(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class ScriptEvent_Done extends ScriptEvent {
+  const factory ScriptEvent_Done({required final EvalResult result}) =
+      _$ScriptEvent_DoneImpl;
+  const ScriptEvent_Done._() : super._();
+
+  EvalResult get result;
+
+  /// Create a copy of ScriptEvent
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ScriptEvent_DoneImplCopyWith<_$ScriptEvent_DoneImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}

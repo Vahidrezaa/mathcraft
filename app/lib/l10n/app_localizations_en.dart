@@ -49,6 +49,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runTooltip => 'Run';
 
   @override
+  String get stopTooltip => 'Stop';
+
+  @override
   String get copyTooltip => 'Copy';
 
   @override

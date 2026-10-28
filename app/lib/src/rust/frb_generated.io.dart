@@ -19,6 +19,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  RustStreamSink<ScriptEvent> dco_decode_StreamSink_script_event_Sse(
+      dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -37,6 +44,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Axes3D dco_decode_box_autoadd_axes_3_d(dynamic raw);
 
   @protected
+  EvalResult dco_decode_box_autoadd_eval_result(dynamic raw);
+
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw);
+
+  @protected
   Legend dco_decode_box_autoadd_legend(dynamic raw);
 
   @protected
@@ -44,6 +57,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   McError dco_decode_box_autoadd_mc_error(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   Colormap dco_decode_colormap(dynamic raw);
@@ -133,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
+
+  @protected
   Legend? dco_decode_opt_box_autoadd_legend(dynamic raw);
 
   @protected
@@ -142,10 +161,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   McError? dco_decode_opt_box_autoadd_mc_error(dynamic raw);
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
   PlotSpec dco_decode_plot_spec(dynamic raw);
 
   @protected
   RegisterResult dco_decode_register_result(dynamic raw);
+
+  @protected
+  ScriptEvent dco_decode_script_event(dynamic raw);
 
   @protected
   Series2D dco_decode_series_2_d(dynamic raw);
@@ -181,6 +206,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WorkspaceDelta dco_decode_workspace_delta(dynamic raw);
 
   @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<ScriptEvent> sse_decode_StreamSink_script_event_Sse(
+      SseDeserializer deserializer);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -199,6 +231,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Axes3D sse_decode_box_autoadd_axes_3_d(SseDeserializer deserializer);
 
   @protected
+  EvalResult sse_decode_box_autoadd_eval_result(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
   Legend sse_decode_box_autoadd_legend(SseDeserializer deserializer);
 
   @protected
@@ -206,6 +244,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   McError sse_decode_box_autoadd_mc_error(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   Colormap sse_decode_colormap(SseDeserializer deserializer);
@@ -298,6 +339,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
   Legend? sse_decode_opt_box_autoadd_legend(SseDeserializer deserializer);
 
   @protected
@@ -307,10 +351,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   McError? sse_decode_opt_box_autoadd_mc_error(SseDeserializer deserializer);
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   PlotSpec sse_decode_plot_spec(SseDeserializer deserializer);
 
   @protected
   RegisterResult sse_decode_register_result(SseDeserializer deserializer);
+
+  @protected
+  ScriptEvent sse_decode_script_event(SseDeserializer deserializer);
 
   @protected
   Series2D sse_decode_series_2_d(SseDeserializer deserializer);
@@ -346,6 +396,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WorkspaceDelta sse_decode_workspace_delta(SseDeserializer deserializer);
 
   @protected
+  void sse_encode_AnyhowException(
+      AnyhowException self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_StreamSink_script_event_Sse(
+      RustStreamSink<ScriptEvent> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -364,6 +422,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_axes_3_d(Axes3D self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_eval_result(
+      EvalResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_legend(Legend self, SseSerializer serializer);
 
   @protected
@@ -371,6 +436,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_mc_error(McError self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_colormap(Colormap self, SseSerializer serializer);
@@ -473,6 +541,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_legend(
       Legend? self, SseSerializer serializer);
 
@@ -485,11 +556,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       McError? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_plot_spec(PlotSpec self, SseSerializer serializer);
 
   @protected
   void sse_encode_register_result(
       RegisterResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_script_event(ScriptEvent self, SseSerializer serializer);
 
   @protected
   void sse_encode_series_2_d(Series2D self, SseSerializer serializer);

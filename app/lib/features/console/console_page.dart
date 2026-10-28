@@ -49,6 +49,9 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
   bool _running = false;
+  // وضعیت پیشرفت زنده (قرارداد v2 — ROADMAP 2.3)؛ percent = null یعنی نامعین
+  String? _stage;
+  double? _progress;
 
   @override
   void dispose() {
@@ -62,14 +65,37 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
     if (trimmed.isEmpty || _running) return;
     setState(() {
       _running = true;
+      _stage = null;
+      _progress = null;
       _entries.add(InputEntry(trimmed));
     });
     _inputController.clear();
     HapticFeedback.lightImpact(); // درج/اجرا — جدول انیمیشن سند ۰۶
 
     try {
-      final result =
-          await ref.read(engineProvider).evaluateLine(trimmed);
+      // اجرای زندهٔ قرارداد v2: Progress به نوار پیشرفت، نتیجهٔ نهایی از Done
+      // (سند ۰۲ §3 — حس «زنده بودن» کنسول؛ ROADMAP 2.3 task 3 و 4)
+      final result = await collectLiveRun(
+        ref.read(engineProvider).runScript(trimmed),
+        onProgress: (stage, percent) {
+          if (mounted) {
+            setState(() {
+              _stage = stage;
+              _progress = percent;
+            });
+          }
+        },
+        onCancelled: () {
+          // UX فوری: نوار پیشرفت بسته شود؛ پیام نهایی از Done می‌آید
+          if (mounted) {
+            setState(() {
+              _stage = null;
+              _progress = null;
+            });
+          }
+        },
+      );
+      if (result == null) return; // جریان بدون Done بسته شد — finally تمیز می‌کند
       final newEntries = <ConsoleEntry>[];
       for (final event in result.consoleEvents) {
         switch (event) {
@@ -94,9 +120,21 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _running = false);
+      if (mounted) {
+        setState(() {
+          _running = false;
+          _stage = null;
+          _progress = null;
+        });
+      }
       _scrollToBottom();
     }
+  }
+
+  /// دکمهٔ Stop — لغو job فعال (CancellationToken سند ۰۲ §4؛ ROADMAP 2.3 task 4).
+  /// پس از لغو، workspace در آخرین وضعیت commit می‌ماند (مثل stop متلب).
+  Future<void> _stop() async {
+    await ref.read(engineProvider).cancelActive();
   }
 
   void _scrollToBottom() {
@@ -191,52 +229,85 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
                   horizontal: CdsDimens.gutterPortrait,
                   vertical: 8,
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '>>',
-                      style: CdsTheme.monoStyle(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        style: CdsTheme.codeStyle(context),
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: _run,
-                        decoration: InputDecoration(
-                          hintText: l10n.consoleInputHint,
-                          isDense: true,
+                    // نوار پیشرفت زنده (قرارداد v2) — فقط حین اجرا؛
+                    // percent = null → حالت نامعین (سند ۰۶ §5.1)
+                    if (_running) ...[
+                      if (_stage != null) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _stage!,
+                            style: CdsTheme.monoStyle(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
+                        const SizedBox(height: 4),
+                      ],
+                      LinearProgressIndicator(
+                        value: _progress,
+                        minHeight: 2,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation(scheme.primary),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // دکمه run — accent، بزرگ‌تر (سند ۰۶ §5.1/§6)
-                    CdsPressable(
-                      onTap: () => _run(_inputController.text),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: scheme.primary,
-                          borderRadius:
-                              BorderRadius.circular(CdsDimens.radiusSmall),
+                      const SizedBox(height: 8),
+                    ],
+                    Row(
+                      children: [
+                        Text(
+                          '>>',
+                          style: CdsTheme.monoStyle(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
-                        child: _running
-                            ? Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: scheme.onPrimary,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _inputController,
+                            style: CdsTheme.codeStyle(context),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: _run,
+                            decoration: InputDecoration(
+                              hintText: l10n.consoleInputHint,
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // دکمهٔ run/stop — حین اجرا Stop می‌شود (قرارداد v2:
+                        // ROADMAP 2.3 task 4؛ آیکون‌های Craft و توکن‌های CDS)
+                        CdsPressable(
+                          onTap:
+                              _running ? _stop : () => _run(_inputController.text),
+                          child: Tooltip(
+                            message:
+                                _running ? l10n.stopTooltip : l10n.runTooltip,
+                            child: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color:
+                                    _running ? scheme.error : scheme.primary,
+                                borderRadius: BorderRadius.circular(
+                                  CdsDimens.radiusSmall,
                                 ),
-                              )
-                            : CraftIcon(
-                                CraftIcons.actionRun,
-                                color: scheme.onPrimary,
                               ),
-                      ),
+                              child: _running
+                                  ? CraftIcon(
+                                      CraftIcons.actionStop,
+                                      color: scheme.onError,
+                                    )
+                                  : CraftIcon(
+                                      CraftIcons.actionRun,
+                                      color: scheme.onPrimary,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

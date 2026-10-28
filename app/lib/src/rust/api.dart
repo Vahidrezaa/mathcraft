@@ -8,9 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'api.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_delta`, `engine`, `from_value`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Engine`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `new`, `panic_error`, `set_active`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Engine`, `JobGuard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// نسخه قرارداد — UI در startup چک می‌کند (سند ۰۲ بخش ۳ بند ۴).
 Future<int> apiVersion() => RustLib.instance.api.crateApiApiVersion();
@@ -24,8 +24,29 @@ Future<int> plotContractVersion() =>
 ///
 /// سمانتیک متلب: اجرای دستورها به ترتیب، توقف در اولین خطا؛ خروجی‌های
 /// دستورهای قبلی حفظ می‌شوند (سند ۰۲ بخش ۹).
+///
+/// v2: کانتکست job هم نصب می‌شود (لغو/پیشرفت یکنواخت با run_script)؛
+/// رفتار v1 کاملاً حفظ شده — mc-cli بدون تغییر سبز می‌ماند.
 Future<EvalResult> evaluateLine({required String code}) =>
     RustLib.instance.api.crateApiEvaluateLine(code: code);
+
+/// اجرای زندهٔ یک خط/اسکریپت با رویدادهای پیشرفت — مسیر UI گام 2.3.
+///
+/// - قفل موتور کل اجرا را می‌پوشاند (سمانتیک سریالی سند ۰۲ §4)؛
+/// - نخ ticker هر ~100ms اسنپ‌شات کانتکست job را به صورت
+///   `ScriptEvent::Progress` (فقط در تغییر) پخش می‌کند؛
+/// - در لغو: `ScriptEvent::Cancelled` سپس `Done{result: status=Cancelled}`؛
+/// - stream با پایان تابع بسته می‌شود (Drop کلوزر FRB) — مسیر پایان یکتا.
+Stream<ScriptEvent> runScript({required String code}) =>
+    RustLib.instance.api.crateApiRunScript(code: code);
+
+/// درخواست لغو job فعال — بدون قفل موتور (از نخ FRB دیگر امن است).
+/// true = یک job فعال با این id پیدا و پرچمش ست شد.
+Future<bool> cancelJob({required BigInt jobId}) =>
+    RustLib.instance.api.crateApiCancelJob(jobId: jobId);
+
+/// شناسهٔ job در حال اجرا (برای دکمهٔ Stop: پرس‌وجو + cancel) — None = بی‌کار.
+Future<BigInt?> activeJobId() => RustLib.instance.api.crateApiActiveJobId();
 
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
 /// `whos` کنسول ترمینال (توابع الحاقی P0.1 — سند ۰۲ بخش ۳).
@@ -528,6 +549,29 @@ class RegisterResult {
           functions == other.functions &&
           script == other.script &&
           error == other.error;
+}
+
+@freezed
+sealed class ScriptEvent with _$ScriptEvent {
+  const ScriptEvent._();
+
+  /// پیشرفت حلگرهای طولانی (ode45/ode23/integral). `percent` = None یعنی
+  /// نامعین (نوار نامعین UI)؛ در غیر این صورت 0.0..=1.0.
+  const factory ScriptEvent.progress({
+    required BigInt jobId,
+    required String stage,
+    double? percent,
+  }) = ScriptEvent_Progress;
+
+  /// درخواست لغو پذیرفته شد — پیش از Done صادر می‌شود (UX فوری).
+  const factory ScriptEvent.cancelled({
+    required BigInt jobId,
+  }) = ScriptEvent_Cancelled;
+
+  /// پایان job (مسیر پایان یکتا) — نتیجهٔ کامل v1 (همان EvalResult).
+  const factory ScriptEvent.done({
+    required EvalResult result,
+  }) = ScriptEvent_Done;
 }
 
 class Series2D {

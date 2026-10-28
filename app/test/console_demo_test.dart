@@ -9,8 +9,7 @@ import 'package:mathcraft/core/rust/engine_provider.dart';
 
 /// موتور ساختگی برای تست UI بدون libmathcraft.so (سند ۰۸ بخش ۶ — UI golden/test).
 class FakeEngineClient implements EngineClient {
-  @override
-  Future<EvalResult> evaluateLine(String code) async {
+  EvalResult _resultFor(String code) {
     if (code.trim() == '1+1') {
       return EvalResult(
         jobId: BigInt.from(1),
@@ -42,6 +41,17 @@ class FakeEngineClient implements EngineClient {
       durationMs: BigInt.from(1),
     );
   }
+
+  @override
+  Future<EvalResult> evaluateLine(String code) async => _resultFor(code);
+
+  @override
+  Stream<ScriptEvent> runScript(String code) async* {
+    yield ScriptEvent_Done(result: _resultFor(code));
+  }
+
+  @override
+  Future<bool> cancelActive() async => false;
 }
 
 Future<void> _pumpApp(WidgetTester tester) async {

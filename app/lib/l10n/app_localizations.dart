@@ -179,6 +179,12 @@ abstract class AppLocalizations {
   /// **'Run'**
   String get runTooltip;
 
+  /// No description provided for @stopTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get stopTooltip;
+
   /// Tooltip of the copy action shown on console result blocks and error cards
   ///
   /// In en, this message translates to:

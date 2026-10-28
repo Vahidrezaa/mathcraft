@@ -46,6 +46,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
   final _outputScroll = ScrollController();
   final _entries = <EditorEntry>[];
   bool _running = false;
+  // وضعیت پیشرفت زنده (قرارداد v2 — ROADMAP 2.3)
+  String? _stage;
+  double? _progress;
 
   @override
   void initState() {
@@ -65,6 +68,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     if (code.isEmpty || _running) return;
     setState(() {
       _running = true;
+      _stage = null;
+      _progress = null;
       _entries
         ..clear()
         ..add(TextEntry('>> run'));
@@ -72,7 +77,27 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     HapticFeedback.lightImpact();
 
     try {
-      final result = await ref.read(engineProvider).evaluateLine(code);
+      // اجرای زندهٔ قرارداد v2 — همان مسیر کنسول (ROADMAP 2.3 task 3/4)
+      final result = await collectLiveRun(
+        ref.read(engineProvider).runScript(code),
+        onProgress: (stage, percent) {
+          if (mounted) {
+            setState(() {
+              _stage = stage;
+              _progress = percent;
+            });
+          }
+        },
+        onCancelled: () {
+          if (mounted) {
+            setState(() {
+              _stage = null;
+              _progress = null;
+            });
+          }
+        },
+      );
+      if (result == null) return; // جریان بدون Done — finally تمیز می‌کند
       final fresh = <EditorEntry>[];
       for (final event in result.consoleEvents) {
         switch (event) {
@@ -98,8 +123,19 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       if (!mounted) return;
       setState(() => _entries.add(TextEntry('engine unavailable: $e')));
     } finally {
-      if (mounted) setState(() => _running = false);
+      if (mounted) {
+        setState(() {
+          _running = false;
+          _stage = null;
+          _progress = null;
+        });
+      }
     }
+  }
+
+  /// دکمهٔ Stop پنل خروجی — لغو job فعال (سند ۰۲ §4؛ ROADMAP 2.3 task 4).
+  Future<void> _stop() async {
+    await ref.read(engineProvider).cancelActive();
   }
 
   String _copyTextOf(EditorEntry e) => switch (e) {
@@ -171,24 +207,21 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                   ),
                   const SizedBox(width: 10),
                   CdsPressable(
-                    onTap: _run,
+                    onTap: _running ? _stop : _run,
                     child: Tooltip(
-                      message: l10n.runTooltip,
+                      message: _running ? l10n.stopTooltip : l10n.runTooltip,
                       child: Container(
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: scheme.primary,
+                          color: _running ? scheme.error : scheme.primary,
                           borderRadius:
                               BorderRadius.circular(CdsDimens.radiusSmall),
                         ),
                         child: _running
-                            ? Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: scheme.onPrimary,
-                                ),
+                            ? CraftIcon(
+                                CraftIcons.actionStop,
+                                color: scheme.onError,
                               )
                             : CraftIcon(
                                 CraftIcons.actionRun,
@@ -202,6 +235,29 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             ),
           ),
         ),
+        // نوار پیشرفت زنده (قرارداد v2) — فقط حین اجرا؛ مرحلهٔ فعال هم نمایش
+        if (_running) ...[
+          if (_stage != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: CdsDimens.gutterPortrait,
+                vertical: 4,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _stage!,
+                  style: CdsTheme.monoStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ),
+          LinearProgressIndicator(
+            value: _progress,
+            minHeight: 2,
+            backgroundColor: scheme.surfaceContainerHighest,
+            valueColor: AlwaysStoppedAnimation(scheme.primary),
+          ),
+        ],
         // ناحیه کد — جزیره LTR همیشگی
         Expanded(
           flex: 3,

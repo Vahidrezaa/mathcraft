@@ -49,6 +49,9 @@ class AppLocalizationsFa extends AppLocalizations {
   String get runTooltip => 'اجرا';
 
   @override
+  String get stopTooltip => 'توقف';
+
+  @override
   String get copyTooltip => 'کپی';
 
   @override

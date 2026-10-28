@@ -11,8 +11,7 @@ import 'package:mathcraft/features/editor/matlab_highlight.dart';
 /// موتور ساختگی — همان الگوی console_demo_test (سند ۰۸ بخش ۶):
 /// بدون libmathcraft.so؛ رفتار قطعی برای ادیتور.
 class FakeEngineClient implements EngineClient {
-  @override
-  Future<EvalResult> evaluateLine(String code) async {
+  EvalResult _resultFor(String code) {
     if (code.trim() == 'x = 41 + 1') {
       return EvalResult(
         jobId: BigInt.from(1),
@@ -44,6 +43,17 @@ class FakeEngineClient implements EngineClient {
       durationMs: BigInt.from(1),
     );
   }
+
+  @override
+  Future<EvalResult> evaluateLine(String code) async => _resultFor(code);
+
+  @override
+  Stream<ScriptEvent> runScript(String code) async* {
+    yield ScriptEvent_Done(result: _resultFor(code));
+  }
+
+  @override
+  Future<bool> cancelActive() async => false;
 }
 
 Future<void> _pumpApp(WidgetTester tester) async {

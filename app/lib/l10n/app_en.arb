@@ -14,6 +14,7 @@
   "consoleEmptyTitle": "Try your first command",
   "consoleEmptyHint": "Tap a sample — it really runs on the Rust engine",
   "runTooltip": "Run",
+  "stopTooltip": "Stop",
   "copyTooltip": "Copy",
   "@copyTooltip": {
     "description": "Tooltip of the copy action shown on console result blocks and error cards"
