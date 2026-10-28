@@ -123,6 +123,10 @@ struct Lexer {
     pending_space: bool,
     /// توکن قبلی پایان‌یافتهٔ عملوند؟ (تمایز `'` ترانهاده/رشته)
     last_was_operand_end: bool,
+    /// آیا در این سطر (قبل از موقعیت فعلی) کد/توکنی آمده؟ — شرط کامنت
+    /// بلوکی متلب: `%{` و `%}` باید تنها محتوای سطر خودشان باشند
+    /// (ROADMAP 2.4 — بخشی از آیتم ۹ ممیزی).
+    line_has_code: bool,
 }
 
 /// Maximum significant identifier length, like MATLAB `namelengthmax` (doc 03 §2).
@@ -136,6 +140,7 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
         col: 1,
         pending_space: false,
         last_was_operand_end: false,
+        line_has_code: false,
     };
     let mut out: Vec<Token> = Vec::new();
     while let Some(c) = lx.peek() {
@@ -151,14 +156,22 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
                 lx.line += 1;
                 lx.col = 1;
                 lx.last_was_operand_end = false;
+                lx.line_has_code = false;
             }
             '%' => {
-                // کامنت تا انتهای خط (سند ۰۳ بخش ۲) — `%%` هم همین‌جا پوشش داده می‌شود.
-                while let Some(ch) = lx.peek() {
-                    if ch == '\n' {
-                        break;
+                // کامنت بلوکی متلب `%{ ... %}` (ROADMAP 2.4 — بخشی از آیتم ۹):
+                // فقط وقتی %{ در ابتدای سطر (فقط فاصله/تب قبلش) و تنها محتوای
+                // سطر باشد. در غیر این صورت کامنت خطی تا انتهای سطر.
+                if !lx.line_has_code && lx.starts_with("%{") && lx.rest_of_line_blank_from(2) {
+                    lx.skip_block_comment()?;
+                } else {
+                    // کامنت تا انتهای خط (سند ۰۳ بخش ۲) — `%%` هم همین‌جا پوشش داده می‌شود.
+                    while let Some(ch) = lx.peek() {
+                        if ch == '\n' {
+                            break;
+                        }
+                        lx.advance();
                     }
-                    lx.advance();
                 }
             }
             '.' if lx.starts_with("...") => {
@@ -406,6 +419,75 @@ impl Lexer {
             .all(|(i, sc)| self.peek_at(i) == Some(sc))
     }
 
+    /// آیا از offset فعلی + skip تا انتهای سطر فقط فاصله/تب است؟
+    /// (شرط «تنها محتوای سطر» برای %{ و %})
+    fn rest_of_line_blank_from(&self, skip: usize) -> bool {
+        let mut k = skip;
+        loop {
+            match self.peek_at(k) {
+                Some(' ') | Some('\t') | Some('\r') => k += 1,
+                Some('\n') | None => return true,
+                Some(_) => return false,
+            }
+        }
+    }
+
+    /// پرش کامنت بلوکی — نشانگر روی `%` آغازین است. سطرهای بلوک هیچ توکنی
+    /// نمی‌دهند؛ سطرِ `%}` مصرف می‌شود ولی newline آن به جریان عادی می‌ماند
+    /// (مثل یک سطر خالی). `%}` باید تنها محتوای سطر خودش باشد؛
+    /// EOF بدون بستن → خطای پارس (رفتار متلب). تو در تو پشتیبانی نمی‌شود
+    /// (مثل متلب — %{ داخلی فقط متن کامنت است).
+    fn skip_block_comment(&mut self) -> Result<(), McError> {
+        // بقیهٔ سطر آغازین تا newline
+        while let Some(ch) = self.peek() {
+            if ch == '\n' {
+                break;
+            }
+            self.advance();
+        }
+        if self.peek().is_none() {
+            return Err(self.unterminated_block_comment());
+        }
+        self.advance(); // newline سطر آغازین
+        self.line += 1;
+        self.col = 1;
+        self.pending_space = true;
+        self.line_has_code = false;
+        loop {
+            // فاصله/تب ابتدای سطر
+            while matches!(self.peek(), Some(' ') | Some('\t') | Some('\r')) {
+                self.advance();
+            }
+            if self.starts_with("%}") && self.rest_of_line_blank_from(2) {
+                // مصرف %} و بقیهٔ سطر؛ newline بعدش عادی پردازش می‌شود
+                while let Some(ch) = self.peek() {
+                    if ch == '\n' {
+                        break;
+                    }
+                    self.advance();
+                }
+                return Ok(());
+            }
+            match self.peek() {
+                Some('\n') => {
+                    self.advance();
+                    self.line += 1;
+                    self.col = 1;
+                }
+                Some(_) => self.advance(),
+                None => return Err(self.unterminated_block_comment()),
+            }
+        }
+    }
+
+    fn unterminated_block_comment(&self) -> McError {
+        self.err_here(
+            ids::PARSE_ERROR,
+            "Unterminated block comment: '%{' without a closing '%}' on its own line.",
+            "کامنت بلوکی بسته نشده: «%{» بدون «%}» تنها در یک سطر.",
+        )
+    }
+
     fn advance(&mut self) {
         self.pos += 1;
         self.col += 1;
@@ -415,6 +497,7 @@ impl Lexer {
     fn make(&mut self, tok: Tok) -> Token {
         let space_before = self.pending_space;
         self.pending_space = false;
+        self.line_has_code = true;
         Token {
             tok,
             line: self.line,
@@ -658,6 +741,65 @@ mod tests {
                 Tok::Eof
             ]
         );
+    }
+
+    #[test]
+    fn block_comments_are_swallowed() {
+        // ROADMAP 2.4 — بخشی از آیتم ۹: %{ ... %} (فقط سطر مستقل)
+        assert_eq!(
+            toks("a = 1\n%{\njunk ~%% $\n%}\nb = 2"),
+            vec![
+                Tok::Ident("a".into()),
+                Tok::Assign,
+                Tok::Num(1.0),
+                Tok::Newline,
+                Tok::Newline,
+                Tok::Ident("b".into()),
+                Tok::Assign,
+                Tok::Num(2.0),
+                Tok::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn block_comment_at_start_with_indent() {
+        // بلوک در ابتدای برنامه + تورفتگی سطر بستن
+        assert_eq!(
+            toks("%{\nhidden\n   %}\n1"),
+            vec![Tok::Newline, Tok::Num(1.0), Tok::Eof]
+        );
+    }
+
+    #[test]
+    fn opener_with_trailing_content_is_line_comment() {
+        // %{ با محتوای بعدش در همان سطر = کامنت خطی (نه بلوک)
+        assert_eq!(toks("%{ x\n1"), vec![Tok::Newline, Tok::Num(1.0), Tok::Eof]);
+        // %{ بعد از کد در همان سطر هم کامنت خطی است
+        assert_eq!(
+            toks("x = 1 %{ note\n2"),
+            vec![
+                Tok::Ident("x".into()),
+                Tok::Assign,
+                Tok::Num(1.0),
+                Tok::Newline,
+                Tok::Num(2.0),
+                Tok::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn closer_with_trailing_content_does_not_close() {
+        // %} با محتوای بعدش سطر بستن نیست → بلوک ادامه می‌یابد → EOF خطا
+        let err = tokenize("%{\nx\n%} x\n1").unwrap_err();
+        assert_eq!(err.id, ids::PARSE_ERROR);
+    }
+
+    #[test]
+    fn unterminated_block_comment_is_parse_error() {
+        let err = tokenize("a = 1\n%{\nno close").unwrap_err();
+        assert_eq!(err.id, ids::PARSE_ERROR);
     }
 
     #[test]

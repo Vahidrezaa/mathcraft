@@ -543,3 +543,25 @@ fn display_output_cannot_be_used_in_expression() {
         "disp in expression context must error honestly"
     );
 }
+
+// ---------- آیتم ۹ (بخش کامنت بلوکی — ROADMAP 2.4) ----------
+
+#[test]
+fn block_comments_are_ignored_by_eval() {
+    // %{ %} سطرمستقل — محتوای داخل بلوک حتی syntax نامعتبر هم اجرا نمی‌شود
+    let (env, _, err) = run("x = 1\n%{\ny = 99 ???? %%\n%}\nz = x + 1");
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert!(env.get("y").is_none(), "block content must not execute");
+    let (_, _, d) = mat(&env, "z");
+    assert_eq!(d, vec![2.0]);
+}
+
+#[test]
+fn block_comment_inside_function_body_works() {
+    // کامنت بلوکی داخل بدنهٔ تابع فایلی (الگوی رایج کلاس)
+    let (_, texts, err) = run(
+        "function r = doubleit(v)\n%{\nhelper note with junk ~%%\n%}\nr = v * 2\nend\nz = doubleit(21)",
+    );
+    assert!(err.is_none(), "engine error: {err:?}");
+    assert!(texts.iter().any(|t| t.contains("z =") && t.contains("42")));
+}
