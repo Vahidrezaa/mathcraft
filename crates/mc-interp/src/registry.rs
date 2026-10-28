@@ -6,7 +6,7 @@
 //! - هیچ panic/unwrap در مسیر محصول — همه خطاها McError دوزبانه (سند ۰۲ §9).
 //! - الگوریتم‌های سنگین به mc-num واگذار می‌شوند (سند ۰۴ §1: نقشه ماژول‌ها).
 
-use mc_core::{ids, Matrix, McError, Value};
+use mc_core::{budget, ids, Matrix, McError, Value};
 use mc_num as num;
 
 /// امضای توابع داخلی — آرگومان‌ها + تعداد خروجی خواسته‌شده.
@@ -333,17 +333,18 @@ fn scalar_val(v: f64) -> Value {
 
 fn bi_zeros(args: &[Value], _n: usize) -> Result<Value, McError> {
     let (r, c) = dim2(args, "zeros")?;
-    Ok(Value::Double(Matrix::full(r, c, 0.0)))
+    // بودجهٔ حافظه (ROADMAP 2.5): ابعاد از ورودی کاربر — try_full اجباری.
+    Ok(Value::Double(Matrix::try_full(r, c, 0.0)?))
 }
 
 fn bi_ones(args: &[Value], _n: usize) -> Result<Value, McError> {
     let (r, c) = dim2(args, "ones")?;
-    Ok(Value::Double(Matrix::full(r, c, 1.0)))
+    Ok(Value::Double(Matrix::try_full(r, c, 1.0)?))
 }
 
 fn bi_eye(args: &[Value], _n: usize) -> Result<Value, McError> {
     let (r, c) = dim2(args, "eye")?;
-    let mut m = Matrix::full(r, c, 0.0);
+    let mut m = Matrix::try_full(r, c, 0.0)?;
     for i in 0..r.min(c) {
         m.set(i, i, 1.0);
     }
@@ -378,7 +379,7 @@ fn bi_linspace(args: &[Value], _n: usize) -> Result<Value, McError> {
     if n == 1 {
         return Ok(Value::Double(Matrix::full(1, 1, b)));
     }
-    let mut m = Matrix::full(1, n, 0.0);
+    let mut m = Matrix::try_full(1, n, 0.0)?;
     for i in 0..n {
         // فرمول متلب: a + i*(b-a)/(n-1) با اصلاح پایانی (سند ۰۳ §7 روح).
         m.set(0, i, a + (i as f64) * (b - a) / ((n - 1) as f64));
@@ -419,7 +420,11 @@ fn bi_diag(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Double(m) if m.rows() == 1 || m.cols() == 1 => {
             // بردار → ماتریس قطری
             let len = m.rows().max(m.cols());
-            let n = len + k.unsigned_abs() as usize;
+            // بودجهٔ حافظه: k اسکالر کاربر است (k=1e18 مجاز نیست) — جمع/چک امن (ROADMAP 2.5).
+            let n = len
+                .checked_add(k.unsigned_abs() as usize)
+                .ok_or_else(|| budget::out_of_memory_error(len, k.unsigned_abs() as usize))?;
+            budget::check_elements(n, n)?;
             let mut out = Matrix::full(n, n, 0.0);
             for i in 0..len {
                 let idx = (i as i64 + k) as usize;
@@ -539,7 +544,17 @@ fn bi_repmat(args: &[Value], _n: usize) -> Result<Value, McError> {
     let m = need_matrix(args, 0)?;
     let r = need_int_scalar(args, 1)?;
     let c = need_int_scalar(args, 2)?;
-    let mut out = Matrix::full(m.rows() * r, m.cols() * c, 0.0);
+    // بودجهٔ حافظه: ضرب ابعاد کاربر می‌تواند سرریز کند — ضرب امن (ROADMAP 2.5).
+    let or = m
+        .rows()
+        .checked_mul(r)
+        .ok_or_else(|| budget::out_of_memory_error(m.rows().saturating_mul(r), c))?;
+    let oc = m
+        .cols()
+        .checked_mul(c)
+        .ok_or_else(|| budget::out_of_memory_error(or, m.cols().saturating_mul(c)))?;
+    budget::check_elements(or, oc)?;
+    let mut out = Matrix::full(or, oc, 0.0);
     for br in 0..r {
         for bc in 0..c {
             for sr in 0..m.rows() {
@@ -748,7 +763,15 @@ fn bi_kron(args: &[Value], _n: usize) -> Result<Value, McError> {
     let a = need_matrix(args, 0)?;
     let b = need_matrix(args, 1)?;
     let (ar, ac, br, bc) = (a.rows(), a.cols(), b.rows(), b.cols());
-    let mut out = Matrix::full(ar * br, ac * bc, 0.0);
+    // بودجهٔ حافظه: kron(a,b) از اندازهٔ دو ماتریس موجود فراتر می‌رود — چک امن (ROADMAP 2.5).
+    let or = ar
+        .checked_mul(br)
+        .ok_or_else(|| budget::out_of_memory_error(ar, br))?;
+    let oc = ac
+        .checked_mul(bc)
+        .ok_or_else(|| budget::out_of_memory_error(ac, bc))?;
+    budget::check_elements(or, oc)?;
+    let mut out = Matrix::full(or, oc, 0.0);
     for i in 0..ar {
         for j in 0..ac {
             let v = a.get(i, j);

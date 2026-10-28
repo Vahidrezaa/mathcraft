@@ -11,7 +11,7 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use mc_core::{ids, job, AnonFn, Matrix, McError, Value};
+use mc_core::{budget, ids, job, AnonFn, Matrix, McError, Value};
 use mc_parser::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
 
 use crate::complex_ops as cx;
@@ -1000,7 +1000,7 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
     match idx {
         Idx::Scalar(i) => {
             if *i > m.numel() {
-                grow_linear(m, *i);
+                grow_linear(m, *i)?;
             }
             m.set_linear(i - 1, v.get(0, 0));
             Ok(())
@@ -1009,7 +1009,7 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
             for k in 0..m.numel().max(v.numel()) {
                 if k < v.numel() {
                     if k >= m.numel() {
-                        grow_linear(m, k + 1);
+                        grow_linear(m, k + 1)?;
                     }
                     m.set_linear(k, v.get_linear(k));
                 }
@@ -1019,7 +1019,7 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
         Idx::Vector { idx: list, .. } => {
             for (k, i) in list.iter().enumerate() {
                 if *i > m.numel() {
-                    grow_linear(m, *i);
+                    grow_linear(m, *i)?;
                 }
                 let val = if v.is_scalar() {
                     v.get(0, 0)
@@ -1033,29 +1033,26 @@ fn linear_assign(m: &mut Matrix, idx: &Idx, v: &Matrix) -> Result<(), McError> {
     }
 }
 
-fn grow_linear(m: &mut Matrix, new_len: usize) {
+fn grow_linear(m: &mut Matrix, new_len: usize) -> Result<(), McError> {
     // رشد با اندیس خطی — جهت حفظ می‌شود (رفتار متلب): بردار سطری سطری
     // می‌ماند (`x=10; x(3)=5` → 1×3)، ستونی ستونی؛ ماتریس با افزایش سطر
-    // رشد می‌کند (A(5)=9 روی 2×2 → 3×2).
-    let mut data: Vec<f64> = (0..m.numel()).map(|i| m.get_linear(i)).collect();
-    if m.rows() == 1 {
-        data.resize(new_len, 0.0);
-        *m = Matrix::from_columns(1, new_len, data);
+    // رشد می‌کند (A(5)=9 روی 2×2 → 3×2). رشد از خالی → 1×new_len.
+    let (new_rows, new_cols) = if m.rows() == 1 {
+        (1, new_len)
     } else if m.cols() == 1 {
-        data.resize(new_len, 0.0);
-        *m = Matrix::from_columns(new_len, 1, data);
+        (new_len, 1)
+    } else if m.cols() == 0 {
+        (1, new_len)
     } else {
-        let cols = m.cols();
-        if cols == 0 {
-            // رشد از خالی (مثل `A=[]; A(3)=5`) → سطر 1×new_len (رفتار متلب)
-            data.resize(new_len, 0.0);
-            *m = Matrix::from_columns(1, new_len, data);
-            return;
-        }
-        let new_rows = new_len.div_ceil(cols);
-        data.resize(new_rows * cols, 0.0);
-        *m = Matrix::from_columns(new_rows, cols, data);
-    }
+        (new_len.div_ceil(m.cols()), m.cols())
+    };
+    // بودجهٔ حافظه (ROADMAP 2.5): new_len از اندیس کاربر می‌آید (`x(1e9)=5`)
+    // — چکِ قبل از تخصیص، وگرنه resize پروسه را abort می‌کند.
+    budget::check_elements(new_rows, new_cols)?;
+    let mut data: Vec<f64> = (0..m.numel()).map(|i| m.get_linear(i)).collect();
+    data.resize(new_rows * new_cols, 0.0);
+    *m = Matrix::from_columns(new_rows, new_cols, data);
+    Ok(())
 }
 
 fn matrix_assign(
@@ -1073,7 +1070,8 @@ fn matrix_assign(
         let new_rows = m.rows().max(*r);
         let new_cols = m.cols().max(*c);
         if (new_rows, new_cols) != (m.rows(), m.cols()) {
-            let mut nd = Matrix::full(new_rows, new_cols, 0.0);
+            // بودجهٔ حافظه (ROADMAP 2.5): ابعاد جدید از اندیس کاربر است.
+            let mut nd = Matrix::try_full(new_rows, new_cols, 0.0)?;
             for cc in 0..m.cols() {
                 for rr in 0..m.rows() {
                     nd.set(rr, cc, m.get(rr, cc));
@@ -1895,7 +1893,14 @@ fn build_matrix(
         let any_complex = parts
             .iter()
             .any(|c| matches!(c, Cell::Complex(z) if !z.is_all_real()));
-        let c: usize = parts.iter().map(|p| dims(p).1).sum();
+        // بودجهٔ حافظه (ROADMAP 2.5): تلفیق می‌تواند از مجموع ورودی‌ها بزرگ‌تر شود؛
+        // جمع امن + چک قبل از دو تخصیص re/im.
+        let c: usize = parts
+            .iter()
+            .map(|p| dims(p).1)
+            .try_fold(0usize, |acc, w| acc.checked_add(w))
+            .ok_or_else(|| budget::out_of_memory_error(r, usize::MAX))?;
+        budget::check_elements(r, c)?;
         let mut re = Matrix::full(r, c, 0.0);
         let mut im = Matrix::full(r, c, 0.0);
         let mut off = 0usize;
@@ -1959,7 +1964,13 @@ fn build_matrix(
             "تلفیق عمودی نیاز به تعداد ستون برابر دارد.",
         ));
     }
-    let r: usize = row_cells.iter().map(|m| dims(m).0).sum();
+    // بودجهٔ حافظه (ROADMAP 2.5): جمع سطرها امن + چک قبل از دو تخصیص re/im.
+    let r: usize = row_cells
+        .iter()
+        .map(|m| dims(m).0)
+        .try_fold(0usize, |acc, h| acc.checked_add(h))
+        .ok_or_else(|| budget::out_of_memory_error(usize::MAX, c))?;
+    budget::check_elements(r, c)?;
     let any_complex = row_cells
         .iter()
         .any(|c| matches!(c, Cell::Complex(z) if !z.is_all_real()));
@@ -2035,7 +2046,9 @@ fn range_values(a: &Value, s: &Value, b: &Value) -> Result<Value, McError> {
     if n == 0 {
         return Ok(Value::Double(Matrix::full(1, 0, 0.0))); // ماتریس تهی 1×0 (سند ۰۳ §4)
     }
-    let mut out = Matrix::full(1, n, 0.0);
+    // بودجهٔ حافظه (ROADMAP 2.5، بند ۲ دفتر): materialize شدن بازه از ورودی کاربر است —
+    // «x=1:1e9» باید خطای MATLAB-گونه بدهد، نه abort پروسه.
+    let mut out = Matrix::try_full(1, n, 0.0)?;
     for i in 0..n {
         out.set(0, i, av + (i as f64) * sv);
     }

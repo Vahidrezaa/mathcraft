@@ -1007,4 +1007,77 @@ mod tests {
             matches!(done, ScriptEvent::Done { result } if result.status == JobStatus::Cancelled)
         );
     }
+
+    /// ROADMAP 2.5 — بستن بند ۲ دفتر ممیزی (COMPATIBILITY §4.8): تخصیص بزرگ
+    /// باید خطای MATLAB-گونه (`MC:E4003_OUT_OF_MEMORY`) بدهد، نه abort پروسه
+    /// (SIGABRT خروج ۱۳۴ — تخصیصِ ناموفق با catch_unwind مهارشدنی نیست).
+    /// «پروسهٔ زنده» یعنی: تست بعد از هر خطا ادامه می‌یابد و موتور همچنان
+    /// به درخواست‌های بعدی جواب می‌دهد (رفتار متلب: session ادامه دارد).
+    #[test]
+    fn memory_budget_oom_is_clean_error_process_alive() {
+        let _guard = serial_guard();
+        // -- DoD گام 2.5: zeros(100000,100000); → خطای پاک (۱۰¹⁰ عنصر = ~76GB)
+        let r = evaluate_line("zeros(100000,100000);".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        let [ConsoleEvent::Error { err }] = r.console_events.as_slice() else {
+            panic!("error event expected");
+        };
+        assert_eq!(err.id, "MC:E4003_OUT_OF_MEMORY");
+        assert!(err.message_en.contains("Out of memory"));
+        assert!(err.message_en.contains("100000x100000"));
+        assert!(err.message_en.contains("Reduce the problem size"));
+        assert!(err.message_fa.contains("خارج از حافظه"));
+
+        // -- DoD گام 2.5: x=1:1e9 → همان خطا (materialize شدن بازه)
+        let r = evaluate_line("x = 1:1e9;".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+
+        // -- رشد اندیس‌دار (مسیر grow_linear): اندیس از کاربر می‌آید
+        let r = evaluate_line("v = 7; v(1000000000) = 5;".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+
+        // -- ضرب ابعاد کاربر: repmat و diag(k بزرگ)
+        let r = evaluate_line("repmat(eye(2), 100000, 100000);".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+        let r = evaluate_line("diag(ones(3,1), 1000000000);".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+
+        // -- تلفیق افقی/عمودی (مسیر hcat/vcat): مجموع می‌تواند از بودجه بگذرد
+        let r = evaluate_line("[zeros(1,100000000), zeros(1,2)];".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+        let r = evaluate_line("[zeros(100000000,1); zeros(2,1)];".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(matches!(
+            &r.console_events[0],
+            ConsoleEvent::Error { err } if err.id == "MC:E4003_OUT_OF_MEMORY"
+        ));
+
+        // -- پروسه زنده است: موتور پس از همهٔ این‌ها سرِ کارش + تهی همیشه مجاز
+        let r = evaluate_line("zeros(2,3)".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        let r = evaluate_line("w = 1:0;".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        let r = evaluate_line("v(3) = 9; v".to_owned());
+        assert_eq!(r.status, JobStatus::Done); // رشد کوچک همان مسیر، مجاز
+    }
 }

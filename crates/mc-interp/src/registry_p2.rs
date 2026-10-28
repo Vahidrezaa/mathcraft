@@ -217,7 +217,7 @@ fn uniform_like(args: &[Value], name: &str, draw: fn() -> f64) -> Result<Value, 
             ))
         }
     };
-    let mut out = Matrix::full(rows, cols, 0.0);
+    let mut out = Matrix::try_full(rows, cols, 0.0)?; // بودجهٔ حافظه (ROADMAP 2.5) — ابعاد از کاربر
     for idx in 0..out.numel() {
         out.set_linear(idx, draw());
     }
@@ -275,7 +275,7 @@ fn bi_randi(args: &[Value], _n: usize) -> Result<Value, McError> {
             ))
         }
     };
-    let mut out = Matrix::full(rows, cols, 0.0);
+    let mut out = Matrix::try_full(rows, cols, 0.0)?; // بودجهٔ حافظه (ROADMAP 2.5) — ابعاد از کاربر
     for idx in 0..out.numel() {
         out.set_linear(idx, num::rng::uniform_int_in(lo as u64, hi as u64) as f64);
     }
