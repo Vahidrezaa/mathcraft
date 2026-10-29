@@ -43,6 +43,7 @@ static P2_REGISTRY: &[(&str, crate::registry::Builtin)] = &[
     ("compan", bi_compan),
     // ---- درون‌یابی (سند ۰۴ §6) ----
     ("interp1", bi_interp1),
+    ("interp2", bi_interp2),
     // ---- ریشه/انتگرال (سند ۰۴ §5) ----
     ("fzero", bi_fzero),
     ("integral", bi_integral),
@@ -420,6 +421,114 @@ fn bi_interp1(args: &[Value], _n: usize) -> Result<Value, McError> {
     num::interp::require_min_points(x.numel(), method)?;
     let inp = num::interp::prepare_interp1(&x, &v, &xq, method, extrap, extrapval)?;
     Ok(Value::Double(num::interp::interp1_eval(&inp)))
+}
+
+/// interp2 — درون‌یابی دوبعدی linear/nearest (سند ۰۴ §6، ROADMAP 2.6).
+///
+/// فرم‌های متلب:
+/// - `interp2(X, Y, V, Xq, Yq, ...)` — V ابعاد numel(Y)×numel(X)
+/// - `interp2(V, Xq, Yq, ...)` — محورهای ضمنی X=1:n، Y=1:m
+///
+/// گزینه‌ها: `'linear'` (پیش‌فرض) / `'nearest'`، پرچم `'extrap'`، مقدار extrapval.
+/// Xq سطری + Yq ستونی = گسترش meshgrid (خروجی numel(Yq)×numel(Xq))؛
+/// در غیر این صورت Xq/Yq باید هم‌شکل باشند. spline/cubic دوبعدی = E7.
+fn bi_interp2(args: &[Value], _n: usize) -> Result<Value, McError> {
+    const NAME: &str = "interp2";
+    if args.len() < 3 {
+        return Err(err(
+            "interp2: needs V, Xq, Yq (or X, Y, V, Xq, Yq).",
+            "interp2: به V و Xq و Yq (یا X و Y و V و Xq و Yq) نیاز دارد.",
+        ));
+    }
+    let opt_start;
+    let (x, y, v, xq, yq): (Matrix, Matrix, Matrix, Matrix, Matrix) = if args.len() >= 5 {
+        opt_start = 5;
+        (
+            need_matrix(args, 0, NAME)?,
+            need_matrix(args, 1, NAME)?,
+            need_matrix(args, 2, NAME)?,
+            need_matrix(args, 3, NAME)?,
+            need_matrix(args, 4, NAME)?,
+        )
+    } else {
+        opt_start = 3;
+        let v = need_matrix(args, 0, NAME)?;
+        // محورهای ضمنی متلب: X = 1:n (ستون‌ها)، Y = 1:m (سطرها)
+        let xs: Vec<f64> = (1..=v.cols()).map(|k| k as f64).collect();
+        let ys: Vec<f64> = (1..=v.rows()).map(|k| k as f64).collect();
+        (
+            Matrix::from_columns(1, xs.len(), xs),
+            Matrix::from_columns(1, ys.len(), ys),
+            v,
+            need_matrix(args, 1, NAME)?,
+            need_matrix(args, 2, NAME)?,
+        )
+    };
+    let mut method = num::interp::Method2::Linear;
+    let mut extrap = false;
+    let mut extrapval: Option<f64> = None;
+    for a in &args[opt_start..] {
+        match a {
+            Value::Char(s) => {
+                if s == "extrap" {
+                    extrap = true;
+                } else if let Some(m) = num::interp::Method2::from_name(s) {
+                    method = m;
+                } else {
+                    return Err(err(
+                        "interp2: unknown method (linear | nearest) — 2-D spline/cubic is out of scope for v1 (expansion E7).",
+                        "interp2: روش ناشناخته (linear | nearest) — spline/cubic دوبعدی خارج از محدودهٔ v1 است (گسترش E7).",
+                    ));
+                }
+            }
+            Value::Double(m) if m.is_scalar() && extrapval.is_none() => {
+                extrapval = Some(m.get(0, 0));
+            }
+            _ => {
+                return Err(err(
+                    "interp2: extra arguments must be a method name, 'extrap' or a value.",
+                    "interp2: آرگومان‌های اضافی باید نام روش، 'extrap' یا مقدار باشند.",
+                ))
+            }
+        }
+    }
+    let grid = num::interp::prepare_interp2(&x, &y, &v, method, extrap, extrapval)?;
+    // شکل پرسش‌ها — سمانتیک متلب
+    let (out_rows, out_cols, xq_flat, yq_flat) = if xq.rows() == 1
+        && yq.cols() == 1
+        && xq.cols() > 0
+        && yq.rows() > 0
+    {
+        // سطری + ستونی → گسترش meshgrid: خروجی numel(Yq)×numel(Xq)
+        // Q(r,c) = V در (Xq(c)، Yq(r)) — تولید جفت‌ها ستون‌محور تا با
+        // set_linear ستون‌محور (کولون-محور) هم‌تراز بماند.
+        let m = yq.rows();
+        let n = xq.cols();
+        let mut xs = Vec::with_capacity(m * n);
+        let mut ys = Vec::with_capacity(m * n);
+        for c in 0..n {
+            for r in 0..m {
+                xs.push(xq.get(0, c));
+                ys.push(yq.get(r, 0));
+            }
+        }
+        (m, n, xs, ys)
+    } else if xq.rows() == yq.rows() && xq.cols() == yq.cols() {
+        let xs: Vec<f64> = (0..xq.numel()).map(|k| xq.get_linear(k)).collect();
+        let ys: Vec<f64> = (0..yq.numel()).map(|k| yq.get_linear(k)).collect();
+        (xq.rows(), xq.cols(), xs, ys)
+    } else {
+        return Err(err(
+                "interp2: Xq and Yq must be the same size, or Xq a row vector and Yq a column vector (meshgrid expansion).",
+                "interp2: Xq و Yq باید هم‌شکل باشند، یا Xq سطری و Yq ستونی (گسترش meshgrid).",
+            ));
+    };
+    let vals = num::interp::interp2_eval(&grid, &xq_flat, &yq_flat);
+    let mut out = Matrix::full(out_rows, out_cols, f64::NAN);
+    for (k, val) in vals.iter().enumerate() {
+        out.set_linear(k, *val);
+    }
+    Ok(Value::Double(out))
 }
 
 // ---------- ریشه/انتگرال ----------
