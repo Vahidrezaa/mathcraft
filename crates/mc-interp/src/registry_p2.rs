@@ -67,6 +67,8 @@ static P2_MULTI: &[(&str, MultiBuiltin)] = &[
     ("ode23", bi_ode23),
     ("deconv", bi_deconv),
     ("eig", bi_eig),
+    ("qr", bi_qr_multi),
+    ("svd", bi_svd_multi),
 ];
 
 // ---------- ابزارهای ورودی ----------
@@ -887,4 +889,37 @@ fn bi_eig(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
             Value::Complex(ComplexMatrix::from_columns(n, n, d_re, d_im)),
         ]),
     }
+}
+
+/// [Q, R] = qr(A) — قرارداد کامل متلب: Q یکانی m×m، R مثلثی بالایی m×n.
+/// تک‌خروجی (هندل @qr / فراخوانی برهنه) = فقط R مثل متلب؛ مسیر اصلی تک‌خروجی
+/// (registry) هم همین را می‌دهد (COMPATIBILITY §۳).
+fn bi_qr_multi(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
+    let a = need_matrix(args, 0, "qr")?;
+    let (q, r) = num::qr(&a)?;
+    if nargout == 1 {
+        Ok(vec![Value::Double(r)])
+    } else {
+        Ok(vec![Value::Double(q), Value::Double(r)])
+    }
+}
+
+/// [U, S, V] = svd(A) — U یکانی m×m، S قطری m×n، V یکانی n×n؛ σها نزولی.
+/// تک‌خروجی = بردار ستونی σها (رفتار متلب s = svd(A)).
+fn bi_svd_multi(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
+    let a = need_matrix(args, 0, "svd")?;
+    let (u, s, v) = num::svd(&a)?;
+    if nargout == 1 {
+        let mut col = Matrix::full(s.len(), 1, 0.0);
+        for (i, x) in s.iter().enumerate() {
+            col.set(i, 0, *x);
+        }
+        return Ok(vec![Value::Double(col)]);
+    }
+    let (m, n) = (a.rows(), a.cols());
+    let mut sm = Matrix::full(m, n, 0.0);
+    for (k, x) in s.iter().enumerate() {
+        sm.set(k, k, *x);
+    }
+    Ok(vec![Value::Double(u), Value::Double(sm), Value::Double(v)])
 }

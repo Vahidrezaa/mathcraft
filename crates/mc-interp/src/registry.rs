@@ -666,8 +666,10 @@ fn bi_chol(args: &[Value], _n: usize) -> Result<Value, McError> {
 fn bi_qr(args: &[Value], nout: usize) -> Result<Value, McError> {
     let m = need_matrix(args, 0)?;
     if nout > 1 {
+        // [Q,R] = qr — چندخروجی در registry_p2 (ROADMAP 2.6) پیاده شد.
         return multi_out_soon("qr");
     }
+    // متلب qr(A) تک‌خروجی: فقط R (مثلثی بالایی) — COMPATIBILITY §۳.
     let (_, r) = num::qr(&m)?;
     Ok(Value::Double(r))
 }
@@ -675,10 +677,12 @@ fn bi_qr(args: &[Value], nout: usize) -> Result<Value, McError> {
 fn bi_svd(args: &[Value], nout: usize) -> Result<Value, McError> {
     let m = need_matrix(args, 0)?;
     if nout > 1 {
+        // [U,S,V] = svd — چندخروجی در registry_p2 (ROADMAP 2.6) پیاده شد.
         return multi_out_soon("svd");
     }
     let (_, s, _) = num::svd(&m)?;
-    // متلب svd(A) تک‌خروجی: ماتریس قطری σ هم‌شکل A — ما ستون σها می‌دهیم (بردار)
+    // متلب svd(A) تک‌خروجی: بردار ستونی σها به‌ترتیب نزولی (نه ماتریس قطری) —
+    // همین رفتار. ماتریس S فقط در شکل سه‌خروجی [U,S,V] می‌آید.
     let mut out = Matrix::full(s.len(), 1, 0.0);
     for (i, v) in s.iter().enumerate() {
         out.set(i, 0, *v);
