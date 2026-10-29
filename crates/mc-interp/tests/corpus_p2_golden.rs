@@ -195,11 +195,9 @@ fn run_mat(src: &str, var: &str) -> Vec<Vec<f64>> {
     let out = eval_program(&prog, &mut env);
     assert!(out.error.is_none(), "engine error: {:?}", out.error);
     match env.get(var) {
-        Some(mc_core::Value::Double(m)) => {
-            (0..m.rows())
-                .map(|r| (0..m.cols()).map(|c| m.get(r, c)).collect())
-                .collect()
-        }
+        Some(mc_core::Value::Double(m)) => (0..m.rows())
+            .map(|r| (0..m.cols()).map(|c| m.get(r, c)).collect())
+            .collect(),
         other => panic!("'{var}' is not a matrix: {other:?}"),
     }
 }
@@ -251,10 +249,38 @@ fn p2_tril_triu_k_regression() {
     let lm1 = run_mat(src!("p2_18_tril_triu_k.m"), "Lm1");
     let u1 = run_mat(src!("p2_18_tril_triu_k.m"), "U1");
     let um1 = run_mat(src!("p2_18_tril_triu_k.m"), "Um1");
-    assert_eq!(l1, vec![vec![1.0, 2.0, 0.0], vec![4.0, 5.0, 6.0], vec![7.0, 8.0, 9.0]]);
-    assert_eq!(lm1, vec![vec![0.0, 0.0, 0.0], vec![4.0, 0.0, 0.0], vec![7.0, 8.0, 0.0]]);
-    assert_eq!(u1, vec![vec![0.0, 2.0, 3.0], vec![0.0, 0.0, 6.0], vec![0.0, 0.0, 0.0]]);
-    assert_eq!(um1, vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0], vec![0.0, 8.0, 9.0]]);
+    assert_eq!(
+        l1,
+        vec![
+            vec![1.0, 2.0, 0.0],
+            vec![4.0, 5.0, 6.0],
+            vec![7.0, 8.0, 9.0]
+        ]
+    );
+    assert_eq!(
+        lm1,
+        vec![
+            vec![0.0, 0.0, 0.0],
+            vec![4.0, 0.0, 0.0],
+            vec![7.0, 8.0, 0.0]
+        ]
+    );
+    assert_eq!(
+        u1,
+        vec![
+            vec![0.0, 2.0, 3.0],
+            vec![0.0, 0.0, 6.0],
+            vec![0.0, 0.0, 0.0]
+        ]
+    );
+    assert_eq!(
+        um1,
+        vec![
+            vec![1.0, 2.0, 3.0],
+            vec![4.0, 5.0, 6.0],
+            vec![0.0, 8.0, 9.0]
+        ]
+    );
 }
 
 #[test]

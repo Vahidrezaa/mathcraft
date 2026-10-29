@@ -473,24 +473,38 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**Step 2.5 executed (2026-10-28) — per-item commit series, sandbox gates green**
-(task 1 allocation budget: `mc-core::budget` one documented place — default
-1e8 elements = 800 MB decimal for f64 + `MATHCRAFT_MAX_ELEMENTS` override;
-`MC:E4003_OUT_OF_MEMORY` bilingual error with remedy, doc 03 §14 · task 2
-range materialization + every user-dimension builtin guarded — zeros/ones/
-eye/linspace/rand/randi/diag(k)/repmat/kron/hcat/vcat/indexed & scalar grow
-via `Matrix::try_full`/`check_elements` with checked arithmetic · task 3
-CI panic audit guard = `scripts/panic_audit.py` over all non-test product
-code incl. mc-cli; parser `expect`→`expect_tok` so zero `.expect(` remain).
-DoD verified in sandbox: `zeros(100000,100000);` and `x=1:1e9` → clean
-error, `mc -e` exit 1, process alive; **346 tests green** (≥ 315), fmt /
-clippy -D warnings / panic-audit clean; Cargo.lock + app/ untouched.
-Audit ledger: item 2 ✅, item 15 ✅ (both halves) — COMPATIBILITY §4.8.
-Also closed this session: step 2.3 officially done (user confirmed the
-push + on-device demo: «همه چیز مورد انتظار و موفق بود»).
-**Next: 2.6 (numeric extras & structured options, STATUS §3.1 leftovers)**
-— includes the user-action item: pin one real-MATLAB van der Pol μ=1000
-point reference + optional display-threshold paste (2.4 pin flags).
+**Step 2.6 executed (2026-10-29) — per-item commit series, sandbox gates green**
+(task 1 [Q,R]=qr / [U,S,V]=svd via lookup_multi — single outputs untouched
+(qr = R, svd = σ column, MATLAB); corpus oracle = invariants since Q/U/V
+column signs are LAPACK-vs-faer implementation-defined · task 2 interp2
+linear + nearest — MATLAB forms incl. implicit-axis 3-arg, plaid meshgrid
+matrices, descending-axis normalization, row+col query expansion (caught a
+real column-major pairing bug during development), NaN-outside /
+'extrap' / extrapval, 2-D spline/cubic → honest E7 error · task 3
+histcounts + histogram numeric core — MATLAB counting semantics
+(right-closed last bin, NaN/±Inf ignored, [N,edges,bin]),
+scott/fd/sturges/sqrt/integers, 'auto' = documented engine contract
+(Scott×2^(1/3) + nice-number snap; MATLAB does not publish the rule) with
+a real-MATLAB pin flag; histogram pre-plot = [counts, edges] (drawing and
+object = 3.2); Octave 9.4 lacks both → analytic oracle, outside the octave
+manifest · task 4 integral named options RelTol/AbsTol/Waypoints
+(piecewise adaptive, a>b sign, honest errors; infinite bounds + Waypoints =
+documented deviation) — §4.5 «integral گزینه‌ها» row closed · task 6
+(odeset struct) stays blocked on 2.9 as planned.
+**Bonus compat fix:** tril/triu kth-diagonal sign was inverted vs MATLAB —
+discovered while writing the qr goldens; fixed + permanent regressions
+(tri_diag_k_regression + corpus p2_18, rule R2).
+DoD verified in sandbox: corpus p2_14..p2_20 golden (5 entries in the
+Octave manifest with analytic expected — 74 cases total; 2 analytic-only
+outside it, reasons recorded), harness 20/20 green incl. the ~8 min
+vdp1000 test, fmt / clippy -D warnings / panic-audit clean; Cargo.lock +
+app/ untouched (no new deps; no FFI/glue changes).
+**Remaining to close 2.6 (user action):** pin the van der Pol μ=1000 point
+reference from the user's real MATLAB (one device run) — command delivered
+in the handoff message; optional display-threshold paste (2.4 pin flags).
+**Next: 2.7 (Phase 2 close — numeric milestone gate)** after the pin lands
+and the user pushes; per §2.7 it also needs the device confirmations
+carried from 2.3 (pendulum demo) and FB-1/FB-2 touch verification.
 No session may start any other step without the user explicitly reordering
 (§ Governance).
 
@@ -501,3 +515,4 @@ No session may start any other step without the user explicitly reordering
 | 1.0 | 2026-10-25 | Initial binding plan: baseline P0/P1/P2 recorded; steps 2.3–2.11, 3.1–3.6, 4.1–4.4, 5.1–5.6, 6.1–6.3, v1.0 close defined; expansion E1–E8 named; audit cross-map added | User (scope answers, this session) |
 | 1.0 | 2026-10-28 | Step 2.4 executed per plan (§2.4 tasks 1-5): ledger rows 5/8/10/11 → closed, row 9 split (block comments closed, hold on → 3.2); §11 updated. User approval: «اوکی بود. برو مرحله بعدی» | User (chat) |
 | 1.0 | 2026-10-28 | Step 2.3 closed (user confirmed push + device demo) and Step 2.5 executed per plan (§2.5 tasks 1-3): ledger rows 2 and 15 → closed; doc 03 §14 row MC:E4003 added; §11 updated. User approval: «همه چیز مورد انتظار و موفق بود. من مشکلی ندیدم. میتونیم بریم گام بعدی» | User (chat) |
+| 1.0 | 2026-10-29 | Step 2.6 executed per plan (§2.6 tasks 1-4 + corpus; task 6 stays blocked on 2.9): multi-output qr/svd, interp2 (linear/nearest), histcounts/histogram numeric core (documented 'auto' contract + pin flag), integral RelTol/AbsTol/Waypoints; tril/triu k-sign compat fix (rule R2 regressions); COMPATIBILITY §4.5 shrunk (integral/qr-svd rows closed); §11 updated. Task 5 (vdp1000 pin) = pending user MATLAB run. User approval: «خب در گام ۲.۵ همه چیز سبز بود. بریم گام ۲.۶» | User (chat) |
