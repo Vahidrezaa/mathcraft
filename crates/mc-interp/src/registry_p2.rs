@@ -70,6 +70,8 @@ static P2_MULTI: &[(&str, MultiBuiltin)] = &[
     ("eig", bi_eig),
     ("qr", bi_qr_multi),
     ("svd", bi_svd_multi),
+    ("histcounts", bi_histcounts),
+    ("histogram", bi_histogram),
 ];
 
 // ---------- ابزارهای ورودی ----------
@@ -802,6 +804,222 @@ fn bi_complex(args: &[Value], _n: usize) -> Result<Value, McError> {
     let im_i = cx::c_elem_mul(&im, &ComplexMatrix::imaginary_unit())?;
     let z = cx::c_add(&re, &im_i)?;
     Ok(Value::Complex(z))
+}
+
+// ---------- histcounts/histogram (سند ۰۴ §7، ROADMAP 2.6) ----------
+
+/// بردار تخت از هر ماتریس — برای شمارش (شکل اصلی برای خروجی bin حفظ می‌شود).
+fn flat_any(m: &Matrix) -> Vec<f64> {
+    (0..m.numel()).map(|k| m.get_linear(k)).collect()
+}
+
+fn row_value(vals: &[f64]) -> Value {
+    Value::Double(Matrix::from_columns(1, vals.len(), vals.to_vec()))
+}
+
+/// خروجی‌های مشترک histcounts/histogram از مرزهای آماده.
+fn hist_outputs(
+    x: &[f64],
+    shape: (usize, usize),
+    edges: &[f64],
+    nargout: usize,
+    max_out: usize,
+    name: &str,
+) -> Result<Vec<Value>, McError> {
+    if nargout > max_out {
+        return Err(err(
+            &format!("{name} produces at most {max_out} outputs."),
+            &format!("«{name}» حداکثر {max_out} خروجی دارد."),
+        ));
+    }
+    let (counts, bin) = num::stats::counts_for_edges(x, edges);
+    let mut outs = vec![row_value(&counts)];
+    if nargout >= 2 {
+        outs.push(row_value(edges));
+    }
+    if nargout >= 3 {
+        // اندیس بین هر عنصر — هم‌شکل X (0 = بیرون مرزها؛ قرارداد متلب)
+        let mut b = Matrix::full(shape.0, shape.1, 0.0);
+        for (k, val) in bin.iter().enumerate() {
+            b.set_linear(k, *val);
+        }
+        outs.push(Value::Double(b));
+    }
+    Ok(outs)
+}
+
+/// [N, edges, bin] = histcounts(X [, nbins | edges])
+/// — N سطر 1×nbins، edges سطر 1×(nbins+1)، bin هم‌شکل X.
+fn bi_histcounts(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
+    const NAME: &str = "histcounts";
+    if args.is_empty() {
+        return Err(err(
+            "histcounts: needs a data vector or matrix.",
+            "histcounts: به داده (بردار یا ماتریس) نیاز دارد.",
+        ));
+    }
+    let xm = need_matrix(args, 0, NAME)?;
+    let x = flat_any(&xm);
+    let edges = match args.get(1) {
+        None => num::stats::auto_edges(&x, num::stats::BinMethod::Auto)?,
+        Some(Value::Double(m)) if m.is_scalar() => {
+            let nb = m.get(0, 0);
+            if nb < 1.0 || nb.fract() != 0.0 || !nb.is_finite() {
+                return Err(err(
+                    "histcounts: nbins must be a positive integer.",
+                    "histcounts: nbins باید عدد صحیح مثبت باشد.",
+                ));
+            }
+            let fin: Vec<f64> = x.iter().copied().filter(|v| v.is_finite()).collect();
+            if fin.is_empty() {
+                vec![0.0, 1.0]
+            } else {
+                let lo = fin.iter().copied().fold(f64::INFINITY, f64::min);
+                let hi = fin.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                if lo == hi {
+                    vec![lo - 0.5, hi + 0.5]
+                } else {
+                    num::stats::edges_for_nbins(lo, hi, nb as usize)
+                }
+            }
+        }
+        Some(Value::Double(m)) => {
+            let e = flat_any(m);
+            num::stats::validate_edges(&e)?;
+            e
+        }
+        Some(_) => {
+            return Err(err(
+                "histcounts: second argument must be a bin count or an edges vector.",
+                "histcounts: آرگومان دوم باید تعداد بین یا بردار مرزها باشد.",
+            ))
+        }
+    };
+    hist_outputs(&x, (xm.rows(), xm.cols()), &edges, nargout, 3, NAME)
+}
+
+/// [N, edges] = histogram(X, 'BinMethod', m | 'BinWidth', w | 'BinLimits', [a b])
+///
+/// انحراف مستند (COMPATIBILITY §4.5): متلب آبجکت Histogram می‌سازد و رسم
+/// می‌کند — رسم در P3 (گام 3.2) می‌آید؛ هستهٔ عددی همین‌جا ارائه می‌شود و
+/// شکل خروجی [counts، edges] است.
+fn bi_histogram(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
+    const NAME: &str = "histogram";
+    if args.is_empty() {
+        return Err(err(
+            "histogram: needs a data vector or matrix.",
+            "histogram: به داده (بردار یا ماتریس) نیاز دارد.",
+        ));
+    }
+    let xm = need_matrix(args, 0, NAME)?;
+    let x = flat_any(&xm);
+    let fin: Vec<f64> = x.iter().copied().filter(|v| v.is_finite()).collect();
+    let mut method = num::stats::BinMethod::Auto;
+    let mut bin_width: Option<f64> = None;
+    let mut limits: Option<(f64, f64)> = None;
+    // فرم دوم متلب: histogram(X, edges) — مرزهای صریح به‌جای گزینه‌ها
+    let explicit_edges: Option<Vec<f64>> = match args.get(1) {
+        Some(Value::Double(m)) if !m.is_scalar() => {
+            let e = flat_any(m);
+            num::stats::validate_edges(&e)?;
+            Some(e)
+        }
+        Some(Value::Double(m)) if m.is_scalar() => {
+            return Err(err(
+                "histogram: a scalar bin count is not supported — use 'BinWidth' or 'BinLimits' options.",
+                "histogram: تعداد بینِ اسکالر پشتیبانی نمی‌شود — از گزینه‌های «BinWidth» یا «BinLimits» استفاده کنید.",
+            ))
+        }
+        _ => None,
+    };
+    let mut i = if explicit_edges.is_some() { 2 } else { 1 };
+    while i + 1 < args.len() {
+        let key = need_char(args, i, NAME)?;
+        match key.as_str() {
+            "BinMethod" => {
+                let m = need_char(args, i + 1, NAME)?;
+                match num::stats::BinMethod::from_name(&m) {
+                    Some(bm) => method = bm,
+                    None => {
+                        return Err(err(
+                            "histogram: unknown BinMethod (auto | scott | fd | sturges | sqrt | integers).",
+                            "histogram: BinMethod ناشناخته (auto | scott | fd | sturges | sqrt | integers).",
+                        ))
+                    }
+                }
+            }
+            "BinWidth" => {
+                let w = need_scalar(args, i + 1, NAME)?;
+                if !w.is_finite() || w <= 0.0 {
+                    return Err(err(
+                        "histogram: BinWidth must be a positive finite scalar.",
+                        "histogram: BinWidth باید اسکالر متناهیِ مثبت باشد.",
+                    ));
+                }
+                bin_width = Some(w);
+            }
+            "BinLimits" => {
+                let m = need_matrix(args, i + 1, NAME)?;
+                if m.numel() != 2 {
+                    return Err(err(
+                        "histogram: BinLimits must be a two-element vector [a b].",
+                        "histogram: BinLimits باید بردار دومعیاری [a b] باشد.",
+                    ));
+                }
+                let (a, b) = (m.get_linear(0), m.get_linear(1));
+                if !a.is_finite() || !b.is_finite() || a >= b {
+                    return Err(err(
+                        "histogram: BinLimits must be finite with a < b.",
+                        "histogram: BinLimits باید متناهی و با a < b باشد.",
+                    ));
+                }
+                limits = Some((a, b));
+            }
+            _ => {
+                return Err(err(
+                    "histogram: unsupported option (BinMethod | BinWidth | BinLimits).",
+                    "histogram: گزینهٔ پشتیبانی‌نشده (BinMethod | BinWidth | BinLimits).",
+                ))
+            }
+        }
+        i += 2;
+    }
+    if i < args.len() {
+        return Err(err(
+            "histogram: options must come in name/value pairs.",
+            "histogram: گزینه‌ها باید جفت نام/مقدار باشند.",
+        ));
+    }
+    let edges = match explicit_edges {
+        Some(e) => e,
+        None => match (bin_width, limits) {
+            // عرض صریح — مرزها از مضرب w ≤ شروع تا پوششِ سقف محدوده
+            (Some(w), Some((a, b))) => num::stats::edges_for_width(a, b, w),
+            (Some(w), None) => {
+                let lo = fin.iter().copied().fold(f64::INFINITY, f64::min);
+                let hi = fin.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                if lo.is_infinite() {
+                    vec![0.0, 1.0]
+                } else {
+                    num::stats::edges_for_width(lo, hi, w)
+                }
+            }
+            // محدودهٔ صریح بدون عرض — روش روی دادهٔ بریده‌شده به [a,b]، سپس برش
+            // مرزها به محدوده (قرارداد مستند؛ متلب مرزها را به BinLimits می‌چسباند)
+            (None, Some((a, b))) => {
+                let clamped: Vec<f64> = fin.iter().copied().filter(|&v| v >= a && v <= b).collect();
+                let e = num::stats::auto_edges(&clamped, method)?;
+                let mut e: Vec<f64> = e.into_iter().filter(|&t| t >= a && t <= b).collect();
+                if e.len() < 2 {
+                    e = vec![a, b];
+                }
+                e
+            }
+            // روش خالص (پیش‌فرض auto) — مرزها روی خود داده
+            (None, None) => num::stats::auto_edges(&x, method)?,
+        },
+    };
+    hist_outputs(&x, (xm.rows(), xm.cols()), &edges, nargout, 2, NAME)
 }
 
 // ---------- چندخروجی‌ها ----------

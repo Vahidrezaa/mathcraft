@@ -11,6 +11,11 @@ use mc_core::{Matrix, McError};
 
 use crate::linalg::num_error;
 
+pub mod hist;
+pub use hist::{
+    auto_edges, counts_for_edges, edges_for_nbins, edges_for_width, validate_edges, BinMethod,
+};
+
 /// اعتبارسنجی بردار بودن + استخراج تخت.
 fn flat_vector(name: &str, m: &Matrix) -> Result<Vec<f64>, McError> {
     if m.rows() != 1 && m.cols() != 1 {
