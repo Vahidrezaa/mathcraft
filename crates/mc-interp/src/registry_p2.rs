@@ -576,7 +576,8 @@ fn bi_fzero(args: &[Value], _n: usize) -> Result<Value, McError> {
     Ok(scalar_val(r.x))
 }
 
-/// integral(f, a, b) — G7/K15 تطبیقی؛ بازه‌های بی‌نهایت با تبدیل متغیر.
+/// integral(f, a, b [, 'RelTol', rt] [, 'AbsTol', at] [, 'Waypoints', wp])
+/// — G7/K15 تطبیقی؛ بازه‌های بی‌نهایت با تبدیل متغیر (سند ۰۴ §5.3، ROADMAP 2.6).
 fn bi_integral(args: &[Value], _n: usize) -> Result<Value, McError> {
     const NAME: &str = "integral";
     if args.len() < 3 {
@@ -588,6 +589,60 @@ fn bi_integral(args: &[Value], _n: usize) -> Result<Value, McError> {
     let f = need_fn(args, 0, NAME)?.clone();
     let a = need_scalar(args, 1, NAME)?;
     let b = need_scalar(args, 2, NAME)?;
+    // گزینه‌های نامی (گام 2.6 — سطر integral جدول §4.5 COMPATIBILITY بسته شد)
+    let mut reltol = 1e-10;
+    let mut abstol = 1e-10;
+    let mut waypoints: Option<Vec<f64>> = None;
+    let mut i = 3;
+    while i + 1 < args.len() {
+        let key = need_char(args, i, NAME)?;
+        match key.as_str() {
+            "RelTol" => {
+                let v = need_scalar(args, i + 1, NAME)?;
+                if !v.is_finite() || v <= 0.0 {
+                    return Err(err(
+                        "integral: RelTol must be a positive finite scalar.",
+                        "integral: RelTol باید اسکالر متناهیِ مثبت باشد.",
+                    ));
+                }
+                reltol = v;
+            }
+            "AbsTol" => {
+                let v = need_scalar(args, i + 1, NAME)?;
+                if !v.is_finite() || v < 0.0 {
+                    return Err(err(
+                        "integral: AbsTol must be a non-negative finite scalar.",
+                        "integral: AbsTol باید اسکالر متناهیِ نامنفی باشد.",
+                    ));
+                }
+                abstol = v;
+            }
+            "Waypoints" => {
+                let m = need_matrix(args, i + 1, NAME)?;
+                let wp: Vec<f64> = (0..m.numel()).map(|k| m.get_linear(k)).collect();
+                if wp.is_empty() {
+                    return Err(err(
+                        "integral: Waypoints must be a non-empty vector of finite numbers.",
+                        "integral: Waypoints باید برداری غیرخالی از اعداد متناهی باشد.",
+                    ));
+                }
+                waypoints = Some(wp);
+            }
+            _ => {
+                return Err(err(
+                    "integral: unsupported option (RelTol | AbsTol | Waypoints).",
+                    "integral: گزینهٔ پشتیبانی‌نشده (RelTol | AbsTol | Waypoints).",
+                ))
+            }
+        }
+        i += 2;
+    }
+    if i < args.len() {
+        return Err(err(
+            "integral: options must come in name/value pairs.",
+            "integral: گزینه‌ها باید جفت نام/مقدار باشند.",
+        ));
+    }
     let mut call = |x: f64| -> Result<f64, McError> {
         let v = (f.call)(&[scalar_val(x)])?;
         match v {
@@ -600,7 +655,10 @@ fn bi_integral(args: &[Value], _n: usize) -> Result<Value, McError> {
         }
     };
     let bounds = num::solvers::bounds_from(a, b)?;
-    let r = num::solvers::integrate(&mut call, bounds, 1e-10, 1e-10)?;
+    let r = match &waypoints {
+        None => num::solvers::integrate(&mut call, bounds, reltol, abstol)?,
+        Some(wp) => num::solvers::integrate_waypoints(&mut call, bounds, wp, reltol, abstol)?,
+    };
     Ok(scalar_val(r.value))
 }
 

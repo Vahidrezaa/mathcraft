@@ -299,6 +299,100 @@ pub fn bounds_from(a: f64, b: f64) -> Result<Bounds, McError> {
     }
 }
 
+/// انتگرال‌گیری تکه‌ای روی نقاط شکست — گزینهٔ Waypoints متلب (ROADMAP 2.6).
+///
+/// - فقط بازهٔ متناهی: Waypoints با مرز بی‌نهایت → خطای صادقانه (انحراف
+///   مستند COMPATIBILITY §4.5).
+/// - هر Waypoint باید متناهی و داخل بازهٔ بستهٔ انتگرال باشد (رفتار متلب:
+///   «waypoints must lie within the integration interval») — بیرون = خطا.
+/// - جهت a > b مثل متلب با علامت منفی اعمال می‌شود؛ نقاط تکراری/مرزی بی‌اثرند.
+/// - هر تکه با بودجهٔ مستقل و همان RelTol انتگرال گرفته می‌شود؛ AbsTol بین
+///   تکه‌ها تقسیم می‌شود و خطای کل در برابر tol نهایی سنجیده می‌شود — نتیجه
+///   هرگز silent-مشکوک نیست (سند ۰۴ §9).
+pub fn integrate_waypoints<F: QuadFn>(
+    f: &mut F,
+    bounds: Bounds,
+    waypoints: &[f64],
+    reltol: f64,
+    abstol: f64,
+) -> Result<QuadResult, McError> {
+    let (a, b) = match bounds {
+        Bounds::Finite { a, b } => (a, b),
+        _ => {
+            return Err(solver_error(
+                ids::PARSE_ERROR,
+                "integral: Waypoints with infinite limits is not supported in this milestone.",
+                "integral: Waypoints با مرزهای بی‌نهایت در این مایل‌استون پشتیبانی نمی‌شود.",
+            ))
+        }
+    };
+    if !(reltol > 0.0 && reltol.is_finite()) || !(abstol >= 0.0 && abstol.is_finite()) {
+        return Err(solver_error(
+            ids::PARSE_ERROR,
+            "integral: RelTol must be positive and AbsTol non-negative.",
+            "integral: RelTol باید مثبت و AbsTol نامنفی باشد.",
+        ));
+    }
+    let (lo, hi, sign) = if b < a { (b, a, -1.0) } else { (a, b, 1.0) };
+    for &w in waypoints {
+        if !w.is_finite() || w < lo || w > hi {
+            return Err(solver_error(
+                ids::PARSE_ERROR,
+                "integral: Waypoints must be finite and lie within the integration interval.",
+                "integral: Waypoints باید متناهی و داخل بازهٔ انتگرال‌گیری باشند.",
+            ));
+        }
+    }
+    let mut pts: Vec<f64> = waypoints
+        .iter()
+        .copied()
+        .filter(|&w| w > lo && w < hi)
+        .collect();
+    pts.sort_by(|x, y| x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Less));
+    pts.dedup();
+    let mut breaks = Vec::with_capacity(pts.len() + 2);
+    breaks.push(lo);
+    breaks.extend(pts);
+    breaks.push(hi);
+    let n = breaks.len() - 1;
+    let budget = (10_000 / n as u32).max(100);
+    let abstol_piece = abstol / n as f64;
+    let mut value = 0.0;
+    let mut abserr = 0.0;
+    let mut fcalls = 0u32;
+    let mut max_abs_f = 0.0f64;
+    for k in 0..n {
+        let r = adaptive(f, breaks[k], breaks[k + 1], reltol, abstol_piece, budget)?;
+        value += r.value;
+        abserr += r.abserr;
+        fcalls += r.fcalls;
+        max_abs_f = max_abs_f.max(r.max_abs_f);
+    }
+    value *= sign;
+    let tol = abstol.max(reltol * value.abs());
+    if abserr > tol {
+        return Err(solver_error(
+            ids::PARSE_ERROR,
+            format!(
+                "integral: failed to reach tolerance with Waypoints (error ≈ {:.3e} > {:.3e}); \
+                 integrand may be singular or oscillatory.",
+                abserr, tol
+            ),
+            format!(
+                "integral: رسیدن به تلورانس با Waypoints ممکن نشد (خطا ≈ {:.3e} > {:.3e})؛ \
+                 احتمالاً انتگرال‌نما تکین یا نوسانی است.",
+                abserr, tol
+            ),
+        ));
+    }
+    Ok(QuadResult {
+        value,
+        abserr,
+        fcalls,
+        max_abs_f,
+    })
+}
+
 /// نسخهٔ با بودجهٔ پرسش‌های بیشتر برای تست‌ها — صادقانه مثل integrate.
 pub fn integrate_transformed<F: QuadFn>(
     f: &mut F,
@@ -462,5 +556,114 @@ mod tests {
         ));
         // جهت غلط: [+∞ به 0]
         assert!(bounds_from(f64::INFINITY, 0.0).is_err());
+    }
+
+    // ---------- Waypoints (ROADMAP 2.6) ----------
+
+    #[test]
+    fn waypoints_piecewise_exact() {
+        // f پله‌ای: 1 روی [0,0.5) و 2 روی (0.5,1] → ∫ = 1.5
+        // بدون نقطهٔ شکست، G7/K15 روی تکهٔ ناهموار خطا می‌دهد یا گران است؛
+        // با Waypoints=[0.5] هر تکه چندجمله‌ای‌درجه‌۰ و دقیق است.
+        let mut f = call(|x| Ok(if x < 0.5 { 1.0 } else { 2.0 }));
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: 0.0, b: 1.0 },
+            &[0.5],
+            1e-10,
+            1e-10,
+        )
+        .unwrap_or_else(|e| panic!("{e:?}"));
+        assert!((r.value - 1.5).abs() < 1e-12, "got {}", r.value);
+    }
+
+    #[test]
+    fn waypoints_kink_abs() {
+        // ∫₋₁¹ |x| dx = 1 — شکست در 0
+        let mut f = call(|x| Ok(x.abs()));
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: -1.0, b: 1.0 },
+            &[0.0],
+            1e-10,
+            1e-10,
+        )
+        .unwrap();
+        assert!((r.value - 1.0).abs() < 1e-12, "got {}", r.value);
+    }
+
+    #[test]
+    fn waypoints_reversed_bounds_negative_sign() {
+        // ∫₁⁻¹ |x| dx = −1 — جهت متلب
+        let mut f = call(|x| Ok(x.abs()));
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: 1.0, b: -1.0 },
+            &[0.0],
+            1e-10,
+            1e-10,
+        )
+        .unwrap();
+        assert!((r.value + 1.0).abs() < 1e-12, "got {}", r.value);
+    }
+
+    #[test]
+    fn waypoints_outside_interval_error() {
+        let mut f = call(Ok);
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: 0.0, b: 1.0 },
+            &[0.5, 2.0],
+            1e-10,
+            1e-10,
+        );
+        assert!(r.is_err(), "waypoint outside interval must error");
+        // NaN هم خطاست
+        let mut g = call(Ok);
+        let r2 = integrate_waypoints(
+            &mut g,
+            Bounds::Finite { a: 0.0, b: 1.0 },
+            &[f64::NAN],
+            1e-10,
+            1e-10,
+        );
+        assert!(r2.is_err());
+    }
+
+    #[test]
+    fn waypoints_with_infinite_bounds_error() {
+        let mut f = call(|x| Ok((-x).exp()));
+        let r = integrate_waypoints(&mut f, Bounds::HalfUp { a: 0.0 }, &[1.0], 1e-10, 1e-10);
+        assert!(
+            r.is_err(),
+            "Waypoints + infinite bounds must error honestly"
+        );
+    }
+
+    #[test]
+    fn waypoints_duplicates_and_endpoints_harmless() {
+        let mut f = call(|x| Ok(x * x));
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: 0.0, b: 1.0 },
+            &[0.0, 0.5, 0.5, 1.0],
+            1e-10,
+            1e-10,
+        )
+        .unwrap();
+        assert!((r.value - 1.0 / 3.0).abs() < 1e-12, "got {}", r.value);
+    }
+
+    #[test]
+    fn waypoints_invalid_tolerances_error() {
+        let mut f = call(Ok);
+        let r = integrate_waypoints(
+            &mut f,
+            Bounds::Finite { a: 0.0, b: 1.0 },
+            &[0.5],
+            0.0,
+            1e-10,
+        );
+        assert!(r.is_err(), "RelTol=0 must error");
     }
 }
