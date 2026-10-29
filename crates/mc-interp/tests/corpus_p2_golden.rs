@@ -186,3 +186,97 @@ fn p2_ode45_vanderpol_mu1000() {
     assert!(y2_3000.abs() < 0.1, "slow phase expected, y2 = {y2_3000}");
     assert!(y1_3000.abs() < 2.2, "y1(3000) = {y1_3000}");
 }
+
+// ---------- ROADMAP 2.6 — qr/svd چندخروجی، interp2، tril/triu k، Waypoints، hist ----------
+
+fn run_mat(src: &str, var: &str) -> Vec<Vec<f64>> {
+    let prog = parse(src).expect("parse");
+    let mut env = Environment::new();
+    let out = eval_program(&prog, &mut env);
+    assert!(out.error.is_none(), "engine error: {:?}", out.error);
+    match env.get(var) {
+        Some(mc_core::Value::Double(m)) => {
+            (0..m.rows())
+                .map(|r| (0..m.cols()).map(|c| m.get(r, c)).collect())
+                .collect()
+        }
+        other => panic!("'{var}' is not a matrix: {other:?}"),
+    }
+}
+
+#[test]
+fn p2_qr_multi_invariants() {
+    // p2_14 — [Q,R]=qr: ناورداها (علامت ستون‌ها پیاده‌سازی‌وابسته است)
+    let erra = run(src!("p2_14_qr_multi.m"), "errA");
+    let errq = run(src!("p2_14_qr_multi.m"), "errQ");
+    let errr = run(src!("p2_14_qr_multi.m"), "errR");
+    assert!(approx(erra, 0.0, 1e-9), "Q*R−A = {erra}");
+    assert!(approx(errq, 0.0, 1e-9), "Q'Q−I = {errq}");
+    assert!(approx(errr, 0.0, 1e-12), "tril(R,−1) = {errr}");
+}
+
+#[test]
+fn p2_svd_multi_invariants_and_analytic_sigma() {
+    // p2_15 — [U,S,V]=svd: σ تحلیلی [3;2] + ناورداها
+    let s1 = run(src!("p2_15_svd_multi.m"), "sig1");
+    let s2 = run(src!("p2_15_svd_multi.m"), "sig2");
+    assert!(approx(s1, 3.0, 1e-12), "sigma1 = {s1}");
+    assert!(approx(s2, 2.0, 1e-12), "sigma2 = {s2}");
+    let erra = run(src!("p2_15_svd_multi.m"), "errA");
+    assert!(approx(erra, 0.0, 1e-9), "U·S·V'−A = {erra}");
+}
+
+#[test]
+fn p2_interp2_linear_plane_exact() {
+    // p2_16 — صفحهٔ خطی: دوبعدیِ خطی دقیق است
+    let q1 = run(src!("p2_16_interp2_linear.m"), "q1");
+    assert!(approx(q1, 16.0, 1e-12), "q1 = {q1}");
+    let e = run(src!("p2_16_interp2_linear.m"), "e");
+    assert!(approx(e, 0.0, 1e-12), "meshgrid expansion mismatch = {e}");
+}
+
+#[test]
+fn p2_interp2_nearest() {
+    // p2_17
+    let q1 = run(src!("p2_17_interp2_nearest.m"), "q1");
+    let q2 = run(src!("p2_17_interp2_nearest.m"), "q2");
+    assert!(approx(q1, 2.0, 1e-12), "q1 = {q1}");
+    assert!(approx(q2, 3.0, 1e-12), "q2 = {q2}");
+}
+
+#[test]
+fn p2_tril_triu_k_regression() {
+    // p2_18 — رگرسیون فیکس علامت k (متلب: k>0 بالای قطر اصلی)
+    let l1 = run_mat(src!("p2_18_tril_triu_k.m"), "L1");
+    let lm1 = run_mat(src!("p2_18_tril_triu_k.m"), "Lm1");
+    let u1 = run_mat(src!("p2_18_tril_triu_k.m"), "U1");
+    let um1 = run_mat(src!("p2_18_tril_triu_k.m"), "Um1");
+    assert_eq!(l1, vec![vec![1.0, 2.0, 0.0], vec![4.0, 5.0, 6.0], vec![7.0, 8.0, 9.0]]);
+    assert_eq!(lm1, vec![vec![0.0, 0.0, 0.0], vec![4.0, 0.0, 0.0], vec![7.0, 8.0, 0.0]]);
+    assert_eq!(u1, vec![vec![0.0, 2.0, 3.0], vec![0.0, 0.0, 6.0], vec![0.0, 0.0, 0.0]]);
+    assert_eq!(um1, vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0], vec![0.0, 8.0, 9.0]]);
+}
+
+#[test]
+fn p2_integral_waypoints_analytic() {
+    // p2_19 — پله و شکست |x| (خارج از manifest اکتاو — اوراکل تحلیلی)
+    let q = run(src!("p2_19_integral_waypoints.m"), "q");
+    assert!(approx(q, 1.5, 1e-10), "q = {q}");
+    let r = run(src!("p2_19_integral_waypoints.m"), "r");
+    assert!(approx(r, 1.0, 1e-10), "r = {r}");
+}
+
+#[test]
+fn p2_histcounts_histogram_analytic() {
+    // p2_20 — مرز بستهٔ راست + bin + BinWidth (خارج از manifest اکتاو)
+    let n = run_vec(src!("p2_20_histcounts_edges.m"), "N");
+    assert_eq!(n, vec![2.0, 2.0, 2.0], "last bin right-closed");
+    let edges = run_vec(src!("p2_20_histcounts_edges.m"), "edges");
+    assert_eq!(edges, vec![0.0, 1.0, 2.0, 3.0]);
+    let nb = run_vec(src!("p2_20_histcounts_edges.m"), "Nb");
+    assert_eq!(nb, vec![2.0, 1.0]);
+    let bin = run_vec(src!("p2_20_histcounts_edges.m"), "bin");
+    assert_eq!(bin, vec![0.0, 1.0, 1.0, 2.0], "0 = outside (MATLAB)");
+    let h = run_vec(src!("p2_20_histcounts_edges.m"), "h");
+    assert_eq!(h, vec![1.0, 1.0, 1.0]);
+}

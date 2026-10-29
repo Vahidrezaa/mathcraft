@@ -498,6 +498,47 @@
     "sd",
     "rho"
    ]
+  },
+  {
+   "script": "p2_14_qr_multi.m",
+   "vars": [
+    "errA",
+    "errQ",
+    "errR"
+   ]
+  },
+  {
+   "script": "p2_15_svd_multi.m",
+   "vars": [
+    "errA",
+    "errU",
+    "errV",
+    "sig1",
+    "sig2"
+   ]
+  },
+  {
+   "script": "p2_16_interp2_linear.m",
+   "vars": [
+    "q1",
+    "e"
+   ]
+  },
+  {
+   "script": "p2_17_interp2_nearest.m",
+   "vars": [
+    "q1",
+    "q2"
+   ]
+  },
+  {
+   "script": "p2_18_tril_triu_k.m",
+   "vars": [
+    "L1",
+    "Lm1",
+    "U1",
+    "Um1"
+   ]
   }
  ]
 }
