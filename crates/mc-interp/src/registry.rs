@@ -477,11 +477,11 @@ fn tri_extract(args: &[Value], lower: bool) -> Result<Value, McError> {
     let mut out = Matrix::full(m.rows(), m.cols(), 0.0);
     for r in 0..m.rows() {
         for c in 0..m.cols() {
-            let keep = if lower {
-                (r as i64) >= (c as i64) + k
-            } else {
-                (r as i64) <= (c as i64) + k
-            };
+            // قرارداد متلب: قطر k-اُم، k>0 بالای قطر اصلی. tril(A,k) = روی و
+            // زیرِ قطر k-اُم: i−j ≥ −k؛ triu(A,k) = روی و بالای آن: i−j ≤ −k.
+            // (فیکس رگرسیون ROADMAP 2.6 — قبلاً علامت k برعکس متلب بود)
+            let d = (r as i64) - (c as i64);
+            let keep = if lower { d >= -k } else { d <= -k };
             if keep {
                 out.set(r, c, m.get(r, c));
             }
