@@ -162,13 +162,18 @@ shipping a plotter on top of a half-language would force rework.
   2. `interp2` linear + nearest (spline 2-D explicitly out of scope for v1 — expansion E7).
   3. `histogram` with MATLAB auto-binning rule.
   4. `integral` named option `Waypoints`.
-  5. Pin the van der Pol μ=1000 **point reference** obtained from the user's real MATLAB
-     (one device run — user action item) into the corpus; Octave stays too slow for CI.
+  5. Pin the van der Pol μ=1000 **point reference** into the corpus. ✅ Executed differently
+     than planned — no real MATLAB exists on the user side (chat: «من متلب واقعی ندارم خودت
+     کارا رو درست کن»): pinned from scipy 1.14.1 stiff-solver triangulation (Radau
+     rtol=1e-10/atol=1e-13 + BDF/LSODA rtol=1e-8, spread ≤ 2.3e-7;
+     `test-corpus/references/p2_13_vanderpol_mu1000.json`); Octave ode45 measured impractical
+     (probe [0,300] > 5 min). Re-verification pattern = re-run the reference script on scipy
+     upgrades.
   6. `odeset` structured form: blocked on `Value::Struct` (step 2.9) — named pairs remain,
      deviation stays documented until then.
 - **DoD:**
-  - [ ] All items in corpus `p2_*` golden with recorded references; ≥ 325 tests green.
-  - [ ] COMPATIBILITY §4.5 deviation table updated (shrunk); vdp1000 point reference pinned.
+  - [x] All items in corpus `p2_*` golden with recorded references; ≥ 325 tests green.
+  - [x] COMPATIBILITY §4.5 deviation table updated (shrunk); vdp1000 point reference pinned.
 - **Tests:** golden corpus entries with Octave/analytic/user-MATLAB references.
 - **Risks:** user-MATLAB reference requires user cooperation — schedule explicitly, do not
   fake it; interp2 grid validation edge cases.
@@ -178,12 +183,14 @@ shipping a plotter on top of a half-language would force rework.
 ### Step 2.7 — Phase 2 close (numeric milestone gate)
 - **Goal:** formal docs/07 §P2 milestone close — nothing "almost done".
 - **DoD (all must hold):**
-  - [ ] van der Pol μ=1000 matches the pinned point reference; `rng(42)` reproducible.
-  - [ ] Cancel mid-ode45 leaves a consistent workspace (step 2.3, device-verified).
-  - [ ] Pendulum demo on device: runs in < 1 s with a progress bar (docs/07 §P2 demo).
-  - [ ] FB-1/FB-2 final touch verification by user (carried from P2 start) — confirmed here.
-  - [ ] STATUS + COMPATIBILITY updated; tag + package; phase declared closed in this file's
-        Current Focus section.
+  - [x] van der Pol μ=1000 matches the pinned point reference; `rng(42)` reproducible.
+  - [x] Cancel mid-ode45 leaves a consistent workspace (step 2.3, device-verified).
+  - [ ] Pendulum demo on device: runs in < 1 s with a progress bar (docs/07 §P2 demo) —
+        pending device confirmation.
+  - [ ] FB-1/FB-2 final touch verification by user (carried from P2 start) — pending device.
+  - [x] STATUS + COMPATIBILITY updated; tag + package ⇒ after CI green on the user's push
+        (tag `p2-code-complete`); phase declared **code-complete, pending device** in §11 —
+        never silently closed (stop rule below).
 - **Stop / rollback:** if device confirmation is unavailable, the phase stays
   "code-complete, pending device" (same as P1 did) — never silently closed.
 
@@ -473,39 +480,37 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**Step 2.6 executed (2026-10-29) — per-item commit series, sandbox gates green**
-(task 1 [Q,R]=qr / [U,S,V]=svd via lookup_multi — single outputs untouched
-(qr = R, svd = σ column, MATLAB); corpus oracle = invariants since Q/U/V
-column signs are LAPACK-vs-faer implementation-defined · task 2 interp2
-linear + nearest — MATLAB forms incl. implicit-axis 3-arg, plaid meshgrid
-matrices, descending-axis normalization, row+col query expansion (caught a
-real column-major pairing bug during development), NaN-outside /
-'extrap' / extrapval, 2-D spline/cubic → honest E7 error · task 3
-histcounts + histogram numeric core — MATLAB counting semantics
-(right-closed last bin, NaN/±Inf ignored, [N,edges,bin]),
-scott/fd/sturges/sqrt/integers, 'auto' = documented engine contract
-(Scott×2^(1/3) + nice-number snap; MATLAB does not publish the rule) with
-a real-MATLAB pin flag; histogram pre-plot = [counts, edges] (drawing and
-object = 3.2); Octave 9.4 lacks both → analytic oracle, outside the octave
-manifest · task 4 integral named options RelTol/AbsTol/Waypoints
-(piecewise adaptive, a>b sign, honest errors; infinite bounds + Waypoints =
-documented deviation) — §4.5 «integral گزینه‌ها» row closed · task 6
-(odeset struct) stays blocked on 2.9 as planned.
-**Bonus compat fix:** tril/triu kth-diagonal sign was inverted vs MATLAB —
-discovered while writing the qr goldens; fixed + permanent regressions
-(tri_diag_k_regression + corpus p2_18, rule R2).
-DoD verified in sandbox: corpus p2_14..p2_20 golden (5 entries in the
-Octave manifest with analytic expected — 74 cases total; 2 analytic-only
-outside it, reasons recorded), harness 20/20 green incl. the ~8 min
-vdp1000 test, fmt / clippy -D warnings / panic-audit clean; Cargo.lock +
-app/ untouched (no new deps; no FFI/glue changes).
-**Remaining to close 2.6 (user action):** pin the van der Pol μ=1000 point
-reference from the user's real MATLAB (one device run) — command delivered
-in the handoff message; optional display-threshold paste (2.4 pin flags).
-**Next: 2.7 (Phase 2 close — numeric milestone gate)** after the pin lands
-and the user pushes; per §2.7 it also needs the device confirmations
-carried from 2.3 (pendulum demo) and FB-1/FB-2 touch verification.
-No session may start any other step without the user explicitly reordering
+**Step 2.6 CLOSED (2026-11-01) — task 5 resolved without real MATLAB; tasks 1-4 + corpus
+were already green (2026-10-29).** Task 5 (vdp1000 point reference): the planned
+real-MATLAB pin is permanently N/A — the user has no real MATLAB (chat: «من متلب واقعی
+ندارم خودت کارا رو درست کن. برو گام بعد.»). Measured facts: Octave 9.4 ode45 probe on
+[0,300] (< 10% of the span) took > 5 min (m-file interpreter core + explicit-method
+stability on the stiff slow branch) → Octave cannot be this pin's oracle. Reference of
+record = scipy 1.14.1 stiff-solver triangulation (anti-cheating rule doc 08 §2 — no
+MathCraft output involved): Radau rtol=1e-10/atol=1e-13 + BDF/LSODA rtol=1e-8, spread
+≤ 2.3e-7 → y1(3000) = −1.51060693674408 · y2(3000) = 0.00117838000073098 · ymax =
+2.00007296600247. Pinned in `test-corpus/references/p2_13_vanderpol_mu1000.json` + the
+corpus test upgraded qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3 ≈
+14-85× the observed delta) with JSON-sync and triangle-coherence guards; Cargo.lock and
+app/ untouched (no new deps; no FFI/glue changes — the CI Octave job is structurally
+unaffected). Delivery note (honesty): the first patch carrying this change was lost to a
+sandbox reset before reaching the user and was fully re-derived and re-verified from
+scratch (Radau values reproduced to ≤ 7.9e-11) before re-delivery — new tree/sha256 are
+the ones in the handoff message.
+
+**Step 2.7 (Phase 2 close — numeric milestone gate): CODE-COMPLETE, PENDING DEVICE
+(2026-11-01).** DoD status: vdp1000 matches the pinned point reference ✓ (sandbox,
+debug mode — same mode as CI) · `rng(42)` reproducible ✓ (PCG64 unit tests) · cancel
+mid-ode45 leaves a consistent workspace ✓ (device-verified in 2.3) · STATUS +
+COMPATIBILITY updated ✓ · pendulum demo < 1 s with progress bar ⬜ (device) · FB-1/FB-2
+final touch verification ⬜ (device). Per the §2.7 stop rule the phase is NOT silently
+closed. To close formally: (1) the user applies this patch series, pushes, CI three-job
+green; (2) `git tag p2-code-complete` + push the tag; (3) device checklist from the
+handoff message (pendulum < 1 s + progress bar, FB-1/FB-2 touch, optional 2.4 display
+spot-check). The next session then records the formal close.
+
+**Next: 2.8 (char type & strings — first P2-c step) only after the formal Phase-2
+close.** No session may start any other step without the user explicitly reordering
 (§ Governance).
 
 ## 12. Change log
@@ -516,3 +521,4 @@ No session may start any other step without the user explicitly reordering
 | 1.0 | 2026-10-28 | Step 2.4 executed per plan (§2.4 tasks 1-5): ledger rows 5/8/10/11 → closed, row 9 split (block comments closed, hold on → 3.2); §11 updated. User approval: «اوکی بود. برو مرحله بعدی» | User (chat) |
 | 1.0 | 2026-10-28 | Step 2.3 closed (user confirmed push + device demo) and Step 2.5 executed per plan (§2.5 tasks 1-3): ledger rows 2 and 15 → closed; doc 03 §14 row MC:E4003 added; §11 updated. User approval: «همه چیز مورد انتظار و موفق بود. من مشکلی ندیدم. میتونیم بریم گام بعدی» | User (chat) |
 | 1.0 | 2026-10-29 | Step 2.6 executed per plan (§2.6 tasks 1-4 + corpus; task 6 stays blocked on 2.9): multi-output qr/svd, interp2 (linear/nearest), histcounts/histogram numeric core (documented 'auto' contract + pin flag), integral RelTol/AbsTol/Waypoints; tril/triu k-sign compat fix (rule R2 regressions); COMPATIBILITY §4.5 shrunk (integral/qr-svd rows closed); §11 updated. Task 5 (vdp1000 pin) = pending user MATLAB run. User approval: «خب در گام ۲.۵ همه چیز سبز بود. بریم گام ۲.۶» | User (chat) |
+| 1.0 | 2026-11-01 | Task 5 of 2.6 closed without real MATLAB (user chat: «من متلب واقعی ندارم خودت کارا رو درست کن. برو گام بعد.»): vdp1000 pinned from scipy 1.14.1 stiff-solver triangulation (Radau/BDF/LSODA, spread ≤ 2.3e-7; Octave measured impractical — probe [0,300] > 5 min); corpus test qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3) with JSON-sync + triangle-coherence guards; step 2.7 = code-complete, pending device (pendulum < 1 s + FB-1/FB-2 touch); §11 rewritten. First delivery lost to a sandbox reset — fully re-derived and re-verified (≤ 7.9e-11) before re-delivery | User (chat) |
