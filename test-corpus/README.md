@@ -13,6 +13,9 @@
 ```
 scripts/           p1_01..p1_60.m — منبع یگانه اسکریپت‌ها (قطعی، tol 1e-9)
 expected/          خروجی مرجع JSON (اوراکل numpy/LAPACK — scripts/gen_corpus.py)
+references/        پین‌های نقطه‌ای بیرونِ چرخهٔ اکتاو — الان: p2_13 vdp1000 (مثلث‌بازی
+                   سه‌حلگری صلب scipy؛ منشأ کامل داخل فایل). compare_expected.py این
+                   پوشه را نمی‌خواند → job اکتاو CI محفوظ می‌ماند
 manifest.json      متادیتا + متغیرهای capture + tolerance per case
 octave_regen.m     اجرای کل کورپوس با Octave ≥ 7 → generated/
 generated/         خروجی موقت Octave (گیت‌شده) — با expected مقایسه می‌شود
