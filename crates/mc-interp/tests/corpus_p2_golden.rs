@@ -2,8 +2,11 @@
 //!
 //! مراجع:
 //! - موارد تحلیلی: مقدار بستهٔ ریاضی (exp(−2)، √π، √2، ...) — تلورانس 1e-6.
-//! - van der Pol μ=1000: مرجع مستقل Octave 9.4 (DP54 همان متلب) — تلورانس
-//!   5e-2 (دو پیاده‌سازی تطبیقی با توالی گام متفاوت؛ سند ۰۴ §4.2).
+//! - van der Pol μ=1000: پین نقطه‌ای مستقل = مثلث‌بازی سه‌حلگری صلب scipy 1.14.1
+//!   (Radau rtol=1e-10/atol=1e-13 + BDF/LSODA rtol=1e-8، پراکندگی ≤ 2.3e-7 —
+//!   test-corpus/references/p2_13_vanderpol_mu1000.json)؛ اکتاو ode45 غیرعملی
+//!   اندازه‌گیری شد (پروب [0,300] > ۵ دقیقه) و MATLAB واقعی در دسترس نیست —
+//!   تلورانس موتور ≈ ۱۴-۸۵× دلتای مشاهده‌شده (دو تطبیقی DP54 با توالی گام متفاوت).
 //! - RNG عمداً در کورپوس Octave-مقایسه‌ای نیست (سازگاری بیت‌به‌بیت هدف
 //!   نیست — سند ۰۴ §7/COMPATIBILITY)؛ تکرارپذیری در تست واحد rng پوشش دارد.
 
@@ -168,19 +171,77 @@ fn p2_stats_descriptives() {
     assert!(approx(r, 1.0, 1e-12), "rho = {r}");
 }
 
-// ---------- van der Pol μ=1000 (DoD — مرجع Octave) ----------
+// ---------- van der Pol μ=1000 (DoD — پین نقطه‌ای مستقل، تسک ۵ گام 2.6) ----------
+
+// مرجع پین‌شده — همان اعداد test-corpus/references/p2_13_vanderpol_mu1000.json
+// (مثلث‌بازی scipy: Radau + BDF + LSODA). ثابت‌ها عمداً literal‌اند (بدون
+// وابستگی جدید — Cargo.lock دست‌نخورده) و گارد contains هر واگرایی فایل/تست
+// را می‌شکند؛ گارد انسجام پایین، ویرایش تک‌مقداری ثابت‌ها را ناممکن می‌کند.
+const VDP_REF: (f64, f64, f64) = (
+    -1.5106069367440798,
+    0.0011783800007309784,
+    2.0000729660024676,
+);
+const VDP_BDF: (f64, f64, f64) = (
+    -1.5106067863622619,
+    0.0011783803010558481,
+    2.0000729677665627,
+);
+const VDP_LSODA: (f64, f64, f64) = (
+    -1.5106067087852515,
+    0.0011783804559862673,
+    2.000072959334575,
+);
 
 #[test]
 fn p2_ode45_vanderpol_mu1000() {
     // DoD سند ۰۷ — van der Pol μ=1000 روی [0, 3000] (بازهٔ مثال مرجع متلب):
-    // ۱) قید کیفی سند ۰۴ §9: چرخهٔ حدی |y1| ≤ 2.1 — بدون انفجار عددی
-    // ۲) y2(3000) در فاز آهسته (چرخهٔ حدی با دورهٔ ≈ 1.6·μ ≈ 1614 —
-    //    در t=3000 حل روی شاخهٔ بازیابی با y2 کوچک است)
-    // ۳) y1(3000) داخل باند چرخهٔ حدی (بازهٔ فیزیکی مسئله)
-    // تطبیق نقطه‌ای با مرجع Octave پس از پایان رفرنس‌گیری افزوده می‌شود.
+    // پین نقطه‌ای بدون MATLAB واقعی (تصمیم چت کاربر) — مرجع و منشأ کامل در
+    // JSON مرجع (مثلث‌بازی سه‌حلگری صلب scipy؛ اکتاو غیرعملی اندازه‌گیری شد).
+    let rf = include_str!("../../../test-corpus/references/p2_13_vanderpol_mu1000.json");
+    assert!(
+        rf.contains("-1.5106069367440798"),
+        "reference json out of sync (y1)"
+    );
+    assert!(
+        rf.contains("0.0011783800007309784"),
+        "reference json out of sync (y2)"
+    );
+    assert!(
+        rf.contains("2.0000729660024676"),
+        "reference json out of sync (ymax)"
+    );
+    // گارد انسجام مثلث مرجع (تلورانس‌ها در JSON: 5e-6 / 1e-8 / 1e-7):
+    assert!(
+        (VDP_REF.0 - VDP_BDF.0).abs() < 5e-6 && (VDP_REF.0 - VDP_LSODA.0).abs() < 5e-6,
+        "y1 spread broken"
+    );
+    assert!(
+        (VDP_REF.1 - VDP_BDF.1).abs() < 1e-8 && (VDP_REF.1 - VDP_LSODA.1).abs() < 1e-8,
+        "y2 spread broken"
+    );
+    assert!(
+        (VDP_REF.2 - VDP_BDF.2).abs() < 1e-7 && (VDP_REF.2 - VDP_LSODA.2).abs() < 1e-7,
+        "ymax spread broken"
+    );
+
     let y1_3000 = run(src!("p2_13_vanderpol_mu1000.m"), "y1_end");
     let y2_3000 = run(src!("p2_13_vanderpol_mu1000.m"), "y2_end");
     let ymax = run(src!("p2_13_vanderpol_mu1000.m"), "ymax");
+
+    // تطبیق نقطه‌ای موتور با مرجع (تلورانس JSON ≈ ۱۴-۸۵× دلتای مشاهده‌شده):
+    let (ref_y1, ref_y2, ref_ymax) = VDP_REF;
+    assert!(
+        approx(y1_3000, ref_y1, 5e-3),
+        "y1(3000) = {y1_3000} vs {ref_y1}"
+    );
+    assert!(
+        approx(y2_3000, ref_y2, 2e-5),
+        "y2(3000) = {y2_3000} vs {ref_y2}"
+    );
+    assert!(approx(ymax, ref_ymax, 1e-3), "ymax = {ymax} vs {ref_ymax}");
+
+    // قیود کیفی قبلی — گارد رژیم (چرخهٔ حدی/فاز آهسته) سرِ جایشان:
     assert!(ymax < 2.2, "y1 max = {ymax}");
     assert!(ymax > 1.9, "limit cycle amplitude collapsed: {ymax}");
     assert!(y2_3000.abs() < 0.1, "slow phase expected, y2 = {y2_3000}");
