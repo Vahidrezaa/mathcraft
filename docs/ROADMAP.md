@@ -185,12 +185,13 @@ shipping a plotter on top of a half-language would force rework.
 - **DoD (all must hold):**
   - [x] van der Pol μ=1000 matches the pinned point reference; `rng(42)` reproducible.
   - [x] Cancel mid-ode45 leaves a consistent workspace (step 2.3, device-verified).
-  - [ ] Pendulum demo on device: runs in < 1 s with a progress bar (docs/07 §P2 demo) —
-        pending device confirmation.
-  - [ ] FB-1/FB-2 final touch verification by user (carried from P2 start) — pending device.
-  - [x] STATUS + COMPATIBILITY updated; tag + package ⇒ after CI green on the user's push
-        (tag `p2-code-complete`); phase declared **code-complete, pending device** in §11 —
-        never silently closed (stop rule below).
+  - [x] Pendulum demo on device: runs in < 1 s with a progress bar (docs/07 §P2 demo) —
+        user-confirmed 2026-11-05 (STATUS §3.9).
+  - [x] FB-1/FB-2 final touch verification by user (carried from P2 start) — user-confirmed
+        2026-11-05 (STATUS §3.9).
+  - [x] STATUS + COMPATIBILITY updated; tag + package: tag `p2-code-complete` pushed by the
+        user at `e189195` (CI #18 + Android #18 green, 2026-11-01); package of record =
+        `MathCraft-P2-v0.9-phase2-closed-WITH-GIT.tar.gz`; phase declared **CLOSED** in §11.
 - **Stop / rollback:** if device confirmation is unavailable, the phase stays
   "code-complete, pending device" (same as P1 did) — never silently closed.
 
@@ -498,20 +499,20 @@ sandbox reset before reaching the user and was fully re-derived and re-verified 
 scratch (Radau values reproduced to ≤ 7.9e-11) before re-delivery — new tree/sha256 are
 the ones in the handoff message.
 
-**Step 2.7 (Phase 2 close — numeric milestone gate): CODE-COMPLETE, PENDING DEVICE
-(2026-11-01).** DoD status: vdp1000 matches the pinned point reference ✓ (sandbox,
-debug mode — same mode as CI) · `rng(42)` reproducible ✓ (PCG64 unit tests) · cancel
-mid-ode45 leaves a consistent workspace ✓ (device-verified in 2.3) · STATUS +
-COMPATIBILITY updated ✓ · pendulum demo < 1 s with progress bar ⬜ (device) · FB-1/FB-2
-final touch verification ⬜ (device). Per the §2.7 stop rule the phase is NOT silently
-closed. To close formally: (1) the user applies this patch series, pushes, CI three-job
-green; (2) `git tag p2-code-complete` + push the tag; (3) device checklist from the
-handoff message (pendulum < 1 s + progress bar, FB-1/FB-2 touch, optional 2.4 display
-spot-check). The next session then records the formal close.
+**Phase 2 (numeric milestone gate) CLOSED — 2026-11-05, device-verified.** All
+formal-close conditions of §2.7 are met: (1) the user pushed the vdp1000-pin series —
+HEAD `e189195`, CI #18 + Android #18 green (2026-11-01); (2) the user created and pushed
+the annotated tag `p2-code-complete` → `e189195`; (3) the user confirmed the full device
+checklist (chat, 2026-11-05: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار
+میکردند») — pendulum ode45 demo < 1 s with progress bar ✓ · FB-1 display layout ✓ ·
+FB-2 themed selection/copy ✓ (the optional 2.4 display spot-check was not exercised —
+nothing was reported broken). All §2.7 DoD boxes are ticked; STATUS §3.9 records the
+close; package of record = `MathCraft-P2-v0.9-phase2-closed-WITH-GIT.tar.gz`. Nothing in
+Phase 2 remains "almost done" — the numeric core + hardening milestone (P2 of docs/07)
+is complete; sub-phase P2-c (language completeness, §4) continues under the P2 umbrella.
 
-**Next: 2.8 (char type & strings — first P2-c step) only after the formal Phase-2
-close.** No session may start any other step without the user explicitly reordering
-(§ Governance).
+**Next: step 2.8 — char type & strings (first step of sub-phase P2-c, §4).** No session
+may start any other step without the user explicitly reordering (§ Governance).
 
 ## 12. Change log
 
@@ -522,3 +523,4 @@ close.** No session may start any other step without the user explicitly reorder
 | 1.0 | 2026-10-28 | Step 2.3 closed (user confirmed push + device demo) and Step 2.5 executed per plan (§2.5 tasks 1-3): ledger rows 2 and 15 → closed; doc 03 §14 row MC:E4003 added; §11 updated. User approval: «همه چیز مورد انتظار و موفق بود. من مشکلی ندیدم. میتونیم بریم گام بعدی» | User (chat) |
 | 1.0 | 2026-10-29 | Step 2.6 executed per plan (§2.6 tasks 1-4 + corpus; task 6 stays blocked on 2.9): multi-output qr/svd, interp2 (linear/nearest), histcounts/histogram numeric core (documented 'auto' contract + pin flag), integral RelTol/AbsTol/Waypoints; tril/triu k-sign compat fix (rule R2 regressions); COMPATIBILITY §4.5 shrunk (integral/qr-svd rows closed); §11 updated. Task 5 (vdp1000 pin) = pending user MATLAB run. User approval: «خب در گام ۲.۵ همه چیز سبز بود. بریم گام ۲.۶» | User (chat) |
 | 1.0 | 2026-11-01 | Task 5 of 2.6 closed without real MATLAB (user chat: «من متلب واقعی ندارم خودت کارا رو درست کن. برو گام بعد.»): vdp1000 pinned from scipy 1.14.1 stiff-solver triangulation (Radau/BDF/LSODA, spread ≤ 2.3e-7; Octave measured impractical — probe [0,300] > 5 min); corpus test qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3) with JSON-sync + triangle-coherence guards; step 2.7 = code-complete, pending device (pendulum < 1 s + FB-1/FB-2 touch); §11 rewritten. First delivery lost to a sandbox reset — fully re-derived and re-verified (≤ 7.9e-11) before re-delivery | User (chat) |
+| 1.0 | 2026-11-05 | Phase 2 formally closed at step 2.7: user pushed annotated tag `p2-code-complete` at `e189195` (CI #18 + Android #18 green) and confirmed the full device checklist (pendulum ode45 demo < 1 s + progress bar, FB-1, FB-2); §2.7 DoD all ticked; §11 rewritten (Phase 2 CLOSED, next = P2-c step 2.8); STATUS §3.9 + phase map + FB rows updated; package v0.9 | User (chat: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار میکردند») |
