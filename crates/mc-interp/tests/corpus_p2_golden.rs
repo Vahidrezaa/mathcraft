@@ -367,3 +367,51 @@ fn p2_histcounts_histogram_analytic() {
     let h = run_vec(src!("p2_20_histcounts_edges.m"), "h");
     assert_eq!(h, vec![1.0, 1.0, 1.0]);
 }
+
+// ---------- char type & strings (ROADMAP 2.8 — بندهای ۶/۱۲ ممیزی) ----------
+
+#[test]
+fn p2_chars_promote_oracle_octave() {
+    // p2_21 — تلفیق مخلوط + ارتقای عددی (اوراکل: Octave 10.3 + سند متلب)
+    let mc = run_vec(src!("p2_21_chars_promote.m"), "mc");
+    assert_eq!(mc, vec![65.0, 97.0], "[65 'a'] → 'Aa' codes");
+    let plus = run_vec(src!("p2_21_chars_promote.m"), "plus");
+    assert_eq!(plus, vec![98.0, 99.0, 100.0], "'abc'+1");
+    let cc = run(src!("p2_21_chars_promote.m"), "cc");
+    assert_eq!(cc, 195.0, "'a'+'b'");
+    let mm = run_vec(src!("p2_21_chars_promote.m"), "mm");
+    assert_eq!(mm, vec![194.0, 196.0], "'ab'*2 numeric");
+    let el = run_vec(src!("p2_21_chars_promote.m"), "el");
+    assert_eq!(el, vec![196.0, 198.0], "'ab'+'cd'");
+    let dv = run_vec(src!("p2_21_chars_promote.m"), "dv");
+    assert_eq!(dv, vec![48.5, 49.0], "'ab'./2");
+    let b66 = run(src!("p2_21_chars_promote.m"), "b66");
+    assert_eq!(b66, 66.0, "char(66) → 'B'");
+}
+
+#[test]
+fn p2_chars_index_cmp_oracle_octave() {
+    // p2_22 — اندیس‌گذاری/مقایسه/builtinهای رشته (اوراکل: Octave 10.3)
+    let second = run(src!("p2_22_chars_index_cmp.m"), "second");
+    assert_eq!(second, 101.0, "h(2)");
+    let pair = run_vec(src!("p2_22_chars_index_cmp.m"), "pair");
+    assert_eq!(pair, vec![104.0, 108.0], "h([1 3])");
+    let rev = run_vec(src!("p2_22_chars_index_cmp.m"), "rev");
+    assert_eq!(rev, vec![111.0, 108.0, 108.0, 101.0, 104.0], "h(end:-1:1)");
+    let eqv = run_vec(src!("p2_22_chars_index_cmp.m"), "eqv");
+    assert_eq!(eqv, vec![1.0, 1.0, 0.0], "'abc'=='abd'");
+    let ltv = run(src!("p2_22_chars_index_cmp.m"), "ltv");
+    assert_eq!(ltv, 1.0, "'a'<'b'");
+    let eqc = run(src!("p2_22_chars_index_cmp.m"), "eqc");
+    assert_eq!(eqc, 1.0, "'a'==97");
+    let is_c = run(src!("p2_22_chars_index_cmp.m"), "is_c");
+    assert_eq!(is_c, 1.0, "ischar('abc')");
+    let is_d = run(src!("p2_22_chars_index_cmp.m"), "is_d");
+    assert_eq!(is_d, 0.0, "ischar(5)");
+    let sd = run(src!("p2_22_chars_index_cmp.m"), "sd");
+    assert_eq!(sd, 1.5, "str2double('1.5')");
+    let bl = run_vec(src!("p2_22_chars_index_cmp.m"), "bl");
+    assert_eq!(bl, vec![32.0, 32.0, 32.0], "blanks(3)");
+    let ch = run_vec(src!("p2_22_chars_index_cmp.m"), "ch");
+    assert_eq!(ch, vec![72.0, 105.0], "char([72 105])");
+}

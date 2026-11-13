@@ -539,6 +539,34 @@
     "U1",
     "Um1"
    ]
+  },
+  {
+   "script": "p2_21_chars_promote.m",
+   "vars": [
+    "mc",
+    "plus",
+    "cc",
+    "mm",
+    "el",
+    "dv",
+    "b66"
+   ]
+  },
+  {
+   "script": "p2_22_chars_index_cmp.m",
+   "vars": [
+    "second",
+    "pair",
+    "rev",
+    "eqv",
+    "ltv",
+    "eqc",
+    "is_c",
+    "is_d",
+    "sd",
+    "bl",
+    "ch"
+   ]
   }
  ]
 }
