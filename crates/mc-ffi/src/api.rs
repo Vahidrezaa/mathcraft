@@ -104,9 +104,18 @@ pub struct VarSummary {
 
 impl VarSummary {
     fn from_value(name: &str, value: &Value) -> Self {
+        // char: کلاس و شکل واقعی گزارش می‌شود؛ پیش‌نمایش عددی ندارد (ROADMAP 2.8)
+        if let Value::Char(s) = value {
+            return Self {
+                name: name.to_owned(),
+                class: value.class_name().to_owned(),
+                shape: vec![1, s.chars().count() as u32],
+                preview: Vec::new(),
+            };
+        }
         let m = match value {
             Value::Double(m) => m,
-            // char/هندل پیش‌نمایش عددی ندارند — فقط کلاس گزارش می‌شود (سند ۰۲ §3)
+            // هندل پیش‌نمایش عددی ندارد — فقط کلاس گزارش می‌شود (سند ۰۲ §3)
             _ => {
                 return Self {
                     name: name.to_owned(),

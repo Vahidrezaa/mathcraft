@@ -117,6 +117,12 @@ static REGISTRY: &[(&str, Builtin)] = &[
     // ---- نمایش/متنی و ثابت‌ها (ROADMAP 2.4 — آیتم ۸ ممیزی) ----
     ("class", bi_class),
     ("num2str", bi_num2str),
+    // ---- char/رشته (ROADMAP 2.8 — بند ۶/۱۲ ممیزی خارجی) ----
+    ("char", bi_char),
+    ("double", bi_double),
+    ("ischar", bi_ischar),
+    ("blanks", bi_blanks),
+    ("str2double", bi_str2double),
     ("intmax", bi_intmax),
     ("realmax", bi_realmax),
     ("realmin", bi_realmin),
@@ -1226,6 +1232,159 @@ fn bi_class(args: &[Value], _n: usize) -> Result<Value, McError> {
     Ok(Value::Char(name.to_owned()))
 }
 
+/// `char(x)` — عددی → رشتهٔ کاراکتری (ROADMAP 2.8 — بند ۶/۱۲). قرارداد گرد
+/// کردن به سمت صفر از سند رسمی متلب؛ دامنهٔ codepoint کامل یونیکد بدون
+/// surrogate — بیرون از دامنه خطای صادقانه (متلب به 0/65535 اشباع می‌کند —
+/// انحراف مستند). فقط ورودی تک‌ردیفه؛ ستونی/دوبعدی = char دوبعدی → E4.
+fn bi_char(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("char", "1", args.len()));
+    }
+    if let Value::Char(s) = &args[0] {
+        return Ok(Value::Char(s.clone()));
+    }
+    if matches!(&args[0], Value::Complex(z) if !z.is_all_real()) {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "char: complex values have no character codes.",
+            "char: مقادیر مختلط کد کاراکتری ندارند.",
+        ));
+    }
+    if matches!(&args[0], Value::Anon(_)) {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "char: function handles have no character form.",
+            "char: function_handle شکل کاراکتری ندارد.",
+        ));
+    }
+    let m = match &args[0] {
+        Value::Double(m) => m.clone(),
+        Value::Complex(z) => z.real_part(),
+        // نوع‌های دیگر بالاتر هندل شدند
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "char: unsupported input type.",
+                "char: نوع ورودی پشتیبانی نمی‌شود.",
+            ))
+        }
+    };
+    if m.numel() == 0 {
+        return Ok(Value::Char(String::new()));
+    }
+    if m.rows() != 1 {
+        return Err(McError::new(
+            ids::UNSUPPORTED,
+            0,
+            0,
+            "char: column/2-D inputs produce 2-D char arrays; expansion E4.",
+            "char: ورودی ستونی/دوبعدی آرایهٔ char دوبعدی می‌سازد؛ انبساط E4 است.",
+        ));
+    }
+    let mut out = String::with_capacity(m.cols());
+    for i in 0..m.cols() {
+        out.push(Value::char_from_code(m.get(0, i), 0, 0)?);
+    }
+    Ok(Value::Char(out))
+}
+
+/// `double(x)` — char → ردیف کدها؛ double/مختلط (کلاس double) → خودش
+/// (ROADMAP 2.8 — «interplay» char/double).
+fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("double", "1", args.len()));
+    }
+    match &args[0] {
+        Value::Double(m) => Ok(Value::Double(m.clone())),
+        Value::Complex(z) => Ok(Value::Complex(z.clone())),
+        Value::Char(s) => Ok(Value::Double(Value::char_codes_row(s))),
+        Value::Anon(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "double: function handles have no numeric form.",
+            "double: function_handle شکل عددی ندارد.",
+        )),
+    }
+}
+
+/// `ischar(x)` — فقط کلاس char (ROADMAP 2.8).
+fn bi_ischar(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("ischar", "1", args.len()));
+    }
+    Ok(scalar_val(matches!(args[0], Value::Char(_)) as i32 as f64))
+}
+
+/// `blanks(n)` — n فاصله (ROADMAP 2.8)؛ چک بودجه قبل از تخصیص (گام 2.5).
+fn bi_blanks(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("blanks", "1", args.len()));
+    }
+    let n = match &args[0] {
+        Value::Double(m) if m.is_scalar() => m.get(0, 0),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "blanks: n must be a numeric scalar.",
+                "blanks: n باید عدد اسکالر باشد.",
+            ))
+        }
+    };
+    if n < 0.0 || n.fract() != 0.0 {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "blanks: n must be a non-negative integer.",
+            "blanks: n باید عدد صحیح نامنفی باشد.",
+        ));
+    }
+    let n = n as usize;
+    budget::check_elements(1, n)?;
+    Ok(Value::Char(" ".repeat(n)))
+}
+
+/// `str2double(s)` — رشته → عدد؛ شکست = NaN (رفتار متلب — ROADMAP 2.8).
+/// می‌پذیرد: عدد اعشاری/علمی، Inf/NaN (بدون حساسیت بزرگی حروف)، فاصله‌های اطراف.
+fn bi_str2double(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("str2double", "1", args.len()));
+    }
+    let s = match &args[0] {
+        Value::Char(s) => s.as_str(),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                0,
+                0,
+                "str2double: input must be a char row vector like '1.5'.",
+                "str2double: ورودی باید رشتهٔ کاراکتری مثل '1.5' باشد.",
+            ))
+        }
+    };
+    let t = s.trim();
+    let v = if t.is_empty() {
+        f64::NAN
+    } else {
+        match t.to_ascii_lowercase().as_str() {
+            "inf" | "+inf" => f64::INFINITY,
+            "-inf" => f64::NEG_INFINITY,
+            "nan" => f64::NAN,
+            _ => t.parse::<f64>().unwrap_or(f64::NAN),
+        }
+    };
+    Ok(scalar_val(v))
+}
+
 fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
     if args.len() != 1 {
         return Err(arity_err("num2str", "1", args.len()));
@@ -1247,8 +1406,8 @@ fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
             ids::UNSUPPORTED,
             0,
             0,
-            "num2str: 2-D char arrays arrive with the char model step (2.8).",
-            "num2str: آرایهٔ کاراکتری دوبعدی با گام مدل char (2.8) می‌آید.",
+            "num2str: 2-D inputs produce 2-D char arrays; expansion E4 (row vectors convert fine).",
+            "num2str: ورودی دوبعدی آرایهٔ char دوبعدی می‌سازد؛ انبساط E4 (بردارهای سطری تبدیل می‌شوند).",
         )),
         Value::Complex(_) => Err(McError::new(
             ids::UNSUPPORTED,
