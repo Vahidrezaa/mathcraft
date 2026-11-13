@@ -595,6 +595,16 @@ mod tests {
     }
 
     #[test]
+    fn char_display_matlab_style() {
+        // سند رسمی متلب (char): «MATLAB displays strings with double quotes and
+        // character vectors with single quotes» — اکوی char با کوتیشن؛ disp بدون
+        // کوتیشن (stdio). نتیجهٔ تلفیق مخلوط هم char است: [65 'a'] → 'Aa'.
+        assert_eq!(format_value(&Value::Char("Aa".to_owned())), "'Aa'\n");
+        assert_eq!(format_value(&Value::Char("".to_owned())), "''\n");
+        assert_eq!(format_value(&Value::Char("سلام".to_owned())), "'سلام'\n");
+    }
+
+    #[test]
     fn empty_shape_display_matlab_style() {
         // ROADMAP 2.4 — آیتم ۱۰: متن خالی‌های متلب
         assert_eq!(

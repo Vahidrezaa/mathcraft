@@ -22,16 +22,9 @@ pub fn to_complex(v: &Value, line: u32, col: u32) -> Result<ComplexMatrix, McErr
         Value::Double(m) => Ok(ComplexMatrix::from_real(m)),
         Value::Complex(z) => Ok(z.clone()),
         Value::Char(s) => {
-            let mut ch = s.chars();
-            match (ch.next(), ch.next()) {
-                (Some(c), None) => Ok(ComplexMatrix::scalar(c as u32 as f64, 0.0)),
-                _ => Err(cerr(
-                    line,
-                    col,
-                    "Only single-character strings work in numeric expressions.",
-                    "در عبارت عددی فقط رشته تک‌کاراکتری کار می‌کند.",
-                )),
-            }
+            // متلب: char در زمینهٔ عددی = ردیف کدها ('ab'+1i → [97+1i 98+1i]
+            // — ROADMAP 2.8 بند ۶/۱۲)
+            Ok(ComplexMatrix::from_real(&Value::char_codes_row(s)))
         }
         Value::Anon(_) => Err(cerr(
             line,

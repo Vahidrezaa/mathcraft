@@ -577,6 +577,36 @@ fn truthy_scalar(v: &Value) -> Result<bool, McError> {
 
 // ---------- انتساب اندیس‌دار ----------
 
+/// ماتریس تک‌ردیفهٔ کدها → رشتهٔ char (ROADMAP 2.8)؛ چندردیفه = char دوبعدی
+/// → خطای صادقانهٔ E4.
+fn char_row_from_matrix(m: &Matrix, line: u32, col: u32) -> Result<String, McError> {
+    if m.rows() != 1 {
+        return Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "This indexed assignment would produce a 2-D char array; expansion E4.",
+            "این انتساب اندیس‌دار آرایهٔ char دوبعدی می‌سازد؛ انبساط E4 است.",
+        ));
+    }
+    let mut s = String::with_capacity(m.cols());
+    for i in 0..m.cols() {
+        s.push(Value::char_from_code(m.get(0, i), line, col)?);
+    }
+    Ok(s)
+}
+
+/// خطای هدف غیر عددی/کاراکتری در انتساب اندیس‌دار (ROADMAP 2.8).
+fn not_numeric_or_char_target(name: &str, line: u32, col: u32) -> McError {
+    McError::new(
+        ids::PARSE_ERROR,
+        line,
+        col,
+        format!("'{name}' is not a numeric or char array; indexed assignment needs double/char."),
+        format!("«{name}» عددی نیست؛ انتساب اندیس‌دار نیاز به آرایه عددی دارد."),
+    )
+}
+
 /// `A(subs...) = v` — با رشد خودکار ماتریس مثل متلب (پرکردن با صفر).
 fn indexed_assign(
     env: &mut Environment,
@@ -588,13 +618,14 @@ fn indexed_assign(
 ) -> Result<(), McError> {
     let vmat = match &value {
         Value::Double(m) => m.clone(),
+        Value::Char(s) => Value::char_codes_row(s),
         _ => {
             return Err(McError::new(
                 ids::PARSE_ERROR,
                 line,
                 col,
-                "Only numeric assignment to indexed targets is supported.",
-                "انتساب اندیس‌دار فقط عددی پشتیبانی می‌شود.",
+                "Only numeric or char row values can be assigned to indexed targets.",
+                "انتساب اندیس‌دار فقط با مقدار عددی یا رشتهٔ کاراکتری ممکن است.",
             ))
         }
     };
@@ -603,24 +634,26 @@ fn indexed_assign(
         .get(name)
         .cloned()
         .unwrap_or(Value::Double(Matrix::full(0, 0, 0.0)));
+    // هدف char (ROADMAP 2.8): مدل کد 1×N + بازگشت char در پایان؛ چندردیفه = E4
+    let char_target = matches!(current, Value::Char(_));
     let cur = match current {
         Value::Double(m) => m,
-        _ => {
-            return Err(McError::new(
-                ids::PARSE_ERROR,
-                line,
-                col,
-                format!("'{name}' is not numeric; indexed assignment needs a numeric array."),
-                format!("«{name}» عددی نیست؛ انتساب اندیس‌دار نیاز به آرایه عددی دارد."),
-            ))
-        }
+        Value::Char(s) => Value::char_codes_row(&s),
+        _ => return Err(not_numeric_or_char_target(name, line, col)),
     };
     let resolved = resolve_subs(&cur, subs, env, depth_of(line))?;
     // انتساب خالی `x(i)=[]` — سمانتیک حذف متلب: المان بردار (با حفظ جهت)،
     // حذف «سطر» با اندیس خطی روی ماتریس، و حذف سطر/ستون با دونقطه A(i,:)/A(:,j).
     if vmat.is_empty() {
         let out = delete_subscripts(&cur, &resolved, line, col)?;
-        env.set(name.to_string(), Value::Double(out));
+        if char_target {
+            env.set(
+                name.to_string(),
+                Value::Char(char_row_from_matrix(&out, line, col)?),
+            );
+        } else {
+            env.set(name.to_string(), Value::Double(out));
+        }
         return Ok(());
     }
     let mut out = cur.clone();
@@ -637,7 +670,14 @@ fn indexed_assign(
             ))
         }
     }
-    env.set(name.to_string(), Value::Double(out));
+    if char_target {
+        env.set(
+            name.to_string(),
+            Value::Char(char_row_from_matrix(&out, line, col)?),
+        );
+    } else {
+        env.set(name.to_string(), Value::Double(out));
+    }
     Ok(())
 }
 
@@ -794,7 +834,12 @@ fn index_read(
         }
     };
     let resolved = resolve_subs(&target, args, env, depth)?;
-    let m = &target;
+    index_double(&target, &resolved, line, col)
+}
+
+/// هستهٔ اندیس‌گذاری ماتریس — جدا شده تا مسیر char (index_read_char) نیز از
+/// همان ماشین جهت‌گیری نتیجه (بند ۵ ممیزی — ROADMAP 2.4) استفاده کند.
+fn index_double(m: &Matrix, resolved: &[Idx], line: u32, col: u32) -> Result<Value, McError> {
     match resolved.len() {
         1 => match &resolved[0] {
             Idx::All => {
@@ -858,6 +903,43 @@ fn index_read(
             format!("اندیس‌گذاری با {n} زیرنویس پشتیبانی نمی‌شود (حداکثر 2)."),
         )),
     }
+}
+
+/// اندیس‌گذاری خواندنی روی رشتهٔ کاراکتری (ROADMAP 2.8 — بند ۶/۱۲):
+/// s(2)→'e'، s([1 3])→'hl'، s(end:-1:1)→'olleh'. ماشین اندیس روی ردیف کدها
+/// اجرا می‌شود و نتیجهٔ تک‌ردیفه به char برمی‌گردد؛ نتیجهٔ ستونی = char
+/// دوبعدی → خطای صادقانهٔ E4.
+fn index_read_char(
+    name: &str,
+    args: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    let s = match env.get(name) {
+        Some(Value::Char(s)) => s.clone(),
+        _ => return Err(undefined_var(name, line, col)),
+    };
+    let target = Value::char_codes_row(&s);
+    let resolved = resolve_subs(&target, args, env, depth)?;
+    let v = index_double(&target, &resolved, line, col)?;
+    if let Value::Double(m) = &v {
+        if m.rows() == 1 {
+            let mut out = String::with_capacity(m.cols());
+            for i in 0..m.cols() {
+                out.push(Value::char_from_code(m.get(0, i), line, col)?);
+            }
+            return Ok(Value::Char(out));
+        }
+    }
+    Err(McError::new(
+        ids::UNSUPPORTED,
+        line,
+        col,
+        "Column-shaped indexing of a char row yields a 2-D char array; expansion E4.",
+        "اندیس‌گذاری ستونیِ رشتهٔ char آرایهٔ دوبعدی می‌سازد؛ انبساط E4 است.",
+    ))
 }
 
 fn idx_list(kind: &Idx, size: usize) -> Vec<usize> {
@@ -1363,7 +1445,22 @@ fn eval_expr_end(
                 }
                 // مختلط: `'` ترانهادهٔ مزدوج، `.'` ترانهادهٔ ساده (سند ۰۳ §5 — P2)
                 Value::Complex(z) => Ok(Value::Complex(cx::c_transpose(&z, *conj))),
-                Value::Char(s) => Ok(Value::Char(s.chars().rev().collect())),
+                Value::Char(s) => {
+                    // 1×1 ترانهادهٔ خودش است؛ 1×N (طول ≥ ۲) ترانهاده‌اش N×1 یعنی
+                    // آرایهٔ char دوبعدی می‌شود → انبساط E4 با خطای صادقانه
+                    // (ROADMAP 2.8 تسک ۱/۳)
+                    if s.chars().count() <= 1 {
+                        Ok(Value::Char(s))
+                    } else {
+                        Err(McError::new(
+                            ids::UNSUPPORTED,
+                            *line,
+                            *col,
+                            "Transposing a 1×N char row yields an N×1 char array; 2-D char arrays are expansion E4.",
+                            "ترانهادهٔ ردیف char با طول ۲ یا بیشتر، آرایهٔ char دوبعدی N×1 می‌سازد؛ char دوبعدی انبساط E4 است.",
+                        ))
+                    }
+                }
                 Value::Anon(_) => Err(McError::new(
                     ids::PARSE_ERROR,
                     *line,
@@ -1515,6 +1612,10 @@ fn call_named(
         }
         Some(Value::Double(_)) if !args.is_empty() => {
             return index_read(name, args, env, depth, line, col);
+        }
+        // اندیس‌گذاری خواندنی روی char (ROADMAP 2.8): s(2) → 'e'
+        Some(Value::Char(_)) if !args.is_empty() => {
+            return index_read_char(name, args, env, depth, line, col);
         }
         Some(_) if !args.is_empty() => {
             return Err(McError::new(
@@ -1855,16 +1956,15 @@ fn build_matrix(
     enum Cell {
         Real(Matrix),
         Complex(mc_core::ComplexMatrix),
+        Char(Vec<char>),
     }
     fn as_cell(v: Value, line: u32, col: u32) -> Result<Cell, McError> {
         match v {
             Value::Double(m) => Ok(Cell::Real(m)),
             Value::Complex(z) => Ok(Cell::Complex(z)),
-            Value::Char(s) => {
-                // 'abc' → سطر کدها (سمانتیک متلب ['ab' 'c'])
-                let codes: Vec<f64> = s.chars().map(|c| c as u32 as f64).collect();
-                Ok(Cell::Real(Matrix::from_columns(1, codes.len(), codes)))
-            }
+            // رشته = سلول char؛ تلفیق مخلوط با عددی → char مثل متلب
+            // ([65 'a'] → 'Aa' — ROADMAP 2.8 بند ۶/۱۲ ممیزی)
+            Value::Char(s) => Ok(Cell::Char(s.chars().collect())),
             Value::Anon(_) => Err(McError::new(
                 ids::PARSE_ERROR,
                 line,
@@ -1879,6 +1979,7 @@ fn build_matrix(
         let dims = |c: &Cell| match c {
             Cell::Real(m) => (m.rows(), m.cols()),
             Cell::Complex(z) => (z.rows(), z.cols()),
+            Cell::Char(cs) => (1, cs.len()),
         };
         let r = parts.first().map(dims).unwrap_or((0, 0)).0;
         if parts.iter().map(dims).any(|(rr, _)| rr != r) {
@@ -1901,6 +2002,39 @@ fn build_matrix(
             .try_fold(0usize, |acc, w| acc.checked_add(w))
             .ok_or_else(|| budget::out_of_memory_error(r, usize::MAX))?;
         budget::check_elements(r, c)?;
+        // تلفیق مخلوط char/عددی → char (ROADMAP 2.8 — بند ۶/۱۲): اعداد با
+        // قرارداد char() متلب به کد تبدیل می‌شوند؛ مختلطِ غیرواقعی خطای صادقانه
+        // (اوراکل Octave 10.3: wrong type argument 'complex scalar').
+        if parts.iter().any(|p| matches!(p, Cell::Char(_))) {
+            if any_complex {
+                return Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    "Complex values cannot be converted to character codes.",
+                    "مقادیر مختلط به کد کاراکتری تبدیل نمی‌شوند.",
+                ));
+            }
+            let mut chars: Vec<char> = Vec::with_capacity(c);
+            for p in parts {
+                match p {
+                    Cell::Char(cs) => chars.extend_from_slice(cs),
+                    Cell::Real(m) => {
+                        for i in 0..m.numel() {
+                            chars.push(Value::char_from_code(m.get_linear(i), line, col)?);
+                        }
+                    }
+                    Cell::Complex(z) => {
+                        // همه‌واقعی — مانند double به کد تبدیل می‌شود
+                        let re = z.real_part();
+                        for i in 0..re.numel() {
+                            chars.push(Value::char_from_code(re.get_linear(i), line, col)?);
+                        }
+                    }
+                }
+            }
+            return Ok(Cell::Char(chars));
+        }
         let mut re = Matrix::full(r, c, 0.0);
         let mut im = Matrix::full(r, c, 0.0);
         let mut off = 0usize;
@@ -1917,6 +2051,8 @@ fn build_matrix(
                             re.set(rr, off + cc, vr);
                             im.set(rr, off + cc, vi);
                         }
+                        // غیرممکن — مسیر char بالاتر return می‌کند
+                        Cell::Char(_) => {}
                     }
                 }
             }
@@ -1949,10 +2085,27 @@ fn build_matrix(
     if row_cells.is_empty() {
         return Ok(Value::Double(Matrix::full(0, 0, 0.0)));
     }
+    // char فقط در قالب تک‌ردیفهٔ 1×N (v1 — ROADMAP 2.8 تسک ۱)؛ چندردیفی =
+    // آرایهٔ char دوبعدی → انبساط E4 با خطای صادقانه.
+    if row_cells.iter().any(|c| matches!(c, Cell::Char(_))) {
+        if row_cells.len() != 1 {
+            return Err(McError::new(
+                ids::UNSUPPORTED,
+                line,
+                col,
+                "2-D char arrays (multi-row) are expansion E4; only 1×N char rows are supported.",
+                "آرایهٔ char دوبعدی (چندردیفی) انبساط E4 است؛ فقط ردیف char با ابعاد 1×N پشتیبانی می‌شود.",
+            ));
+        }
+        if let Cell::Char(cs) = &row_cells[0] {
+            return Ok(Value::Char(cs.iter().collect()));
+        }
+    }
     // تلفیق عمودی ردیف‌ها
     let dims = |c: &Cell| match c {
         Cell::Real(m) => (m.rows(), m.cols()),
         Cell::Complex(z) => (z.rows(), z.cols()),
+        Cell::Char(cs) => (1, cs.len()),
     };
     let c = dims(&row_cells[0]).1;
     if row_cells.iter().map(dims).any(|(_, cc)| cc != c) {
@@ -1988,6 +2141,8 @@ fn build_matrix(
                         re.set(off + rr, cc, vr);
                         im.set(off + rr, cc, vi);
                     }
+                    // غیرممکن — گارد char بالاتر return/error می‌کند
+                    Cell::Char(_) => {}
                 }
             }
         }
@@ -2137,18 +2292,9 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
             "مقدار مختلط در زمینهٔ فقط-حقیقی (مثل اندیس‌گذاری یا مرز حلقه).",
         )),
         Value::Char(s) => {
-            // رشته در مقایسه عددی — متلب کاراکترها را عدد می‌بیند؛ P1: تک‌کاراکتر
-            let mut ch = s.chars();
-            match (ch.next(), ch.next()) {
-                (Some(c), None) => Ok(Matrix::scalar(c as u32 as f64)),
-                _ => Err(McError::new(
-                    ids::PARSE_ERROR,
-                    line,
-                    col,
-                    "Only single-character strings work in numeric comparison in this milestone.",
-                    "در مقایسه عددی این مایل‌استون فقط رشته تک‌کاراکتری کار می‌کند.",
-                )),
-            }
+            // متلب: char در زمینهٔ عددی = ردیف کدها ('abc'+1 → [98 99 100]؛
+            // 'abc'=='abd' → [1 1 0]) — ROADMAP 2.8 بند ۶/۱۲
+            Ok(Value::char_codes_row(s))
         }
         Value::Anon(_) => Err(McError::new(
             ids::PARSE_ERROR,

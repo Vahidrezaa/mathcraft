@@ -97,4 +97,46 @@ impl Value {
             Value::Anon(_) => (1, 1),
         }
     }
+
+    /// ردیف کدهای یک رشتهٔ char (1×N) — `'abc'` → `[97 98 99]`
+    /// (سمانتیک «char در زمینهٔ عددی» متلب — ROADMAP 2.8، بند ۶/۱۲ ممیزی).
+    pub fn char_codes_row(s: &str) -> Matrix {
+        let codes: Vec<f64> = s.chars().map(|c| c as u32 as f64).collect();
+        Matrix::from_columns(1, codes.len(), codes)
+    }
+
+    /// تبدیل کد عددی به کاراکتر — قرارداد `char` متلب: گرد کردن به سمت صفر
+    /// (سند رسمی متلب). دامنهٔ موتور = codepoint کامل یونیکد `0..=0x10FFFF`
+    /// بدون surrogate (مدل یونیکد سند ۰۳ §10)؛ بیرون از دامنه خطای صادقانه —
+    /// متلب به 0/65535 اشباع می‌کند (انحراف مستند COMPATIBILITY).
+    pub fn char_from_code(x: f64, line: u32, col: u32) -> Result<char, McError> {
+        if x.is_nan() {
+            return Err(McError::new(
+                crate::error::ids::PARSE_ERROR,
+                line,
+                col,
+                "NaN has no character code.",
+                "NaN کد کاراکتری ندارد.",
+            ));
+        }
+        let t = x.trunc();
+        if !(0.0..=0x10FFFF as f64).contains(&t) {
+            return Err(McError::new(
+                crate::error::ids::UNSUPPORTED,
+                line,
+                col,
+                format!("Character code {x} is outside the valid Unicode range 0..=1114111."),
+                format!("کد کاراکتر {x} بیرون از دامنهٔ معتبر یونیکد 0..=1114111 است."),
+            ));
+        }
+        char::from_u32(t as u32).ok_or_else(|| {
+            McError::new(
+                crate::error::ids::UNSUPPORTED,
+                line,
+                col,
+                format!("Character code {x} is a UTF-16 surrogate, not a valid Unicode scalar."),
+                format!("کد کاراکتر {x} جایگزینِ UTF-16 است و مقدار یونیکد معتبر نیست."),
+            )
+        })
+    }
 }
