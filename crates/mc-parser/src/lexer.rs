@@ -191,8 +191,10 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
             '0'..='9' => out.push(lx.lex_number()?),
             '.' if lx.peek_at(1).is_some_and(|n| n.is_ascii_digit()) => out.push(lx.lex_number()?),
             'A'..='Z' | 'a'..='z' | '_' => out.push(lx.lex_ident()?),
-            '\'' if lx.last_was_operand_end => {
-                // ترانهاده مزدوج — فقط بعد از پایان‌یافتهٔ عملوند (سند ۰۳ بخش ۵).
+            '\'' if lx.last_was_operand_end && !lx.pending_space => {
+                // ترانهاده مزدوج — فقط چسبیده به پایان عملوند، بدون فاصله
+                // (قاعدهٔ بافت متلب — ROADMAP 2.8 تسک ۲: `x'` ترانهاده است ولی
+                // `[65 'a']` تلفیق است؛ فاصله قبل از ' یعنی شروع رشته).
                 out.push(lx.make(Tok::Transpose));
                 lx.advance();
                 lx.last_was_operand_end = true;
@@ -888,6 +890,57 @@ mod tests {
         assert_eq!(toks("'it''s'"), vec![Tok::Str("it's".into()), Tok::Eof]);
         // رشته با "
         assert_eq!(toks("\"سلام\""), vec![Tok::Str("سلام".into()), Tok::Eof]);
+    }
+
+    #[test]
+    fn quote_transpose_adversarial_suite() {
+        // ROADMAP 2.8 تسک ۲ — قاعدهٔ بافت متلب: ' بعد از پایان عملوند = ترانهاده؛
+        // در جای عملوند = آغاز رشته. موارد خصمانه:
+        // عدد لفظی + ترانهاده (در متلب 1' ترانهاده است، نه شروع رشته)
+        assert_eq!(toks("1'"), vec![Tok::Num(1.0), Tok::Transpose, Tok::Eof]);
+        // رشته درون پرانتز + ترانهاده — ('abc')'
+        assert_eq!(
+            toks("('abc')'"),
+            vec![
+                Tok::LParen,
+                Tok::Str("abc".into()),
+                Tok::RParen,
+                Tok::Transpose,
+                Tok::Eof
+            ]
+        );
+        // رشتهٔ خالی '' (1×0) و رشتهٔ فقط-کوتیشن '''' (گریز با تکرار دوگانه)
+        assert_eq!(toks("''"), vec![Tok::Str("".into()), Tok::Eof]);
+        assert_eq!(toks("''''"), vec![Tok::Str("'".into()), Tok::Eof]);
+        // دابل‌کوتیشن با گریز "" → " ("it""s" → it"s)
+        assert_eq!(
+            toks("\"it\"\"s\""),
+            vec![Tok::Str("it\"s".into()), Tok::Eof]
+        );
+        // یونیکد: رشتهٔ فارسی (شمارش codepoint — سند ۰۳ §10)
+        assert_eq!(toks("'سلام'"), vec![Tok::Str("سلام".into()), Tok::Eof]);
+        // ماتریس char سپس ترانهاده: ['ab' 'cd']'
+        assert_eq!(
+            toks("['ab' 'cd']'"),
+            vec![
+                Tok::LBracket,
+                Tok::Str("ab".into()),
+                Tok::Str("cd".into()),
+                Tok::RBracket,
+                Tok::Transpose,
+                Tok::Eof
+            ]
+        );
+        // ترانهادهٔ زنجیره‌ای: a'' (ترانهادهٔ ترانهاده — در متلب a'' = a)
+        assert_eq!(
+            toks("a''"),
+            vec![
+                Tok::Ident("a".into()),
+                Tok::Transpose,
+                Tok::Transpose,
+                Tok::Eof
+            ]
+        );
     }
 
     #[test]
