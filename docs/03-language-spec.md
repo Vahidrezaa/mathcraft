@@ -179,6 +179,10 @@ capture-by-value در لحظه ساخت (رفتار MATLAB). recursive anonymous
 - `sprintf/fprintf` با زیرمجموعه format spec: `%d %i %f %e %g %s %c %%` + width/precision (`.2f`)؛ `%d` روی double صحیح درست چاپ می‌شود.
 - `num2str, str2double, mat2str, disp, input` (کنسول تعاملی با کیبورد ریاضی).
 - string دابل‌کوتیشن: اسکالر + `string()` + متدهای پایه.
+- وضعیت گام 2.8 (۲۰۲۶-۱۱-۱۳): هستهٔ char اجرا شد — لفظ‌ها، تلفیق مخلوط (`[65 'a']` → `'Aa'`)،
+  ارتقای عددی، اندیس‌گذاری/انتساب اندیس‌دار، `char/double/ischar/blanks/str2double/num2str`؛
+  char دوبعدی، string اسکالر دابل‌کوتیشن و کتابخانهٔ کامل رشته (strcat/strcmp/…) = انبساط E4
+  (در v1 `"..."` مانند `'...'` رفتار می‌کند).
 
 ---
 

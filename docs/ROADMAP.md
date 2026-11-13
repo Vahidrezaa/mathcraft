@@ -216,9 +216,14 @@ shipping a plotter on top of a half-language would force rework.
   4. Builtins: `char`, `double`, `ischar`, `blanks`, `str2double` (minimal set; full string
      function library = expansion E4).
 - **DoD:**
-  - [ ] Audit repro tests for items 6 and 12 green.
-  - [ ] ≥ 20 new tests; corpus extended (char cases with Octave reference).
-  - [ ] COMPATIBILITY §1 rows updated.
+  - [x] Audit repro tests for items 6 and 12 green (tests/chars_step28.rs, 2026-11-13).
+  - [x] ≥ 20 new tests; corpus extended (char cases with Octave reference) — 44 new tests
+        (40 in chars_step28 + lexer adversarial suite + display golden + corpus p2_21/p2_22);
+        manifest 74 → 76 cases, expected/ regenerated with the Octave 10.3 sandbox oracle;
+        460/460 workspace green (was 416).
+  - [x] COMPATIBILITY §1 rows updated (char semantics rows + documented deviations:
+        out-of-range char() errors vs MATLAB clamping — pin flag; "…" behaves as char,
+        string scalars = E4; sort-on-char = E4).
 - **Tests:** lexer disambiguation adversarial suite; arithmetic/display goldens.
 - **Risks:** quote/transpose ambiguity is the classic MATLAB lexer trap → rule + tests first,
   then code; `Value` enum widening touches every match site (compiler-guided sweep).
@@ -511,8 +516,19 @@ close; package of record = `MathCraft-P2-v0.9-phase2-closed-WITH-GIT.tar.gz`. No
 Phase 2 remains "almost done" — the numeric core + hardening milestone (P2 of docs/07)
 is complete; sub-phase P2-c (language completeness, §4) continues under the P2 umbrella.
 
-**Next: step 2.8 — char type & strings (first step of sub-phase P2-c, §4).** No session
-may start any other step without the user explicitly reordering (§ Governance).
+**Step 2.8 — char type & strings (audit items 6/12) — code-complete 2026-11-13, pending
+user push + CI.** Executed per plan (§4): mixed concat promotes numerics to char codes
+(`[65 'a']` → `'Aa'`, rounding toward zero per the MATLAB char documentation); numeric
+promotion real + complex (`'abc'+1` → `[98 99 100]`, `'ab'+1i` → complex row); char
+read-indexing and indexed assignment with class-of-target-wins semantics (`s(2)='x'`,
+`x(1)='a'` → 97); transpose of a 1×N char row is an honest E4 error (2-D char); builtins
+`char/double/ischar/blanks/str2double`; the lexer now enforces MATLAB's no-space
+quote/transpose context rule (`x'` is transpose, `[65 'a']` is concat — adversarial
+suite); 460 tests green; corpus p2_21/p2_22 with the Octave 10.3 sandbox oracle.
+Deviations documented in COMPATIBILITY §1. Recorded in STATUS §3.10.
+
+**Next: step 2.9 — structs minimal (`Value::Struct`, §4).** No session may start any
+other step without the user explicitly reordering (§ Governance).
 
 ## 12. Change log
 
@@ -524,3 +540,4 @@ may start any other step without the user explicitly reordering (§ Governance).
 | 1.0 | 2026-10-29 | Step 2.6 executed per plan (§2.6 tasks 1-4 + corpus; task 6 stays blocked on 2.9): multi-output qr/svd, interp2 (linear/nearest), histcounts/histogram numeric core (documented 'auto' contract + pin flag), integral RelTol/AbsTol/Waypoints; tril/triu k-sign compat fix (rule R2 regressions); COMPATIBILITY §4.5 shrunk (integral/qr-svd rows closed); §11 updated. Task 5 (vdp1000 pin) = pending user MATLAB run. User approval: «خب در گام ۲.۵ همه چیز سبز بود. بریم گام ۲.۶» | User (chat) |
 | 1.0 | 2026-11-01 | Task 5 of 2.6 closed without real MATLAB (user chat: «من متلب واقعی ندارم خودت کارا رو درست کن. برو گام بعد.»): vdp1000 pinned from scipy 1.14.1 stiff-solver triangulation (Radau/BDF/LSODA, spread ≤ 2.3e-7; Octave measured impractical — probe [0,300] > 5 min); corpus test qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3) with JSON-sync + triangle-coherence guards; step 2.7 = code-complete, pending device (pendulum < 1 s + FB-1/FB-2 touch); §11 rewritten. First delivery lost to a sandbox reset — fully re-derived and re-verified (≤ 7.9e-11) before re-delivery | User (chat) |
 | 1.0 | 2026-11-05 | Phase 2 formally closed at step 2.7: user pushed annotated tag `p2-code-complete` at `e189195` (CI #18 + Android #18 green) and confirmed the full device checklist (pendulum ode45 demo < 1 s + progress bar, FB-1, FB-2); §2.7 DoD all ticked; §11 rewritten (Phase 2 CLOSED, next = P2-c step 2.8); STATUS §3.9 + phase map + FB rows updated; package v0.9 | User (chat: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار میکردند») |
+| 1.0 | 2026-11-13 | Step 2.8 executed per plan (§4 tasks 1-4): char type & strings — mixed concat promotion (`[65 'a']`→`'Aa'`), numeric promotion (real+complex), char indexing + indexed assignment (class-of-target wins), honest E4 errors for 2-D char, builtins char/double/ischar/blanks/str2double, MATLAB no-space quote/transpose lexer rule; corpus p2_21/p2_22 (Octave 10.3 sandbox oracle; manifest 74→76); 460 tests green; COMPATIBILITY ledger rows 6/12 closed. User approval: «خب اوکیه. بریم ادامه.» | User (chat) |
