@@ -308,7 +308,7 @@ shipping a plotter on top of a half-language would force rework.
   2. LTTB decimation module with quality test (docs/07: area error < 1%).
   3. Architecture decision (docs/02 §7, already made): Rust computes draw-lists; Flutter
      renders via CustomPainter — **no FFI calls in the frame loop**.
-- **DoD:** [ ] contract v1 committed with tests; [ ] LTTB quality test green.
+- **DoD:** [x] contract v2 committed with tests (52 mc-plot unit tests; v1 = P0 bridge, superseded by the freeze); [x] LTTB quality test green (area-error < 1% on chirp/gaussian/sinc @ 200k→4k).
 - **Deliverable:** commits. **Risks:** none serious — pure data model. **Stop/rollback:** additive crate work.
 
 ### Step 3.2 — Figure state + 2-D builtins
@@ -316,14 +316,14 @@ shipping a plotter on top of a half-language would force rework.
 - **Tasks:** `figure`, `hold on/off` (**closes audit item 9's hold-on part**), `plot`,
   `scatter`, `bar`, `histogram`, `area`, `fill`, `polarplot`, `errorbar`, `fplot`,
   `subplot`, `legend`, `axis`, `grid`, `xlabel/ylabel/title`; MATLAB line-spec parser.
-- **DoD:** [ ] ≥ 25 builtin-level tests; [ ] line-spec parity table vs MATLAB.
+- **DoD:** [x] 33 builtin-level tests (plot_builtins.rs); [x] line-spec parity table vs MATLAB (linespec.rs parity_table_matlab_doc04).
 - **Risks:** hold/figure state model — keep one active figure + axes list (MATLAB-lite,
   documented); full figure management = expansion.
 
 ### Step 3.3 — FFI transport
 - **Goal:** versioned retrieval of the figure list (pull model per docs/02 §8).
 - **Tasks:** `get_plots()` DTO extension; contract bump; glue freshness gate.
-- **DoD:** [ ] round-trip tests; [ ] mc-cli unaffected.
+- **DoD:** [x] round-trip tests (mc-ffi api: push/pull/hold/error-survival, 5 tests); [x] mc-cli unaffected (13/13 green — statement fns are echo-free like disp/rng).
 - **Risks:** DTO size on big series → decimation applied engine-side before transport.
 
 ### Step 3.4 — Flutter plot viewer
@@ -502,111 +502,20 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**Step 2.6 CLOSED (2026-11-01) — task 5 resolved without real MATLAB; tasks 1-4 + corpus
-were already green (2026-10-29).** Task 5 (vdp1000 point reference): the planned
-real-MATLAB pin is permanently N/A — the user has no real MATLAB (chat: «من متلب واقعی
-ندارم خودت کارا رو درست کن. برو گام بعد.»). Measured facts: Octave 9.4 ode45 probe on
-[0,300] (< 10% of the span) took > 5 min (m-file interpreter core + explicit-method
-stability on the stiff slow branch) → Octave cannot be this pin's oracle. Reference of
-record = scipy 1.14.1 stiff-solver triangulation (anti-cheating rule doc 08 §2 — no
-MathCraft output involved): Radau rtol=1e-10/atol=1e-13 + BDF/LSODA rtol=1e-8, spread
-≤ 2.3e-7 → y1(3000) = −1.51060693674408 · y2(3000) = 0.00117838000073098 · ymax =
-2.00007296600247. Pinned in `test-corpus/references/p2_13_vanderpol_mu1000.json` + the
-corpus test upgraded qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3 ≈
-14-85× the observed delta) with JSON-sync and triangle-coherence guards; Cargo.lock and
-app/ untouched (no new deps; no FFI/glue changes — the CI Octave job is structurally
-unaffected). Delivery note (honesty): the first patch carrying this change was lost to a
-sandbox reset before reaching the user and was fully re-derived and re-verified from
-scratch (Radau values reproduced to ≤ 7.9e-11) before re-delivery — new tree/sha256 are
-the ones in the handoff message.
+**P3-a engine core is code-complete (2026-11-17): steps 3.1–3.3 delivered in one
+batch (617 tests green, glue fresh, analyze clean) — pending only the user push +
+CI green.** Contract v2 is the frozen base the viewer builds on; 3D variants and
+the reserved `Overlay` are additive on top of it (no rewrite needed — the
+versioned DTO, semantic palette colors, Rust-side ticks and raw-data re-decimation
+hooks are all in place).
 
-**Phase 2 (numeric milestone gate) CLOSED — 2026-11-05, device-verified.** All
-formal-close conditions of §2.7 are met: (1) the user pushed the vdp1000-pin series —
-HEAD `e189195`, CI #18 + Android #18 green (2026-11-01); (2) the user created and pushed
-the annotated tag `p2-code-complete` → `e189195`; (3) the user confirmed the full device
-checklist (chat, 2026-11-05: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار
-میکردند») — pendulum ode45 demo < 1 s with progress bar ✓ · FB-1 display layout ✓ ·
-FB-2 themed selection/copy ✓ (the optional 2.4 display spot-check was not exercised —
-nothing was reported broken). All §2.7 DoD boxes are ticked; STATUS §3.9 records the
-close; package of record = `MathCraft-P2-v0.9-phase2-closed-WITH-GIT.tar.gz`. Nothing in
-Phase 2 remains "almost done" — the numeric core + hardening milestone (P2 of docs/07)
-is complete; sub-phase P2-c (language completeness, §4) continues under the P2 umbrella.
-
-**Step 2.8 — char type & strings (audit items 6/12) — code-complete 2026-11-13, pending
-user push + CI.** Executed per plan (§4): mixed concat promotes numerics to char codes
-(`[65 'a']` → `'Aa'`, rounding toward zero per the MATLAB char documentation); numeric
-promotion real + complex (`'abc'+1` → `[98 99 100]`, `'ab'+1i` → complex row); char
-read-indexing and indexed assignment with class-of-target-wins semantics (`s(2)='x'`,
-`x(1)='a'` → 97); transpose of a 1×N char row is an honest E4 error (2-D char); builtins
-`char/double/ischar/blanks/str2double`; the lexer now enforces MATLAB's no-space
-quote/transpose context rule (`x'` is transpose, `[65 'a']` is concat — adversarial
-suite); 460 tests green; corpus p2_21/p2_22 with the Octave 10.3 sandbox oracle.
-Deviations documented in COMPATIBILITY §1. Recorded in STATUS §3.10.
-
-**Next: Phase 3 — plotting (§5; first step: 3.1 PlotSpec contract freeze).**
-P2-c and with it **P2 (numeric + language) is code-complete pending this delivery's
-user push + CI + device checklist** — no session may start any other step without the
-user explicitly reordering (§ Governance).
-
-**Step 2.11 — diagnostics workshop — executed per plan 2026-11-17 (pending user
-push + CI).** The error taxonomy of doc 03 §14 is now actually enforced: E3001 is
-syntax-only (lexer/parser); every semantic eval error carries its family — E1002
-for called-but-unknown names (`lenght(x)` → "Function 'lenght' not found." +
-did-you-mean 'length'), E2001 for all bounds paths (name-based, chained, field),
-E2002 (new family, the "executable" level of doc 02 §9) for type/usage/arity
-errors, E2003 for dimension mismatches, E9xxx for honest v1 boundaries — 90
-sites reclassified across eval/registry/stdio/source/complex_ops. Spans were
-extended through the whole AST (Unary/Range/Logic got operator positions —
-`-s` reports the minus, `a && a` the `&&`, `1:x` the colon), and three position
-backstops (expression, statement, call-site — the latter also fixing the single
-registry path that didn't patch builtin errors) mean **no user error keeps
-`line 0:0`**; anonymous-function arity now reports the call site, not 0:0. The
-FFI DTO already carried id+line+col; the UI error card now *shows* the position
-("Line 2, column 7" / «سطر ۲، ستون ۷») — Dart-only change, l10n en/fa,
-verified against the real gen-l10n and `flutter analyze` (no FRB regen needed).
-The catalog test (ids ↔ doc 03 §14) surfaced and closed two pre-existing gaps
-(E2004/E2005 rows). Lexer recovery stays deferred (stop-at-first, documented).
-527 tests green (was 516; +11 diagnostics). Same delivery: the user's app logo
-is now the Android launcher icon (overlay over the flutter-create template,
-exactly the five `ic_launcher.png` densities the real 3.24.5 template ships).
-Recorded in STATUS §3.13.
-
-**Step 2.10 — chained indexing — executed per plan 2026-11-17 (pending user
-push + CI).** Postfix indexing on any expression result: `[1 2 3](2)`,
-`ones(3,3)(2,2)`, `f(x)(1)` (anon and builtin), `(1:4)(3)`, char literals
-`'abc'(2)`, transpose chains `[1 2 3]'(1)` / `A(1,:)'(2)`, deeper chains
-`f(x)(1)(2)` until natural bounds, indexing inside matrix literals
-`[[1 2](1) 5]`, and the full field chain `s.f(2)` read **and** write
-(`s.f(2) = v` incl. nested `w.x.y(2) = v` and MATLAB auto-viv from empty:
-`t.b(3) = 5` → `[0 0 5]`) — the promise made by the 2.9 error message is
-kept. The cell idiom `x(1)(2)` (and `A(1,2)(1)`, in both read and assignment
-forms) is an honest E4 error per this step's spec: MATLAB rejects `()()`
-chaining; Octave chains freely (`A(1,2)(1)` even works) — documented oracle
-delta. `index_value` generalizes the name-based machinery to temporary
-values (`end` resolves against the base value); `indexed_write_value` is the
-shared write core for the name path and the field path. Known boundary kept:
-direct `( )` indexing of complex values (name path parity — pre-existing).
-Oracle: Octave 10.3 sandbox probe (scripts/probe_chain210.m). 516 tests
-green. Recorded in STATUS §3.12.
-
-**Step 2.9 — structs minimal (`Value::Struct`) — executed per plan 2026-11-17
-(pending user push + CI).** Ordered-field-map `Value::Struct` (1×1 only; struct
-arrays need cells = expansion E4 — honest error, Octave builds them with `[]`:
-documented delta) with syntax `s.f`, `s.f = v` (root-variable display), nested
-auto-vivification `w.a.b = 5`, and dynamic fieldnames `s.(expr)` both read and
-assign; builtins `struct/fieldnames/isfield/getfield/setfield` (minimal set —
-`isstruct` stays v1.0-scope, not in this step); console display in MATLAB struct
-style (`  struct with fields:` + 4-space field previews; Octave's
-"scalar structure containing the fields" text = documented oracle delta;
-field-preview thresholds are pin-flagged); `odeset/ode45/ode23` accept a struct
-options argument (named pairs unchanged; struct+pairs mixed = honest error —
-merge via `odeset(old, ...)` which is the MATLAB precedence mechanism);
-`rng(seed)` now returns a MATLAB-style status struct {Type:'PCG64', Seed,
-State:16×1 exact u32-halves} with capture `s = rng` / restore `rng(s)` replay —
-closes the §4.5 deviation; rng statement form is echo-free and ans-free like
-MATLAB. Resource guard: struct nesting capped at 256 (clean error; Octave has
-no cap — documented deviation). Oracle: Octave 10.3 sandbox probe
-(scripts/probe_structs*.m). 501 tests green. Recorded in STATUS §3.11.
+**Next up — Step 3.4 (Flutter plot viewer):** plot page from `get_plots()` /
+`EvalResult.plots`; CustomPainter renderer (draw from the Rust-computed ticks and
+LTTB-decimated series); zoom/pan as an affine transform on painted coordinates
+(no FFI in the frame loop); crosshair; export PNG + share; CDS palette tokens
+(the `Palette(i)` color resolves in Dart per doc 06 §3); LTR island inside RTL
+layout; Craft Icons only. Then 3.5 (CI golden images + perf budget), then P3-b
+(3D) with `surf(peaks)` finger-rotation demo.
 
 ## 12. Change log
 
@@ -622,3 +531,4 @@ no cap — documented deviation). Oracle: Octave 10.3 sandbox probe
 | 1.0 | 2026-11-17 | Step 2.9 executed per plan (§4 tasks 1-4): structs minimal — `Value::Struct` (ordered field map, 1×1; struct arrays = E4 honest error), syntax `s.f` / `s.f = v` / nested auto-viv / dynamic `s.(expr)`, builtins struct/fieldnames/isfield/getfield/setfield, MATLAB-style struct display, `odeset` + struct-form ode options (pair form unchanged; merge precedence via odeset(old,...)), `rng` status struct {Type:'PCG64',Seed,State} with capture/restore replay (closes §4.5 deviation), rng statement form echo-free; depth guard 256; corpus p2_23 (manifest 76→77) + p2_24 (engine-internal, outside Octave manifest); 501 tests green (was 460). User approval: «خب اوکی بریم ادامه» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.9 CLOSED (user pushed 2620328 = tree bac9f15f ✓, CI green, full device checklist confirmed). Step 2.10 executed per plan (§4 tasks 1-2): chained indexing — `Expr::Index` postfix on any expression result (literals/calls/anon/parens/transpose chains/char literals/matrix-literal elements), `s.f(2)` read+write incl. nested + auto-viv from empty, cell idiom `x(1)(2)` = honest E4 (MATLAB rejects; Octave chains freely = documented delta); adversarial suite written before code (chained_step210, 14 tests); corpus p2_25 (manifest 77→78, Octave 10.3 oracle); 516 tests green (was 501). **Governance note (user):** Python/other languages acceptable as *tools* (product stays Rust-in-APK); multiple short steps may be batched per turn at the assistant's judgment — 2.11 deliberately deferred to a dedicated session (span+FFI+UI work). User approval: «خب بیلد شد. چک لیست رو تست کردم اوکی بود…» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.10 CLOSED (user pushed 21a7b59 = tree ef961d00 ✓, CI green, in-app tests confirmed). Step 2.11 executed per plan (§4 tasks 1-3) — **P2-c code-complete; with it P2 (numeric + language) fully closed pending this delivery's push/CI/checklist**: E3001 → syntax-only; 90 semantic sites reclassified (E1002 undefined fn with did-you-mean, E2001 bounds, E2002 new type/usage family, E2003 dims, E9xxx boundaries); AST spans for Unary/Range/Logic; three position backstops → no user error keeps line 0:0; UI error card shows the position (Dart-only, l10n en/fa, gen-l10n-verified, flutter analyze clean — FFI DTO already carried id+span); doc 03 §14 rows E1002/E2001/E2002 (+E2004/E2005 pre-existing gaps); lexer recovery stays deferred; 11 diagnostics tests; 527 green (was 516). Same delivery: user's logo → Android launcher icon (overlay over flutter-create template, verified against the real 3.24.5 template). User approval: «بله بیلد کامل شد. تست های داخل برنامه موفق بود. بریم گام بعد.» | User (chat) |
+| 1.0 | 2026-11-17 | Steps 3.1 + 3.2 + 3.3 executed in one turn (user-approved batching): **PlotSpec contract v2 frozen** (PlotColor palette/exact-RGB, Rust-side 1-2-5 ticks + %.4g, Area/Fill/ErrorBar, Bar series-mode, HistNorm, series id+raw_len for zoom re-decimation, caxis/colorbar reserved, PlotFigure + get_plots pull; PLOT_CONTRACT_VERSION=2); mc-plot v2 (ops grammar + FigureState fold + LTTB ≤4000 with <1% area-error quality test + linespec parser + histogram binning, 52 tests); 17 statement plot builtins in mc-interp (disp/rng pattern — no echo/no ans; expression use = clear error), hold/figure/subplot/legend/axis/grid/labels/fplot(400 samples); **histogram data-form retired for MATLAB parity — Bin* options merged into histcounts (COMPATIBILITY §4.5 closed)**, corpus p2_20 migrated; FFI: Engine.figure_state + push/pull plots + 5 round-trip tests; FRB glue regenerated (6 files, byte-stable re-run) + flutter analyze clean; 617 tests green (was 527). Next per §11: 3.4 Flutter plot viewer | User (chat: «بریم سراغ فاز ۳… بدون افت کیفیت در یک نوبت») |

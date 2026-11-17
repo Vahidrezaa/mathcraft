@@ -147,6 +147,39 @@ pub struct Series2D { pub x: Vec<f64>, pub y: Vec<f64>, pub style: LineStyle /* 
 - آستانه: سری با > 4000 نقطه → LTTB به ≤ 4000 نقطه برای viewport فعلی؛ zoom-in عمیق → درخواست مجدد decimation از Rust با بازه جدید (سند ۰۲ بخش ۷).
 - کیفیت: تست چشمی ثابت (golden image) + تست عددی (خطای ناحیه زیر منحنی < ۱٪ پس از decimation روی مجموعه‌های مرجع).
 
+### 8.4 فریز نسخهٔ v2 (P3-a — ROADMAP 3.1/3.3؛ تاریخ ۲۰۲۶-۱۱-۱۷)
+
+معماری نهایی (سند ۰۲ §7 عیناً اجرا شد):
+
+```
+مفسر (mc-interp)          mc-plot                        mc-ffi (DTO)        Dart
+────────────────          ────────────────────────       ──────────────      ────────
+۱۸ تابع رسم گزاره‌ای  →   PlotOp (گرام داخلی، بی‌نسخه)   PlotSpec v2     →   CustomPainter
+(الگوی disp/rng؛         FigureState = fold مرتب         (فریز‌شده)          (گام 3.4)
+بدون اکو/ans)            + LTTB ≤ 4000/سری               PLOT_CONTRACT_
+                         + تیک 1-2-5 + %.4g              VERSION = 2
+                         + دادهٔ خام برای re-decimation   get_plots() (pull)
+```
+
+دلتاهای v2 نسبت به پل P0 (همه افزودنی از دید UI؛ بامپ نسخه برای پایداری
+زمان اجرا): رنگ دو‌لایه `PlotColor::{Palette(u8), Rgba}` (توکن تم‌محور در
+Dart resolve می‌شود + رنگ دقیق LineSpec متلب)؛ `DashStyle::Invisible`
+(فقط‌مارکر مثل 'b*')؛ `Axes2D` + `visible` + `x_ticks/y_ticks` (تیک‌ها و
+برچسب‌ها در Rust محاسبه می‌شوند — `%.4g`، لگاریتمی به شکل `10^{k}`)؛
+گونه‌های جدید `Area2D/Fill2D/ErrorBar2D` (+ `ErrorSeries2D/ErrorBand`)؛
+`Bar2D` سری‌محور (`series/width/horizontal/stacked` — آفست گروهی در رندرر)؛
+`Histogram` با `counts: f64` + `norm: {Count,Pdf,Cdf}` + `style`؛
+`Series2D` با `id` + `raw_len` (پایهٔ درخواست re-decimation زوم)؛
+`caxis/colorbar` روی Surface/Mesh/Contour (P3-b آماده)؛ انتقال با
+`PlotFigure{figure_id, spec}` — push = `EvalResult.plots` (فقط شکل‌های
+دست‌خوردهٔ همان اجرا)، pull = `get_plots()`.
+
+قواعد سمانتیک (COMPATIBILITY ثبت شده): یک نوع نمودار در هر سلول (واگرایی
+مستند از متلب؛ مسیر افزودنی رزروشده: گونهٔ `Overlay` در آینده)؛
+plot/scatter زیر hold در یک سری‌لست متحد؛ histogram همیشه جایگزین؛ حدود
+خودکار = داده + ۵٪ حاشیه (tight بدون حاشیه، دستی مقدم)؛ رنگ خودکار = سیکل
+پالت ۸رنگی سند ۰۶ §3 و ریست آن با هر جایگزینی؛ یک استایل در هر فراخوانی.
+
 ### 8.3 مدل 3D
 - `surf/mesh`: meshgrid → مثلث‌بازی grid (دو مثلث در خانه)؛ نرمال‌ها در Rust؛ **رندر در Dart** با painter's algorithm (sort بر عمق مرکز مثلث، flat shading با یک نور ثابت قابل تنظیم `camlight`) — بدون GPU dependency؛ بودجه ۶۰fps تا ۵۰k مثلث (sort O(n log n) در Dart isolate per frame قابل قبول است؛ در صورت نیاز، sort عمق در Rust cache می‌شود و چرخش کامل re-project سبک انجام می‌شود).
 - `contourf`: marching squares استاندارد با ۱۰ سطح پیش‌فرض.

@@ -25,7 +25,10 @@ use crate::frb_generated::StreamSink;
 pub const API_CONTRACT_VERSION: u32 = 2;
 
 /// نسخه قرارداد رسم (DTO) رسم‌ها — سند ۰۴ بخش ۸، سند ۰۷ بخش ۳ بند ۲.
-pub const PLOT_CONTRACT_VERSION: u32 = 1;
+/// v1 = پل P0؛ **v2 = فریز P3-a** (رنگ معنایی/دقیق، تیک‌های 1-2-5،
+/// Area/Fill/ErrorBar، Bar سری‌محور، نرمال‌سازی هیستوگرام، شناسهٔ شکل/سری،
+/// caxis/colorbar) — افزودنی از دید UI، شکانده از دید فرم (بامپ صادقانه).
+pub const PLOT_CONTRACT_VERSION: u32 = 2;
 
 // ---------------------------------------------------------------------------
 // انواع قرارداد (سند ۰۲ بخش ۳ — «قرارداد داده اصلی»)
@@ -37,8 +40,8 @@ pub struct EvalResult {
     pub job_id: u64,
     /// متن، خطا، warning — در P0 دسته‌ای؛ streaming کامل با `runScript` در P2.
     pub console_events: Vec<ConsoleEvent>,
-    /// مدل داده رسم (سند ۰۴ بخش ۸) — در P0 همیشه خالی.
-    pub plots: Vec<PlotSpec>,
+    /// شکل‌های دست‌خوردهٔ این اجرا (سند ۰۴ §8 — push؛ لیست کامل با get_plots).
+    pub plots: Vec<PlotFigure>,
     /// فقط متغیرهای تغییرکرده — نه کل workspace (سند ۰۲ بخش ۳).
     pub workspace_delta: WorkspaceDelta,
     pub status: JobStatus,
@@ -145,10 +148,18 @@ impl VarSummary {
 }
 
 // ---------------------------------------------------------------------------
-// قرارداد رسم (نسخه پل — سند ۰۴ بخش ۸.۱؛ قطعی‌شدن نهایی قبل از P3-a)
+// قرارداد رسم — فریز v2 (P3-a، سند ۰۴ §8؛ v1 = پل P0)
 // ---------------------------------------------------------------------------
 
-/// enum بسته رسم‌ها (سند ۰۴ بخش ۸.۱) — «داده در Rust، ترسیم در Dart».
+/// یک شکل قابل‌انتقال — شناسه‌دار برای pull (get_plots) و به‌روزرسانی
+/// هدفمند در UI؛ شناسهٔ سری‌ها هم پایهٔ درخواست re-decimation زوم است.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlotFigure {
+    pub figure_id: u64,
+    pub spec: PlotSpec,
+}
+
+/// enum بستهٔ رسم‌ها (سند ۰۴ §8.1 — فریز v2) — «داده در Rust، ترسیم در Dart».
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlotSpec {
     Line2D {
@@ -161,19 +172,52 @@ pub enum PlotSpec {
         axes: Axes2D,
         legend: Option<Legend>,
     },
+    /// میله‌ای — چند سری = گروهی/انباشته (آفست‌های گروه در رندرر).
     Bar2D {
-        categories: Vec<String>,
-        values: Vec<f64>,
+        series: Vec<Series2D>,
+        /// عرض نسبی میله (0..1؛ پیش‌فرض 0.8).
+        width: f32,
+        /// barh — افقی.
+        horizontal: bool,
+        /// انباشته (در غیر این صورت گروهی).
+        stacked: bool,
         axes: Axes2D,
+        legend: Option<Legend>,
     },
+    /// هیستوگرام — یال‌ها/شمارش‌های از پیش محاسبه‌شده + نرمال‌سازی.
     Histogram {
         bin_edges: Vec<f64>,
-        counts: Vec<u64>,
+        counts: Vec<f64>,
+        norm: HistNorm,
+        /// استایل میله‌ها (رنگ وجه از پالت).
+        style: LineStyle,
+        axes: Axes2D,
+        legend: Option<Legend>,
+    },
+    /// سطح زیر خط با خط مبنا (area).
+    Area2D {
+        series: Vec<Series2D>,
+        baseline: f64,
+        axes: Axes2D,
+        legend: Option<Legend>,
+    },
+    /// چندضلعی‌های بستهٔ توپر (fill) — وجه = رنگ استایل، لبه = خط استایل.
+    Fill2D {
+        series: Vec<Series2D>,
         axes: Axes2D,
     },
+    /// پلار — x = θ (رادیان)، y = شعاع؛ شبکهٔ پلار در رندرر.
     Polar {
         series: Vec<Series2D>,
+        legend: Option<Legend>,
     },
+    /// سری با نوار خطا (errorbar).
+    ErrorBar2D {
+        series: Vec<ErrorSeries2D>,
+        axes: Axes2D,
+        legend: Option<Legend>,
+    },
+    /// میدان برداری (P3-b — رزرو).
     Quiver {
         x: Vec<f64>,
         y: Vec<f64>,
@@ -181,24 +225,33 @@ pub enum PlotSpec {
         v: Vec<f64>,
         axes: Axes2D,
     },
+    /// سطح ۳بعدی (P3-b — رزرو؛ داده‌ها از همین حالا قراردادند).
     Surface {
         x: Vec<f64>,
         y: Vec<f64>,
         z: Vec<Vec<f64>>,
         shading: Shading,
         colormap: Colormap,
+        /// بازهٔ رنگ صریح (caxis) — None = خودکار از z.
+        caxis: Option<Limits>,
+        colorbar: bool,
     },
     Mesh {
         x: Vec<f64>,
         y: Vec<f64>,
         z: Vec<Vec<f64>>,
         colormap: Colormap,
+        caxis: Option<Limits>,
+        colorbar: bool,
     },
     Contour {
         x: Vec<f64>,
         y: Vec<f64>,
         z: Vec<Vec<f64>>,
         levels: Vec<f64>,
+        colormap: Colormap,
+        caxis: Option<Limits>,
+        colorbar: bool,
     },
     Plot3 {
         series: Vec<Series3D>,
@@ -211,12 +264,35 @@ pub enum PlotSpec {
     },
 }
 
+/// سری ۲بعدی — نمایش LTTB-کاسته (≤ 4000 نقطه)؛ `raw_len` = تعداد نقاط
+/// دادهٔ خامِ مانده در Rust (re-decimation زوم از دادهٔ کامل).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Series2D {
+    /// شناسهٔ پایدار سری (نشست) — هدف درخواست re-decimation.
+    pub id: u64,
+    pub raw_len: u64,
     pub x: Vec<f64>,
     pub y: Vec<f64>,
-    /// رنگ از ایندکس پالت ۸ رنگی CDS (سند ۰۶ بخش ۳) — هگز در Dart resolve می‌شود.
     pub style: LineStyle,
+}
+
+/// سری errorbar — نوارهای قرینه/ناقرینهٔ هر محور.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorSeries2D {
+    pub id: u64,
+    pub raw_len: u64,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+    pub x_err: Option<ErrorBand>,
+    pub y_err: Option<ErrorBand>,
+    pub style: LineStyle,
+}
+
+/// نوار خطا — جفت قرینه (neg/pos؛ طول‌ها ≥ 0، هم‌طول سری).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ErrorBand {
+    pub neg: Vec<f64>,
+    pub pos: Vec<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -227,13 +303,28 @@ pub struct Series3D {
     pub style: LineStyle,
 }
 
+/// استایل حل‌شده — رنگ معنایی (پالت، resolve در Dart طبق تم) یا دقیق.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineStyle {
-    /// ۰..=۷ — ترتیب پالت سند ۰۶ بخش ۳ (`plot(x,y)` بدون رنگ به ترتیب پالت می‌رود).
-    pub palette_index: u8,
+    pub color: PlotColor,
+    /// ضخامت dp (پیش‌فرض ۲ — سند ۰۶ §3).
     pub width: f32,
     pub dash: DashStyle,
     pub marker: Marker,
+}
+
+/// رنگ قراردادی — دو لایه (حرفه‌ای‌شدن بدون بازنویسی):
+/// پالت = توکن تم‌محور (رنگ خودکار سری‌ها)؛ Rgba = مقدار دقیق (LineSpec متلب).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlotColor {
+    /// 0..=7 — سیکل پالت سند ۰۶ §3.
+    Palette(u8),
+    Rgba {
+        r: u8,
+        g: u8,
+        b: u8,
+        a: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -243,6 +334,8 @@ pub enum DashStyle {
     Dashed,
     Dotted,
     DashDot,
+    /// بدون خط — فقط مارکر (پارتی `'b*'`).
+    Invisible,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -260,7 +353,9 @@ pub enum Marker {
     TriangleDown,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+/// محورهای ۲بعدی حل‌شده — حدود مؤثر + تیک‌های 1-2-5 با برچسب `%.4g`
+/// (سند ۰۴ §8.1: تیک‌ها در Rust تولید می‌شوند تا Dart فقط بکشد).
+#[derive(Debug, Clone, PartialEq)]
 pub struct Axes2D {
     pub title: Option<String>,
     pub xlabel: Option<String>,
@@ -271,6 +366,46 @@ pub struct Axes2D {
     pub equal_aspect: bool,
     pub log_x: bool,
     pub log_y: bool,
+    /// `axis off` — تزئینات محور مخفی، داده می‌ماند.
+    pub visible: bool,
+    pub x_ticks: Vec<Tick>,
+    pub y_ticks: Vec<Tick>,
+}
+
+impl Default for Axes2D {
+    fn default() -> Self {
+        Self {
+            title: None,
+            xlabel: None,
+            ylabel: None,
+            grid: false,
+            x_limits: None,
+            y_limits: None,
+            equal_aspect: false,
+            log_x: false,
+            log_y: false,
+            visible: true,
+            x_ticks: Vec::new(),
+            y_ticks: Vec::new(),
+        }
+    }
+}
+
+/// یک تیک — `label: None` = فرعی (minor) بدون برچسب؛ برچسب‌های لگاریتمی
+/// به شکل `10^{k}` (TeX سبک؛ رندر superscript در Dart).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tick {
+    pub position: f64,
+    pub label: Option<String>,
+}
+
+/// نرمال‌سازی هیستوگرام (پارتی 'Normalization' متلب).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HistNorm {
+    #[default]
+    Count,
+    Pdf,
+    Cdf,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -282,7 +417,7 @@ pub struct Axes3D {
     pub grid: bool,
 }
 
-/// حدود محور — جفت min/max (تیک‌های زیبای 1-2-5 در Rust تولید می‌شوند؛ سند ۰۴ §8.1).
+/// حدود محور — جفت min/max.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Limits {
     pub min: f64,
@@ -343,6 +478,8 @@ pub struct SubplotCell {
 struct Engine {
     env: Environment,
     jobs: u64,
+    /// حالت شکل‌های نشست — fold روی PlotOpهای هر ارزیابی (P3-a).
+    figures: mc_plot::figure::FigureState,
 }
 
 static ENGINE: OnceLock<Mutex<Engine>> = OnceLock::new();
@@ -352,6 +489,7 @@ fn engine() -> &'static Mutex<Engine> {
         Mutex::new(Engine {
             env: Environment::new(),
             jobs: 0,
+            figures: mc_plot::figure::FigureState::new(),
         })
     })
 }
@@ -407,14 +545,25 @@ pub fn plot_contract_version() -> u32 {
 /// هستهٔ ارزیابی مشترک evaluate_line/run_script — پارس + ارزیابی + نگاشت
 /// رویدادها. لغو (`MC:E4002_CANCELLED`) به `JobStatus::Cancelled` نگاشت
 /// می‌شود (نه Failed) — سمانتیک stop متلب (ROADMAP 2.3).
-fn eval_core(env: &mut Environment, code: &str) -> (Vec<ConsoleEvent>, JobStatus) {
+fn eval_core(
+    env: &mut Environment,
+    code: &str,
+    figures: &mut mc_plot::figure::FigureState,
+) -> (Vec<ConsoleEvent>, JobStatus, Vec<PlotFigure>) {
     match parse(code) {
         Err(e) => (
             vec![ConsoleEvent::Error { err: e.into() }],
             JobStatus::Failed,
+            Vec::new(),
         ),
         Ok(program) => {
             let outcome = eval_program(&program, env);
+            // عملیات‌های رسم این اجرا → حالت شکل‌ها (متلب: نمودارهای پیش از
+            // خطا می‌مانند)؛ خروجی push = فقط شکل‌های دست‌خورده.
+            for op in outcome.plot_ops {
+                figures.apply(op);
+            }
+            let touched = figures.take_touched();
             let mut events: Vec<ConsoleEvent> = outcome
                 .outputs
                 .into_iter()
@@ -432,7 +581,13 @@ fn eval_core(env: &mut Environment, code: &str) -> (Vec<ConsoleEvent>, JobStatus
                     }
                 }
             };
-            (events, status)
+            let plots = figures
+                .snapshots()
+                .into_iter()
+                .filter(|f| touched.contains(&f.figure_id))
+                .map(map_figure)
+                .collect();
+            (events, status, plots)
         }
     }
 }
@@ -476,17 +631,23 @@ pub fn evaluate_line(code: String) -> EvalResult {
     // اندروید). به خطای موتور نگاشت می‌شود؛ وضعیت env بعد از panic ناسازگار
     // ممکن است بماند — نشست باید ادامه یابد (بند ۱۵ گزارش ممیزی خارجی).
     let _guard = JobGuard::new(job_id);
-    let (mut events, status) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        eval_core(&mut engine.env, &code)
-    })) {
-        Ok(pair) => pair,
-        Err(payload) => (
-            vec![ConsoleEvent::Error {
-                err: panic_error(payload).into(),
-            }],
-            JobStatus::Failed,
-        ),
-    };
+    let (mut events, status, plots) =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            {
+                // یک deref صریح تا دو قرضِ گسسته از Engine ممکن شود (MutexGuard)
+                let eng = &mut *engine;
+                eval_core(&mut eng.env, &code, &mut eng.figures)
+            }
+        })) {
+            Ok(triple) => triple,
+            Err(payload) => (
+                vec![ConsoleEvent::Error {
+                    err: panic_error(payload).into(),
+                }],
+                JobStatus::Failed,
+                Vec::new(),
+            ),
+        };
 
     // هیچ رویدادی گم نمی‌شود: اگر خطا وسط خط بود، خروجی‌های قبل از خطا چاپ شده‌اند.
     if status == JobStatus::Failed && events.is_empty() {
@@ -499,7 +660,7 @@ pub fn evaluate_line(code: String) -> EvalResult {
     EvalResult {
         job_id,
         console_events: events,
-        plots: Vec::new(),
+        plots,
         workspace_delta,
         status,
         duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -578,17 +739,23 @@ pub fn run_script(code: String, sink: StreamSink<ScriptEvent>) -> EvalResult {
             .ok() // بدون ticker هم پیشرفت از دست نمی‌رود؛ نتیجهٔ نهایی سالم است
     };
 
-    let (mut events, status) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        eval_core(&mut engine.env, &code)
-    })) {
-        Ok(pair) => pair,
-        Err(payload) => (
-            vec![ConsoleEvent::Error {
-                err: panic_error(payload).into(),
-            }],
-            JobStatus::Failed,
-        ),
-    };
+    let (mut events, status, plots) =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            {
+                // یک deref صریح تا دو قرضِ گسسته از Engine ممکن شود (MutexGuard)
+                let eng = &mut *engine;
+                eval_core(&mut eng.env, &code, &mut eng.figures)
+            }
+        })) {
+            Ok(triple) => triple,
+            Err(payload) => (
+                vec![ConsoleEvent::Error {
+                    err: panic_error(payload).into(),
+                }],
+                JobStatus::Failed,
+                Vec::new(),
+            ),
+        };
 
     // هیچ رویدادی گم نمی‌شود (همان قاعدهٔ v1)
     if status == JobStatus::Failed && events.is_empty() {
@@ -610,7 +777,7 @@ pub fn run_script(code: String, sink: StreamSink<ScriptEvent>) -> EvalResult {
     let result = EvalResult {
         job_id,
         console_events: events,
-        plots: Vec::new(),
+        plots,
         workspace_delta: build_delta(&before, &engine.env),
         status,
         duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
@@ -657,6 +824,237 @@ pub(crate) fn active_job_loop_passes() -> Option<u64> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .as_ref()
         .map(|(_, ctx)| ctx.loop_passes.load(Ordering::Relaxed))
+}
+
+/// لیست کامل شکل‌های نشست (مدل pull سند ۰۲ §7) — UI هر زمان می‌تواند کل
+/// شکل‌ها را بگیرد؛ push برای به‌روزرسانی = `EvalResult.plots` همین اجرا.
+pub fn get_plots() -> Vec<PlotFigure> {
+    let engine = engine()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    engine
+        .figures
+        .snapshots()
+        .into_iter()
+        .map(map_figure)
+        .collect()
+}
+
+// ----- نگاشت snapshot موتور → DTO انتقالی (mc-plot → قرارداد v2) -----
+
+use mc_plot::figure::{
+    AxesSnapshot, CellSnapshot, ColorSnapshot, ErrSeriesSnapshot, FigureSnapshot, SeriesSnapshot,
+    StyleSnapshot,
+};
+use mc_plot::histogram::HistNorm as CoreHistNorm;
+use mc_plot::spec::{DashSpec, MarkerSpec};
+use mc_plot::ticks::Tick as CoreTick;
+
+fn map_figure(f: FigureSnapshot) -> PlotFigure {
+    PlotFigure {
+        figure_id: f.figure_id,
+        spec: map_cell(f.spec),
+    }
+}
+
+fn map_cell(c: CellSnapshot) -> PlotSpec {
+    match c {
+        CellSnapshot::Line {
+            series,
+            axes,
+            legend,
+        } => PlotSpec::Line2D {
+            series: series.into_iter().map(map_series).collect(),
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Scatter {
+            series,
+            axes,
+            legend,
+        } => PlotSpec::Scatter2D {
+            series: series.into_iter().map(map_series).collect(),
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Bar {
+            series,
+            width,
+            horizontal,
+            stacked,
+            axes,
+            legend,
+        } => PlotSpec::Bar2D {
+            series: series.into_iter().map(map_series).collect(),
+            width,
+            horizontal,
+            stacked,
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Histogram {
+            edges,
+            counts,
+            norm,
+            style,
+            axes,
+            legend,
+        } => PlotSpec::Histogram {
+            bin_edges: edges,
+            counts,
+            norm: map_hist_norm(norm),
+            style: map_style(style),
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Area {
+            series,
+            baseline,
+            axes,
+            legend,
+        } => PlotSpec::Area2D {
+            series: series.into_iter().map(map_series).collect(),
+            baseline,
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Fill { series, axes } => PlotSpec::Fill2D {
+            series: series.into_iter().map(map_series).collect(),
+            axes: map_axes(axes),
+        },
+        CellSnapshot::Polar { series, legend } => PlotSpec::Polar {
+            series: series.into_iter().map(map_series).collect(),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::ErrorBar {
+            series,
+            axes,
+            legend,
+        } => PlotSpec::ErrorBar2D {
+            series: series.into_iter().map(map_err_series).collect(),
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Subplot { rows, cols, cells } => PlotSpec::Subplot {
+            rows,
+            cols,
+            cells: cells
+                .into_iter()
+                .map(|sc| SubplotCell {
+                    row: sc.row,
+                    col: sc.col,
+                    spec: map_cell(sc.spec),
+                })
+                .collect(),
+        },
+    }
+}
+
+fn map_series(s: SeriesSnapshot) -> Series2D {
+    Series2D {
+        id: s.id,
+        raw_len: s.raw_len,
+        x: s.x,
+        y: s.y,
+        style: map_style(s.style),
+    }
+}
+
+fn map_err_series(s: ErrSeriesSnapshot) -> ErrorSeries2D {
+    ErrorSeries2D {
+        id: s.id,
+        raw_len: s.raw_len,
+        x: s.x,
+        y: s.y,
+        x_err: s.x_err.map(map_err_band),
+        y_err: s.y_err.map(map_err_band),
+        style: map_style(s.style),
+    }
+}
+
+fn map_err_band(b: mc_plot::spec::ErrBand) -> ErrorBand {
+    ErrorBand {
+        neg: b.neg,
+        pos: b.pos,
+    }
+}
+
+fn map_style(st: StyleSnapshot) -> LineStyle {
+    LineStyle {
+        color: map_color(st.color),
+        width: st.width,
+        dash: match st.dash {
+            DashSpec::Solid => DashStyle::Solid,
+            DashSpec::Dashed => DashStyle::Dashed,
+            DashSpec::Dotted => DashStyle::Dotted,
+            DashSpec::DashDot => DashStyle::DashDot,
+            DashSpec::Invisible => DashStyle::Invisible,
+        },
+        marker: match st.marker {
+            None => Marker::None,
+            Some(MarkerSpec::Point) => Marker::Point,
+            Some(MarkerSpec::Circle) => Marker::Circle,
+            Some(MarkerSpec::Square) => Marker::Square,
+            Some(MarkerSpec::Diamond) => Marker::Diamond,
+            Some(MarkerSpec::Cross) => Marker::Cross,
+            Some(MarkerSpec::Plus) => Marker::Plus,
+            Some(MarkerSpec::Star) => Marker::Star,
+            Some(MarkerSpec::TriangleUp) => Marker::TriangleUp,
+            Some(MarkerSpec::TriangleDown) => Marker::TriangleDown,
+        },
+    }
+}
+
+fn map_color(c: ColorSnapshot) -> PlotColor {
+    match c {
+        ColorSnapshot::Palette(i) => PlotColor::Palette(i),
+        ColorSnapshot::Rgb { r, g, b } => PlotColor::Rgba { r, g, b, a: 255 },
+    }
+}
+
+fn map_axes(a: AxesSnapshot) -> Axes2D {
+    Axes2D {
+        title: a.title,
+        xlabel: a.xlabel,
+        ylabel: a.ylabel,
+        grid: a.grid,
+        x_limits: Some(Limits {
+            min: a.x_limits[0],
+            max: a.x_limits[1],
+        }),
+        y_limits: Some(Limits {
+            min: a.y_limits[0],
+            max: a.y_limits[1],
+        }),
+        equal_aspect: a.equal_aspect,
+        log_x: a.log_x,
+        log_y: a.log_y,
+        visible: a.visible,
+        x_ticks: a.x_ticks.into_iter().map(map_tick).collect(),
+        y_ticks: a.y_ticks.into_iter().map(map_tick).collect(),
+    }
+}
+
+fn map_tick(t: CoreTick) -> Tick {
+    Tick {
+        position: t.position,
+        label: t.label,
+    }
+}
+
+fn map_hist_norm(n: CoreHistNorm) -> HistNorm {
+    match n {
+        CoreHistNorm::Count => HistNorm::Count,
+        CoreHistNorm::Pdf => HistNorm::Pdf,
+        CoreHistNorm::Cdf => HistNorm::Cdf,
+    }
+}
+
+fn map_legend(entries: Vec<String>) -> Legend {
+    Legend {
+        entries,
+        position: LegendPosition::Best,
+    }
 }
 
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
@@ -897,9 +1295,9 @@ mod tests {
         let r = evaluate_line("matrixish = ans * 1".to_owned());
         assert!(r.workspace_delta.changed[0].preview.len() <= 256);
 
-        // -- ثبات نسخه‌های قرارداد
+        // -- ثبات نسخه‌های قرارداد (رسم: v2 از فریز P3-a)
         assert_eq!(api_version(), 2);
-        assert_eq!(plot_contract_version(), 1);
+        assert_eq!(plot_contract_version(), 2);
 
         // -- بازرسی نشست (P0.1): workspace_vars مرتب و clear_workspace سمانتیک clear
         let _ = evaluate_line("zv = 9".to_owned());
@@ -1151,5 +1549,100 @@ mod tests {
         assert_eq!(r.status, JobStatus::Done);
         let r = evaluate_line("v(3) = 9; v".to_owned());
         assert_eq!(r.status, JobStatus::Done); // رشد کوچک همان مسیر، مجاز
+    }
+
+    // ----- قرارداد رسم v2 (P3-a — ROADMAP 3.1/3.3) -----
+
+    /// نسخهٔ قرارداد پس از فریز P3-a.
+    #[test]
+    fn plot_contract_version_is_two_after_p3a_freeze() {
+        assert_eq!(plot_contract_version(), 2);
+    }
+
+    /// رفت‌وبرگشت کامل: گزارهٔ plot → PlotOp → FigureState → snapshot → DTO.
+    #[test]
+    fn plot_roundtrip_pushes_line_figure_with_ticks() {
+        let _guard = serial_guard();
+        // نشست تازه: شکل‌های قبلی را با شمارهٔ شکل بزرگ دور می‌زنیم
+        let r = evaluate_line("figure(9); x = 0:0.1:2*pi; plot(x, sin(x));".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert_eq!(r.plots.len(), 1);
+        let f = &r.plots[0];
+        assert_eq!(f.figure_id, 9);
+        match &f.spec {
+            PlotSpec::Line2D { series, axes, .. } => {
+                assert_eq!(series.len(), 1);
+                assert_eq!(series[0].raw_len, 63); // 0:0.1:2π
+                assert_eq!(series[0].x.len(), 63); // زیر آستانهٔ LTTB — دست‌نخورده
+                assert_eq!(series[0].style.color, PlotColor::Palette(0));
+                assert_eq!(series[0].style.dash, DashStyle::Solid);
+                assert!(!axes.x_ticks.is_empty());
+                assert!(axes.x_ticks.iter().all(|t| t.label.is_some()));
+                assert!(axes.visible); // پیش‌فرض
+            }
+            other => panic!("expected Line2D, got {other:?}"),
+        }
+        // بدون اکو/ans: کنسول تمیز
+        assert!(r.console_events.is_empty());
+    }
+
+    /// مدل pull: get_plots کل شکل‌ها؛ push فقط دست‌خورده‌های همان اجرا.
+    #[test]
+    fn get_plots_pull_lists_all_figures() {
+        let _guard = serial_guard();
+        let r =
+            evaluate_line("figure(11); plot(1:3); figure(12); bar([1 2 3], [4 5 6]); 1".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert_eq!(r.plots.len(), 2); // هر دو شکل در همین اجرا ساخته شدند
+        let all = get_plots();
+        assert!(all.len() >= 2);
+        let ids: Vec<u64> = all.iter().map(|f| f.figure_id).collect();
+        assert!(ids.contains(&11) && ids.contains(&12));
+        // اجرای بدون رسم: push خالی، pull همان‌قدر
+        let r = evaluate_line("2 * 21".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(r.plots.is_empty());
+        assert_eq!(get_plots().len(), all.len());
+    }
+
+    /// hold + چند فراخوانی: سری‌ها در یک سلول جمع می‌شوند (سطح FFI).
+    #[test]
+    fn hold_accumulates_series_across_statements() {
+        let _guard = serial_guard();
+        let r = evaluate_line(
+            "figure(13); hold('on'); plot(1:3); plot(1:3, 'r--'); title('T'); 7".to_owned(),
+        );
+        assert_eq!(r.status, JobStatus::Done);
+        match &r.plots[0].spec {
+            PlotSpec::Line2D {
+                series,
+                axes,
+                legend,
+            } => {
+                assert_eq!(series.len(), 2);
+                assert_eq!(
+                    series[1].style.color,
+                    PlotColor::Rgba {
+                        r: 255,
+                        g: 0,
+                        b: 0,
+                        a: 255
+                    }
+                );
+                assert_eq!(series[1].style.dash, DashStyle::Dashed);
+                assert_eq!(axes.title.as_deref(), Some("T"));
+                assert!(legend.is_none());
+            }
+            other => panic!("expected Line2D, got {other:?}"),
+        }
+    }
+
+    /// خطای وسط اسکریپت: نمودارهای پیش از خطا می‌مانند (سمانتیک متلب).
+    #[test]
+    fn plots_before_error_survive_in_push() {
+        let _guard = serial_guard();
+        let r = evaluate_line("figure(14); plot(1:3); undefined_fn_xyz()".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert_eq!(r.plots.len(), 1, "figure drawn before the error is kept");
     }
 }

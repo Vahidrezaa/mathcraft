@@ -44,6 +44,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Axes3D dco_decode_box_autoadd_axes_3_d(dynamic raw);
 
   @protected
+  ErrorBand dco_decode_box_autoadd_error_band(dynamic raw);
+
+  @protected
   EvalResult dco_decode_box_autoadd_eval_result(dynamic raw);
 
   @protected
@@ -54,6 +57,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Limits dco_decode_box_autoadd_limits(dynamic raw);
+
+  @protected
+  LineStyle dco_decode_box_autoadd_line_style(dynamic raw);
 
   @protected
   McError dco_decode_box_autoadd_mc_error(dynamic raw);
@@ -71,6 +77,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DashStyle dco_decode_dash_style(dynamic raw);
 
   @protected
+  ErrorBand dco_decode_error_band(dynamic raw);
+
+  @protected
+  ErrorSeries2D dco_decode_error_series_2_d(dynamic raw);
+
+  @protected
   EvalResult dco_decode_eval_result(dynamic raw);
 
   @protected
@@ -78,6 +90,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  HistNorm dco_decode_hist_norm(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -104,22 +119,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ConsoleEvent> dco_decode_list_console_event(dynamic raw);
 
   @protected
+  List<ErrorSeries2D> dco_decode_list_error_series_2_d(dynamic raw);
+
+  @protected
   List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw);
 
   @protected
   List<MFunctionSummary> dco_decode_list_m_function_summary(dynamic raw);
 
   @protected
-  List<PlotSpec> dco_decode_list_plot_spec(dynamic raw);
+  List<PlotFigure> dco_decode_list_plot_figure(dynamic raw);
 
   @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
-
-  @protected
-  Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -132,6 +147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SubplotCell> dco_decode_list_subplot_cell(dynamic raw);
+
+  @protected
+  List<Tick> dco_decode_list_tick(dynamic raw);
 
   @protected
   List<VarSummary> dco_decode_list_var_summary(dynamic raw);
@@ -149,6 +167,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  ErrorBand? dco_decode_opt_box_autoadd_error_band(dynamic raw);
+
+  @protected
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
 
   @protected
@@ -162,6 +183,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  PlotColor dco_decode_plot_color(dynamic raw);
+
+  @protected
+  PlotFigure dco_decode_plot_figure(dynamic raw);
 
   @protected
   PlotSpec dco_decode_plot_spec(dynamic raw);
@@ -183,6 +210,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SubplotCell dco_decode_subplot_cell(dynamic raw);
+
+  @protected
+  Tick dco_decode_tick(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -231,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Axes3D sse_decode_box_autoadd_axes_3_d(SseDeserializer deserializer);
 
   @protected
+  ErrorBand sse_decode_box_autoadd_error_band(SseDeserializer deserializer);
+
+  @protected
   EvalResult sse_decode_box_autoadd_eval_result(SseDeserializer deserializer);
 
   @protected
@@ -241,6 +274,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Limits sse_decode_box_autoadd_limits(SseDeserializer deserializer);
+
+  @protected
+  LineStyle sse_decode_box_autoadd_line_style(SseDeserializer deserializer);
 
   @protected
   McError sse_decode_box_autoadd_mc_error(SseDeserializer deserializer);
@@ -258,6 +294,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DashStyle sse_decode_dash_style(SseDeserializer deserializer);
 
   @protected
+  ErrorBand sse_decode_error_band(SseDeserializer deserializer);
+
+  @protected
+  ErrorSeries2D sse_decode_error_series_2_d(SseDeserializer deserializer);
+
+  @protected
   EvalResult sse_decode_eval_result(SseDeserializer deserializer);
 
   @protected
@@ -265,6 +307,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  HistNorm sse_decode_hist_norm(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -292,6 +337,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ErrorSeries2D> sse_decode_list_error_series_2_d(
+      SseDeserializer deserializer);
+
+  @protected
   List<Float64List> sse_decode_list_list_prim_f_64_strict(
       SseDeserializer deserializer);
 
@@ -300,16 +349,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  List<PlotSpec> sse_decode_list_plot_spec(SseDeserializer deserializer);
+  List<PlotFigure> sse_decode_list_plot_figure(SseDeserializer deserializer);
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
-
-  @protected
-  Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -322,6 +368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SubplotCell> sse_decode_list_subplot_cell(SseDeserializer deserializer);
+
+  @protected
+  List<Tick> sse_decode_list_tick(SseDeserializer deserializer);
 
   @protected
   List<VarSummary> sse_decode_list_var_summary(SseDeserializer deserializer);
@@ -339,6 +388,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  ErrorBand? sse_decode_opt_box_autoadd_error_band(
+      SseDeserializer deserializer);
+
+  @protected
   double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
@@ -352,6 +405,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  PlotColor sse_decode_plot_color(SseDeserializer deserializer);
+
+  @protected
+  PlotFigure sse_decode_plot_figure(SseDeserializer deserializer);
 
   @protected
   PlotSpec sse_decode_plot_spec(SseDeserializer deserializer);
@@ -373,6 +432,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SubplotCell sse_decode_subplot_cell(SseDeserializer deserializer);
+
+  @protected
+  Tick sse_decode_tick(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -422,6 +484,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_axes_3_d(Axes3D self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_error_band(
+      ErrorBand self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_eval_result(
       EvalResult self, SseSerializer serializer);
 
@@ -433,6 +499,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_limits(Limits self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_line_style(
+      LineStyle self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_mc_error(McError self, SseSerializer serializer);
@@ -450,6 +520,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_dash_style(DashStyle self, SseSerializer serializer);
 
   @protected
+  void sse_encode_error_band(ErrorBand self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_error_series_2_d(
+      ErrorSeries2D self, SseSerializer serializer);
+
+  @protected
   void sse_encode_eval_result(EvalResult self, SseSerializer serializer);
 
   @protected
@@ -457,6 +534,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_hist_norm(HistNorm self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -485,6 +565,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ConsoleEvent> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_error_series_2_d(
+      List<ErrorSeries2D> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_list_prim_f_64_strict(
       List<Float64List> self, SseSerializer serializer);
 
@@ -493,7 +577,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<MFunctionSummary> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_plot_spec(List<PlotSpec> self, SseSerializer serializer);
+  void sse_encode_list_plot_figure(
+      List<PlotFigure> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_f_64_strict(
@@ -502,10 +587,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_32_strict(
       Uint32List self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_prim_u_64_strict(
-      Uint64List self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -522,6 +603,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_subplot_cell(
       List<SubplotCell> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_tick(List<Tick> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_var_summary(
@@ -541,6 +625,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_error_band(
+      ErrorBand? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
 
   @protected
@@ -557,6 +645,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plot_color(PlotColor self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plot_figure(PlotFigure self, SseSerializer serializer);
 
   @protected
   void sse_encode_plot_spec(PlotSpec self, SseSerializer serializer);
@@ -579,6 +673,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_subplot_cell(SubplotCell self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tick(Tick self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

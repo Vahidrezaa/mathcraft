@@ -8,9 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'api.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `new`, `panic_error`, `set_active`
+// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `map_axes`, `map_cell`, `map_color`, `map_err_band`, `map_err_series`, `map_figure`, `map_hist_norm`, `map_legend`, `map_series`, `map_style`, `map_tick`, `new`, `panic_error`, `set_active`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Engine`, `JobGuard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// نسخه قرارداد — UI در startup چک می‌کند (سند ۰۲ بخش ۳ بند ۴).
 Future<int> apiVersion() => RustLib.instance.api.crateApiApiVersion();
@@ -48,6 +48,10 @@ Future<bool> cancelJob({required BigInt jobId}) =>
 /// شناسهٔ job در حال اجرا (برای دکمهٔ Stop: پرس‌وجو + cancel) — None = بی‌کار.
 Future<BigInt?> activeJobId() => RustLib.instance.api.crateApiActiveJobId();
 
+/// لیست کامل شکل‌های نشست (مدل pull سند ۰۲ §7) — UI هر زمان می‌تواند کل
+/// شکل‌ها را بگیرد؛ push برای به‌روزرسانی = `EvalResult.plots` همین اجرا.
+Future<List<PlotFigure>> getPlots() => RustLib.instance.api.crateApiGetPlots();
+
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
 /// `whos` کنسول ترمینال (توابع الحاقی P0.1 — سند ۰۲ بخش ۳).
 Future<List<VarSummary>> workspaceVars() =>
@@ -76,6 +80,8 @@ Future<BigInt> clearMFunctions() =>
 Future<String?> whichName({required String name}) =>
     RustLib.instance.api.crateApiWhichName(name: name);
 
+/// محورهای ۲بعدی حل‌شده — حدود مؤثر + تیک‌های 1-2-5 با برچسب `%.4g`
+/// (سند ۰۴ §8.1: تیک‌ها در Rust تولید می‌شوند تا Dart فقط بکشد).
 class Axes2D {
   final String? title;
   final String? xlabel;
@@ -87,6 +93,11 @@ class Axes2D {
   final bool logX;
   final bool logY;
 
+  /// `axis off` — تزئینات محور مخفی، داده می‌ماند.
+  final bool visible;
+  final List<Tick> xTicks;
+  final List<Tick> yTicks;
+
   const Axes2D({
     this.title,
     this.xlabel,
@@ -97,6 +108,9 @@ class Axes2D {
     required this.equalAspect,
     required this.logX,
     required this.logY,
+    required this.visible,
+    required this.xTicks,
+    required this.yTicks,
   });
 
   static Future<Axes2D> default_() =>
@@ -112,7 +126,10 @@ class Axes2D {
       yLimits.hashCode ^
       equalAspect.hashCode ^
       logX.hashCode ^
-      logY.hashCode;
+      logY.hashCode ^
+      visible.hashCode ^
+      xTicks.hashCode ^
+      yTicks.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -127,7 +144,10 @@ class Axes2D {
           yLimits == other.yLimits &&
           equalAspect == other.equalAspect &&
           logX == other.logX &&
-          logY == other.logY;
+          logY == other.logY &&
+          visible == other.visible &&
+          xTicks == other.xTicks &&
+          yTicks == other.yTicks;
 }
 
 class Axes3D {
@@ -203,10 +223,82 @@ enum DashStyle {
   dashed,
   dotted,
   dashDot,
+
+  /// بدون خط — فقط مارکر (پارتی `'b*'`).
+  invisible,
   ;
 
   static Future<DashStyle> default_() =>
       RustLib.instance.api.crateApiDashStyleDefault();
+}
+
+/// نوار خطا — جفت قرینه (neg/pos؛ طول‌ها ≥ 0، هم‌طول سری).
+class ErrorBand {
+  final Float64List neg;
+  final Float64List pos;
+
+  const ErrorBand({
+    required this.neg,
+    required this.pos,
+  });
+
+  static Future<ErrorBand> default_() =>
+      RustLib.instance.api.crateApiErrorBandDefault();
+
+  @override
+  int get hashCode => neg.hashCode ^ pos.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ErrorBand &&
+          runtimeType == other.runtimeType &&
+          neg == other.neg &&
+          pos == other.pos;
+}
+
+/// سری errorbar — نوارهای قرینه/ناقرینهٔ هر محور.
+class ErrorSeries2D {
+  final BigInt id;
+  final BigInt rawLen;
+  final Float64List x;
+  final Float64List y;
+  final ErrorBand? xErr;
+  final ErrorBand? yErr;
+  final LineStyle style;
+
+  const ErrorSeries2D({
+    required this.id,
+    required this.rawLen,
+    required this.x,
+    required this.y,
+    this.xErr,
+    this.yErr,
+    required this.style,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      rawLen.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      xErr.hashCode ^
+      yErr.hashCode ^
+      style.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ErrorSeries2D &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          rawLen == other.rawLen &&
+          x == other.x &&
+          y == other.y &&
+          xErr == other.xErr &&
+          yErr == other.yErr &&
+          style == other.style;
 }
 
 /// نتیجه یک اجرا — ساختار کامل سند ۰۲ بخش ۳.
@@ -216,8 +308,8 @@ class EvalResult {
   /// متن، خطا، warning — در P0 دسته‌ای؛ streaming کامل با `runScript` در P2.
   final List<ConsoleEvent> consoleEvents;
 
-  /// مدل داده رسم (سند ۰۴ بخش ۸) — در P0 همیشه خالی.
-  final List<PlotSpec> plots;
+  /// شکل‌های دست‌خوردهٔ این اجرا (سند ۰۴ §8 — push؛ لیست کامل با get_plots).
+  final List<PlotFigure> plots;
 
   /// فقط متغیرهای تغییرکرده — نه کل workspace (سند ۰۲ بخش ۳).
   final WorkspaceDelta workspaceDelta;
@@ -256,6 +348,17 @@ class EvalResult {
           workspaceDelta == other.workspaceDelta &&
           status == other.status &&
           durationMs == other.durationMs;
+}
+
+/// نرمال‌سازی هیستوگرام (پارتی 'Normalization' متلب).
+enum HistNorm {
+  count,
+  pdf,
+  cdf,
+  ;
+
+  static Future<HistNorm> default_() =>
+      RustLib.instance.api.crateApiHistNormDefault();
 }
 
 enum JobStatus {
@@ -305,7 +408,7 @@ enum LegendPosition {
       RustLib.instance.api.crateApiLegendPositionDefault();
 }
 
-/// حدود محور — جفت min/max (تیک‌های زیبای 1-2-5 در Rust تولید می‌شوند؛ سند ۰۴ §8.1).
+/// حدود محور — جفت min/max.
 class Limits {
   final double min;
   final double max;
@@ -327,15 +430,17 @@ class Limits {
           max == other.max;
 }
 
+/// استایل حل‌شده — رنگ معنایی (پالت، resolve در Dart طبق تم) یا دقیق.
 class LineStyle {
-  /// ۰..=۷ — ترتیب پالت سند ۰۶ بخش ۳ (`plot(x,y)` بدون رنگ به ترتیب پالت می‌رود).
-  final int paletteIndex;
+  final PlotColor color;
+
+  /// ضخامت dp (پیش‌فرض ۲ — سند ۰۶ §3).
   final double width;
   final DashStyle dash;
   final Marker marker;
 
   const LineStyle({
-    required this.paletteIndex,
+    required this.color,
     required this.width,
     required this.dash,
     required this.marker,
@@ -343,14 +448,14 @@ class LineStyle {
 
   @override
   int get hashCode =>
-      paletteIndex.hashCode ^ width.hashCode ^ dash.hashCode ^ marker.hashCode;
+      color.hashCode ^ width.hashCode ^ dash.hashCode ^ marker.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is LineStyle &&
           runtimeType == other.runtimeType &&
-          paletteIndex == other.paletteIndex &&
+          color == other.color &&
           width == other.width &&
           dash == other.dash &&
           marker == other.marker;
@@ -455,6 +560,45 @@ class McError {
 }
 
 @freezed
+sealed class PlotColor with _$PlotColor {
+  const PlotColor._();
+
+  /// 0..=7 — سیکل پالت سند ۰۶ §3.
+  const factory PlotColor.palette(
+    int field0,
+  ) = PlotColor_Palette;
+  const factory PlotColor.rgba({
+    required int r,
+    required int g,
+    required int b,
+    required int a,
+  }) = PlotColor_Rgba;
+}
+
+/// یک شکل قابل‌انتقال — شناسه‌دار برای pull (get_plots) و به‌روزرسانی
+/// هدفمند در UI؛ شناسهٔ سری‌ها هم پایهٔ درخواست re-decimation زوم است.
+class PlotFigure {
+  final BigInt figureId;
+  final PlotSpec spec;
+
+  const PlotFigure({
+    required this.figureId,
+    required this.spec,
+  });
+
+  @override
+  int get hashCode => figureId.hashCode ^ spec.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlotFigure &&
+          runtimeType == other.runtimeType &&
+          figureId == other.figureId &&
+          spec == other.spec;
+}
+
+@freezed
 sealed class PlotSpec with _$PlotSpec {
   const PlotSpec._();
 
@@ -468,19 +612,63 @@ sealed class PlotSpec with _$PlotSpec {
     required Axes2D axes,
     Legend? legend,
   }) = PlotSpec_Scatter2D;
+
+  /// میله‌ای — چند سری = گروهی/انباشته (آفست‌های گروه در رندرر).
   const factory PlotSpec.bar2D({
-    required List<String> categories,
-    required Float64List values,
+    required List<Series2D> series,
+
+    /// عرض نسبی میله (0..1؛ پیش‌فرض 0.8).
+    required double width,
+
+    /// barh — افقی.
+    required bool horizontal,
+
+    /// انباشته (در غیر این صورت گروهی).
+    required bool stacked,
     required Axes2D axes,
+    Legend? legend,
   }) = PlotSpec_Bar2D;
+
+  /// هیستوگرام — یال‌ها/شمارش‌های از پیش محاسبه‌شده + نرمال‌سازی.
   const factory PlotSpec.histogram({
     required Float64List binEdges,
-    required Uint64List counts,
+    required Float64List counts,
+    required HistNorm norm,
+
+    /// استایل میله‌ها (رنگ وجه از پالت).
+    required LineStyle style,
     required Axes2D axes,
+    Legend? legend,
   }) = PlotSpec_Histogram;
+
+  /// سطح زیر خط با خط مبنا (area).
+  const factory PlotSpec.area2D({
+    required List<Series2D> series,
+    required double baseline,
+    required Axes2D axes,
+    Legend? legend,
+  }) = PlotSpec_Area2D;
+
+  /// چندضلعی‌های بستهٔ توپر (fill) — وجه = رنگ استایل، لبه = خط استایل.
+  const factory PlotSpec.fill2D({
+    required List<Series2D> series,
+    required Axes2D axes,
+  }) = PlotSpec_Fill2D;
+
+  /// پلار — x = θ (رادیان)، y = شعاع؛ شبکهٔ پلار در رندرر.
   const factory PlotSpec.polar({
     required List<Series2D> series,
+    Legend? legend,
   }) = PlotSpec_Polar;
+
+  /// سری با نوار خطا (errorbar).
+  const factory PlotSpec.errorBar2D({
+    required List<ErrorSeries2D> series,
+    required Axes2D axes,
+    Legend? legend,
+  }) = PlotSpec_ErrorBar2D;
+
+  /// میدان برداری (P3-b — رزرو).
   const factory PlotSpec.quiver({
     required Float64List x,
     required Float64List y,
@@ -488,24 +676,35 @@ sealed class PlotSpec with _$PlotSpec {
     required Float64List v,
     required Axes2D axes,
   }) = PlotSpec_Quiver;
+
+  /// سطح ۳بعدی (P3-b — رزرو؛ داده‌ها از همین حالا قراردادند).
   const factory PlotSpec.surface({
     required Float64List x,
     required Float64List y,
     required List<Float64List> z,
     required Shading shading,
     required Colormap colormap,
+
+    /// بازهٔ رنگ صریح (caxis) — None = خودکار از z.
+    Limits? caxis,
+    required bool colorbar,
   }) = PlotSpec_Surface;
   const factory PlotSpec.mesh({
     required Float64List x,
     required Float64List y,
     required List<Float64List> z,
     required Colormap colormap,
+    Limits? caxis,
+    required bool colorbar,
   }) = PlotSpec_Mesh;
   const factory PlotSpec.contour({
     required Float64List x,
     required Float64List y,
     required List<Float64List> z,
     required Float64List levels,
+    required Colormap colormap,
+    Limits? caxis,
+    required bool colorbar,
   }) = PlotSpec_Contour;
   const factory PlotSpec.plot3({
     required List<Series3D> series,
@@ -574,27 +773,35 @@ sealed class ScriptEvent with _$ScriptEvent {
   }) = ScriptEvent_Done;
 }
 
+/// سری ۲بعدی — نمایش LTTB-کاسته (≤ 4000 نقطه)؛ `raw_len` = تعداد نقاط
+/// دادهٔ خامِ مانده در Rust (re-decimation زوم از دادهٔ کامل).
 class Series2D {
+  /// شناسهٔ پایدار سری (نشست) — هدف درخواست re-decimation.
+  final BigInt id;
+  final BigInt rawLen;
   final Float64List x;
   final Float64List y;
-
-  /// رنگ از ایندکس پالت ۸ رنگی CDS (سند ۰۶ بخش ۳) — هگز در Dart resolve می‌شود.
   final LineStyle style;
 
   const Series2D({
+    required this.id,
+    required this.rawLen,
     required this.x,
     required this.y,
     required this.style,
   });
 
   @override
-  int get hashCode => x.hashCode ^ y.hashCode ^ style.hashCode;
+  int get hashCode =>
+      id.hashCode ^ rawLen.hashCode ^ x.hashCode ^ y.hashCode ^ style.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is Series2D &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
+          rawLen == other.rawLen &&
           x == other.x &&
           y == other.y &&
           style == other.style;
@@ -659,6 +866,29 @@ class SubplotCell {
           row == other.row &&
           col == other.col &&
           spec == other.spec;
+}
+
+/// یک تیک — `label: None` = فرعی (minor) بدون برچسب؛ برچسب‌های لگاریتمی
+/// به شکل `10^{k}` (TeX سبک؛ رندر superscript در Dart).
+class Tick {
+  final double position;
+  final String? label;
+
+  const Tick({
+    required this.position,
+    this.label,
+  });
+
+  @override
+  int get hashCode => position.hashCode ^ label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Tick &&
+          runtimeType == other.runtimeType &&
+          position == other.position &&
+          label == other.label;
 }
 
 class VarSummary {

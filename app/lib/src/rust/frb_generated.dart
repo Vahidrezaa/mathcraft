@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1785572076;
+  int get rustContentHash => -613941579;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -98,9 +98,15 @@ abstract class RustLibApi extends BaseApi {
 
   Future<DashStyle> crateApiDashStyleDefault();
 
+  Future<ErrorBand> crateApiErrorBandDefault();
+
   Future<EvalResult> crateApiEvalResultDefault();
 
   Future<EvalResult> crateApiEvaluateLine({required String code});
+
+  Future<List<PlotFigure>> crateApiGetPlots();
+
+  Future<HistNorm> crateApiHistNormDefault();
 
   Future<JobStatus> crateApiJobStatusDefault();
 
@@ -347,12 +353,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<EvalResult> crateApiEvalResultDefault() {
+  Future<ErrorBand> crateApiErrorBandDefault() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 10, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_error_band,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiErrorBandDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiErrorBandDefaultConstMeta => const TaskConstMeta(
+        debugName: "error_band_default",
+        argNames: [],
+      );
+
+  @override
+  Future<EvalResult> crateApiEvalResultDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_eval_result,
@@ -376,7 +405,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(code, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 11, port: port_);
+            funcId: 12, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_eval_result,
@@ -394,12 +423,58 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<PlotFigure>> crateApiGetPlots() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 13, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_plot_figure,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiGetPlotsConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiGetPlotsConstMeta => const TaskConstMeta(
+        debugName: "get_plots",
+        argNames: [],
+      );
+
+  @override
+  Future<HistNorm> crateApiHistNormDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 14, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_hist_norm,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiHistNormDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiHistNormDefaultConstMeta => const TaskConstMeta(
+        debugName: "hist_norm_default",
+        argNames: [],
+      );
+
+  @override
   Future<JobStatus> crateApiJobStatusDefault() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 12, port: port_);
+            funcId: 15, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_job_status,
@@ -422,7 +497,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 16, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_legend_position,
@@ -446,7 +521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 14, port: port_);
+            funcId: 17, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_m_function_summary,
@@ -469,7 +544,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 15, port: port_);
+            funcId: 18, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_marker,
@@ -492,7 +567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 16, port: port_);
+            funcId: 19, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_mc_error,
@@ -515,7 +590,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 17, port: port_);
+            funcId: 20, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -542,7 +617,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(name, serializer);
         sse_encode_String(source, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 18, port: port_);
+            funcId: 21, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_register_result,
@@ -565,7 +640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 19, port: port_);
+            funcId: 22, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_register_result,
@@ -592,7 +667,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(code, serializer);
         sse_encode_StreamSink_script_event_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 20, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_eval_result,
@@ -616,7 +691,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 21, port: port_);
+            funcId: 24, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_shading,
@@ -640,7 +715,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 22, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -663,7 +738,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 23, port: port_);
+            funcId: 26, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_workspace_delta,
@@ -687,7 +762,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 24, port: port_);
+            funcId: 27, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_var_summary,
@@ -727,8 +802,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Axes2D dco_decode_axes_2_d(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return Axes2D(
       title: dco_decode_opt_String(arr[0]),
       xlabel: dco_decode_opt_String(arr[1]),
@@ -739,6 +814,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       equalAspect: dco_decode_bool(arr[6]),
       logX: dco_decode_bool(arr[7]),
       logY: dco_decode_bool(arr[8]),
+      visible: dco_decode_bool(arr[9]),
+      xTicks: dco_decode_list_tick(arr[10]),
+      yTicks: dco_decode_list_tick(arr[11]),
     );
   }
 
@@ -776,6 +854,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand dco_decode_box_autoadd_error_band(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_error_band(raw);
+  }
+
+  @protected
   EvalResult dco_decode_box_autoadd_eval_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_eval_result(raw);
@@ -797,6 +881,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Limits dco_decode_box_autoadd_limits(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_limits(raw);
+  }
+
+  @protected
+  LineStyle dco_decode_box_autoadd_line_style(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_line_style(raw);
   }
 
   @protected
@@ -846,6 +936,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand dco_decode_error_band(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ErrorBand(
+      neg: dco_decode_list_prim_f_64_strict(arr[0]),
+      pos: dco_decode_list_prim_f_64_strict(arr[1]),
+    );
+  }
+
+  @protected
+  ErrorSeries2D dco_decode_error_series_2_d(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return ErrorSeries2D(
+      id: dco_decode_u_64(arr[0]),
+      rawLen: dco_decode_u_64(arr[1]),
+      x: dco_decode_list_prim_f_64_strict(arr[2]),
+      y: dco_decode_list_prim_f_64_strict(arr[3]),
+      xErr: dco_decode_opt_box_autoadd_error_band(arr[4]),
+      yErr: dco_decode_opt_box_autoadd_error_band(arr[5]),
+      style: dco_decode_line_style(arr[6]),
+    );
+  }
+
+  @protected
   EvalResult dco_decode_eval_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -854,7 +973,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return EvalResult(
       jobId: dco_decode_u_64(arr[0]),
       consoleEvents: dco_decode_list_console_event(arr[1]),
-      plots: dco_decode_list_plot_spec(arr[2]),
+      plots: dco_decode_list_plot_figure(arr[2]),
       workspaceDelta: dco_decode_workspace_delta(arr[3]),
       status: dco_decode_job_status(arr[4]),
       durationMs: dco_decode_u_64(arr[5]),
@@ -871,6 +990,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  HistNorm dco_decode_hist_norm(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return HistNorm.values[raw as int];
   }
 
   @protected
@@ -922,7 +1047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 4)
       throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return LineStyle(
-      paletteIndex: dco_decode_u_8(arr[0]),
+      color: dco_decode_plot_color(arr[0]),
       width: dco_decode_f_32(arr[1]),
       dash: dco_decode_dash_style(arr[2]),
       marker: dco_decode_marker(arr[3]),
@@ -942,6 +1067,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ErrorSeries2D> dco_decode_list_error_series_2_d(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_error_series_2_d).toList();
+  }
+
+  @protected
   List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
@@ -956,9 +1087,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PlotSpec> dco_decode_list_plot_spec(dynamic raw) {
+  List<PlotFigure> dco_decode_list_plot_figure(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_plot_spec).toList();
+    return (raw as List<dynamic>).map(dco_decode_plot_figure).toList();
   }
 
   @protected
@@ -971,12 +1102,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint32List;
-  }
-
-  @protected
-  Uint64List dco_decode_list_prim_u_64_strict(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dcoDecodeUint64List(raw);
   }
 
   @protected
@@ -1001,6 +1126,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<SubplotCell> dco_decode_list_subplot_cell(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_subplot_cell).toList();
+  }
+
+  @protected
+  List<Tick> dco_decode_list_tick(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_tick).toList();
   }
 
   @protected
@@ -1052,6 +1183,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand? dco_decode_opt_box_autoadd_error_band(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_error_band(raw);
+  }
+
+  @protected
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
@@ -1082,6 +1219,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlotColor dco_decode_plot_color(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return PlotColor_Palette(
+          dco_decode_u_8(raw[1]),
+        );
+      case 1:
+        return PlotColor_Rgba(
+          r: dco_decode_u_8(raw[1]),
+          g: dco_decode_u_8(raw[2]),
+          b: dco_decode_u_8(raw[3]),
+          a: dco_decode_u_8(raw[4]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  PlotFigure dco_decode_plot_figure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return PlotFigure(
+      figureId: dco_decode_u_64(arr[0]),
+      spec: dco_decode_plot_spec(arr[1]),
+    );
+  }
+
+  @protected
   PlotSpec dco_decode_plot_spec(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
@@ -1099,21 +1268,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         );
       case 2:
         return PlotSpec_Bar2D(
-          categories: dco_decode_list_String(raw[1]),
-          values: dco_decode_list_prim_f_64_strict(raw[2]),
-          axes: dco_decode_box_autoadd_axes_2_d(raw[3]),
+          series: dco_decode_list_series_2_d(raw[1]),
+          width: dco_decode_f_32(raw[2]),
+          horizontal: dco_decode_bool(raw[3]),
+          stacked: dco_decode_bool(raw[4]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[5]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[6]),
         );
       case 3:
         return PlotSpec_Histogram(
           binEdges: dco_decode_list_prim_f_64_strict(raw[1]),
-          counts: dco_decode_list_prim_u_64_strict(raw[2]),
-          axes: dco_decode_box_autoadd_axes_2_d(raw[3]),
+          counts: dco_decode_list_prim_f_64_strict(raw[2]),
+          norm: dco_decode_hist_norm(raw[3]),
+          style: dco_decode_box_autoadd_line_style(raw[4]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[5]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[6]),
         );
       case 4:
-        return PlotSpec_Polar(
+        return PlotSpec_Area2D(
           series: dco_decode_list_series_2_d(raw[1]),
+          baseline: dco_decode_f_64(raw[2]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[3]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[4]),
         );
       case 5:
+        return PlotSpec_Fill2D(
+          series: dco_decode_list_series_2_d(raw[1]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[2]),
+        );
+      case 6:
+        return PlotSpec_Polar(
+          series: dco_decode_list_series_2_d(raw[1]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[2]),
+        );
+      case 7:
+        return PlotSpec_ErrorBar2D(
+          series: dco_decode_list_error_series_2_d(raw[1]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[2]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[3]),
+        );
+      case 8:
         return PlotSpec_Quiver(
           x: dco_decode_list_prim_f_64_strict(raw[1]),
           y: dco_decode_list_prim_f_64_strict(raw[2]),
@@ -1121,34 +1315,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           v: dco_decode_list_prim_f_64_strict(raw[4]),
           axes: dco_decode_box_autoadd_axes_2_d(raw[5]),
         );
-      case 6:
+      case 9:
         return PlotSpec_Surface(
           x: dco_decode_list_prim_f_64_strict(raw[1]),
           y: dco_decode_list_prim_f_64_strict(raw[2]),
           z: dco_decode_list_list_prim_f_64_strict(raw[3]),
           shading: dco_decode_shading(raw[4]),
           colormap: dco_decode_colormap(raw[5]),
+          caxis: dco_decode_opt_box_autoadd_limits(raw[6]),
+          colorbar: dco_decode_bool(raw[7]),
         );
-      case 7:
+      case 10:
         return PlotSpec_Mesh(
           x: dco_decode_list_prim_f_64_strict(raw[1]),
           y: dco_decode_list_prim_f_64_strict(raw[2]),
           z: dco_decode_list_list_prim_f_64_strict(raw[3]),
           colormap: dco_decode_colormap(raw[4]),
+          caxis: dco_decode_opt_box_autoadd_limits(raw[5]),
+          colorbar: dco_decode_bool(raw[6]),
         );
-      case 8:
+      case 11:
         return PlotSpec_Contour(
           x: dco_decode_list_prim_f_64_strict(raw[1]),
           y: dco_decode_list_prim_f_64_strict(raw[2]),
           z: dco_decode_list_list_prim_f_64_strict(raw[3]),
           levels: dco_decode_list_prim_f_64_strict(raw[4]),
+          colormap: dco_decode_colormap(raw[5]),
+          caxis: dco_decode_opt_box_autoadd_limits(raw[6]),
+          colorbar: dco_decode_bool(raw[7]),
         );
-      case 9:
+      case 12:
         return PlotSpec_Plot3(
           series: dco_decode_list_series_3_d(raw[1]),
           axes: dco_decode_box_autoadd_axes_3_d(raw[2]),
         );
-      case 10:
+      case 13:
         return PlotSpec_Subplot(
           rows: dco_decode_u_32(raw[1]),
           cols: dco_decode_u_32(raw[2]),
@@ -1199,12 +1400,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Series2D dco_decode_series_2_d(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return Series2D(
-      x: dco_decode_list_prim_f_64_strict(arr[0]),
-      y: dco_decode_list_prim_f_64_strict(arr[1]),
-      style: dco_decode_line_style(arr[2]),
+      id: dco_decode_u_64(arr[0]),
+      rawLen: dco_decode_u_64(arr[1]),
+      x: dco_decode_list_prim_f_64_strict(arr[2]),
+      y: dco_decode_list_prim_f_64_strict(arr[3]),
+      style: dco_decode_line_style(arr[4]),
     );
   }
 
@@ -1238,6 +1441,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       row: dco_decode_u_32(arr[0]),
       col: dco_decode_u_32(arr[1]),
       spec: dco_decode_plot_spec(arr[2]),
+    );
+  }
+
+  @protected
+  Tick dco_decode_tick(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return Tick(
+      position: dco_decode_f_64(arr[0]),
+      label: dco_decode_opt_String(arr[1]),
     );
   }
 
@@ -1329,6 +1544,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_equalAspect = sse_decode_bool(deserializer);
     var var_logX = sse_decode_bool(deserializer);
     var var_logY = sse_decode_bool(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
+    var var_xTicks = sse_decode_list_tick(deserializer);
+    var var_yTicks = sse_decode_list_tick(deserializer);
     return Axes2D(
         title: var_title,
         xlabel: var_xlabel,
@@ -1338,7 +1556,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         yLimits: var_yLimits,
         equalAspect: var_equalAspect,
         logX: var_logX,
-        logY: var_logY);
+        logY: var_logY,
+        visible: var_visible,
+        xTicks: var_xTicks,
+        yTicks: var_yTicks);
   }
 
   @protected
@@ -1376,6 +1597,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand sse_decode_box_autoadd_error_band(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_error_band(deserializer));
+  }
+
+  @protected
   EvalResult sse_decode_box_autoadd_eval_result(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_eval_result(deserializer));
@@ -1397,6 +1624,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Limits sse_decode_box_autoadd_limits(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_limits(deserializer));
+  }
+
+  @protected
+  LineStyle sse_decode_box_autoadd_line_style(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_line_style(deserializer));
   }
 
   @protected
@@ -1447,11 +1680,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand sse_decode_error_band(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_neg = sse_decode_list_prim_f_64_strict(deserializer);
+    var var_pos = sse_decode_list_prim_f_64_strict(deserializer);
+    return ErrorBand(neg: var_neg, pos: var_pos);
+  }
+
+  @protected
+  ErrorSeries2D sse_decode_error_series_2_d(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_64(deserializer);
+    var var_rawLen = sse_decode_u_64(deserializer);
+    var var_x = sse_decode_list_prim_f_64_strict(deserializer);
+    var var_y = sse_decode_list_prim_f_64_strict(deserializer);
+    var var_xErr = sse_decode_opt_box_autoadd_error_band(deserializer);
+    var var_yErr = sse_decode_opt_box_autoadd_error_band(deserializer);
+    var var_style = sse_decode_line_style(deserializer);
+    return ErrorSeries2D(
+        id: var_id,
+        rawLen: var_rawLen,
+        x: var_x,
+        y: var_y,
+        xErr: var_xErr,
+        yErr: var_yErr,
+        style: var_style);
+  }
+
+  @protected
   EvalResult sse_decode_eval_result(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_jobId = sse_decode_u_64(deserializer);
     var var_consoleEvents = sse_decode_list_console_event(deserializer);
-    var var_plots = sse_decode_list_plot_spec(deserializer);
+    var var_plots = sse_decode_list_plot_figure(deserializer);
     var var_workspaceDelta = sse_decode_workspace_delta(deserializer);
     var var_status = sse_decode_job_status(deserializer);
     var var_durationMs = sse_decode_u_64(deserializer);
@@ -1474,6 +1735,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  HistNorm sse_decode_hist_norm(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return HistNorm.values[inner];
   }
 
   @protected
@@ -1515,15 +1783,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   LineStyle sse_decode_line_style(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_paletteIndex = sse_decode_u_8(deserializer);
+    var var_color = sse_decode_plot_color(deserializer);
     var var_width = sse_decode_f_32(deserializer);
     var var_dash = sse_decode_dash_style(deserializer);
     var var_marker = sse_decode_marker(deserializer);
     return LineStyle(
-        paletteIndex: var_paletteIndex,
-        width: var_width,
-        dash: var_dash,
-        marker: var_marker);
+        color: var_color, width: var_width, dash: var_dash, marker: var_marker);
   }
 
   @protected
@@ -1547,6 +1812,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ConsoleEvent>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_console_event(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<ErrorSeries2D> sse_decode_list_error_series_2_d(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ErrorSeries2D>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_error_series_2_d(deserializer));
     }
     return ans_;
   }
@@ -1578,13 +1856,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PlotSpec> sse_decode_list_plot_spec(SseDeserializer deserializer) {
+  List<PlotFigure> sse_decode_list_plot_figure(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <PlotSpec>[];
+    var ans_ = <PlotFigure>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_plot_spec(deserializer));
+      ans_.add(sse_decode_plot_figure(deserializer));
     }
     return ans_;
   }
@@ -1601,13 +1879,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint32List(len_);
-  }
-
-  @protected
-  Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getUint64List(len_);
   }
 
   @protected
@@ -1649,6 +1920,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <SubplotCell>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_subplot_cell(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<Tick> sse_decode_list_tick(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Tick>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_tick(deserializer));
     }
     return ans_;
   }
@@ -1716,6 +1999,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ErrorBand? sse_decode_opt_box_autoadd_error_band(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_error_band(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1771,6 +2066,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlotColor sse_decode_plot_color(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_8(deserializer);
+        return PlotColor_Palette(var_field0);
+      case 1:
+        var var_r = sse_decode_u_8(deserializer);
+        var var_g = sse_decode_u_8(deserializer);
+        var var_b = sse_decode_u_8(deserializer);
+        var var_a = sse_decode_u_8(deserializer);
+        return PlotColor_Rgba(r: var_r, g: var_g, b: var_b, a: var_a);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  PlotFigure sse_decode_plot_figure(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_figureId = sse_decode_u_64(deserializer);
+    var var_spec = sse_decode_plot_spec(deserializer);
+    return PlotFigure(figureId: var_figureId, spec: var_spec);
+  }
+
+  @protected
   PlotSpec sse_decode_plot_spec(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1789,21 +2112,58 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return PlotSpec_Scatter2D(
             series: var_series, axes: var_axes, legend: var_legend);
       case 2:
-        var var_categories = sse_decode_list_String(deserializer);
-        var var_values = sse_decode_list_prim_f_64_strict(deserializer);
+        var var_series = sse_decode_list_series_2_d(deserializer);
+        var var_width = sse_decode_f_32(deserializer);
+        var var_horizontal = sse_decode_bool(deserializer);
+        var var_stacked = sse_decode_bool(deserializer);
         var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
         return PlotSpec_Bar2D(
-            categories: var_categories, values: var_values, axes: var_axes);
+            series: var_series,
+            width: var_width,
+            horizontal: var_horizontal,
+            stacked: var_stacked,
+            axes: var_axes,
+            legend: var_legend);
       case 3:
         var var_binEdges = sse_decode_list_prim_f_64_strict(deserializer);
-        var var_counts = sse_decode_list_prim_u_64_strict(deserializer);
+        var var_counts = sse_decode_list_prim_f_64_strict(deserializer);
+        var var_norm = sse_decode_hist_norm(deserializer);
+        var var_style = sse_decode_box_autoadd_line_style(deserializer);
         var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
         return PlotSpec_Histogram(
-            binEdges: var_binEdges, counts: var_counts, axes: var_axes);
+            binEdges: var_binEdges,
+            counts: var_counts,
+            norm: var_norm,
+            style: var_style,
+            axes: var_axes,
+            legend: var_legend);
       case 4:
         var var_series = sse_decode_list_series_2_d(deserializer);
-        return PlotSpec_Polar(series: var_series);
+        var var_baseline = sse_decode_f_64(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
+        return PlotSpec_Area2D(
+            series: var_series,
+            baseline: var_baseline,
+            axes: var_axes,
+            legend: var_legend);
       case 5:
+        var var_series = sse_decode_list_series_2_d(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        return PlotSpec_Fill2D(series: var_series, axes: var_axes);
+      case 6:
+        var var_series = sse_decode_list_series_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
+        return PlotSpec_Polar(series: var_series, legend: var_legend);
+      case 7:
+        var var_series = sse_decode_list_error_series_2_d(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
+        return PlotSpec_ErrorBar2D(
+            series: var_series, axes: var_axes, legend: var_legend);
+      case 8:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
         var var_u = sse_decode_list_prim_f_64_strict(deserializer);
@@ -1811,37 +2171,57 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
         return PlotSpec_Quiver(
             x: var_x, y: var_y, u: var_u, v: var_v, axes: var_axes);
-      case 6:
+      case 9:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
         var var_z = sse_decode_list_list_prim_f_64_strict(deserializer);
         var var_shading = sse_decode_shading(deserializer);
         var var_colormap = sse_decode_colormap(deserializer);
+        var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
+        var var_colorbar = sse_decode_bool(deserializer);
         return PlotSpec_Surface(
             x: var_x,
             y: var_y,
             z: var_z,
             shading: var_shading,
-            colormap: var_colormap);
-      case 7:
+            colormap: var_colormap,
+            caxis: var_caxis,
+            colorbar: var_colorbar);
+      case 10:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
         var var_z = sse_decode_list_list_prim_f_64_strict(deserializer);
         var var_colormap = sse_decode_colormap(deserializer);
+        var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
+        var var_colorbar = sse_decode_bool(deserializer);
         return PlotSpec_Mesh(
-            x: var_x, y: var_y, z: var_z, colormap: var_colormap);
-      case 8:
+            x: var_x,
+            y: var_y,
+            z: var_z,
+            colormap: var_colormap,
+            caxis: var_caxis,
+            colorbar: var_colorbar);
+      case 11:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
         var var_z = sse_decode_list_list_prim_f_64_strict(deserializer);
         var var_levels = sse_decode_list_prim_f_64_strict(deserializer);
+        var var_colormap = sse_decode_colormap(deserializer);
+        var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
+        var var_colorbar = sse_decode_bool(deserializer);
         return PlotSpec_Contour(
-            x: var_x, y: var_y, z: var_z, levels: var_levels);
-      case 9:
+            x: var_x,
+            y: var_y,
+            z: var_z,
+            levels: var_levels,
+            colormap: var_colormap,
+            caxis: var_caxis,
+            colorbar: var_colorbar);
+      case 12:
         var var_series = sse_decode_list_series_3_d(deserializer);
         var var_axes = sse_decode_box_autoadd_axes_3_d(deserializer);
         return PlotSpec_Plot3(series: var_series, axes: var_axes);
-      case 10:
+      case 13:
         var var_rows = sse_decode_u_32(deserializer);
         var var_cols = sse_decode_u_32(deserializer);
         var var_cells = sse_decode_list_subplot_cell(deserializer);
@@ -1888,10 +2268,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   Series2D sse_decode_series_2_d(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_64(deserializer);
+    var var_rawLen = sse_decode_u_64(deserializer);
     var var_x = sse_decode_list_prim_f_64_strict(deserializer);
     var var_y = sse_decode_list_prim_f_64_strict(deserializer);
     var var_style = sse_decode_line_style(deserializer);
-    return Series2D(x: var_x, y: var_y, style: var_style);
+    return Series2D(
+        id: var_id, rawLen: var_rawLen, x: var_x, y: var_y, style: var_style);
   }
 
   @protected
@@ -1918,6 +2301,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_col = sse_decode_u_32(deserializer);
     var var_spec = sse_decode_plot_spec(deserializer);
     return SubplotCell(row: var_row, col: var_col, spec: var_spec);
+  }
+
+  @protected
+  Tick sse_decode_tick(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_position = sse_decode_f_64(deserializer);
+    var var_label = sse_decode_opt_String(deserializer);
+    return Tick(position: var_position, label: var_label);
   }
 
   @protected
@@ -2008,6 +2399,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.equalAspect, serializer);
     sse_encode_bool(self.logX, serializer);
     sse_encode_bool(self.logY, serializer);
+    sse_encode_bool(self.visible, serializer);
+    sse_encode_list_tick(self.xTicks, serializer);
+    sse_encode_list_tick(self.yTicks, serializer);
   }
 
   @protected
@@ -2039,6 +2433,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_error_band(
+      ErrorBand self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_error_band(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_eval_result(
       EvalResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2061,6 +2462,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_limits(Limits self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_limits(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_line_style(
+      LineStyle self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_line_style(self, serializer);
   }
 
   @protected
@@ -2105,11 +2513,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_error_band(ErrorBand self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_f_64_strict(self.neg, serializer);
+    sse_encode_list_prim_f_64_strict(self.pos, serializer);
+  }
+
+  @protected
+  void sse_encode_error_series_2_d(
+      ErrorSeries2D self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.id, serializer);
+    sse_encode_u_64(self.rawLen, serializer);
+    sse_encode_list_prim_f_64_strict(self.x, serializer);
+    sse_encode_list_prim_f_64_strict(self.y, serializer);
+    sse_encode_opt_box_autoadd_error_band(self.xErr, serializer);
+    sse_encode_opt_box_autoadd_error_band(self.yErr, serializer);
+    sse_encode_line_style(self.style, serializer);
+  }
+
+  @protected
   void sse_encode_eval_result(EvalResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.jobId, serializer);
     sse_encode_list_console_event(self.consoleEvents, serializer);
-    sse_encode_list_plot_spec(self.plots, serializer);
+    sse_encode_list_plot_figure(self.plots, serializer);
     sse_encode_workspace_delta(self.workspaceDelta, serializer);
     sse_encode_job_status(self.status, serializer);
     sse_encode_u_64(self.durationMs, serializer);
@@ -2125,6 +2553,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_hist_norm(HistNorm self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -2163,7 +2597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_line_style(LineStyle self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_8(self.paletteIndex, serializer);
+    sse_encode_plot_color(self.color, serializer);
     sse_encode_f_32(self.width, serializer);
     sse_encode_dash_style(self.dash, serializer);
     sse_encode_marker(self.marker, serializer);
@@ -2189,6 +2623,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_error_series_2_d(
+      List<ErrorSeries2D> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_error_series_2_d(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_list_prim_f_64_strict(
       List<Float64List> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2209,12 +2653,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_plot_spec(
-      List<PlotSpec> self, SseSerializer serializer) {
+  void sse_encode_list_plot_figure(
+      List<PlotFigure> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_plot_spec(item, serializer);
+      sse_encode_plot_figure(item, serializer);
     }
   }
 
@@ -2232,14 +2676,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint32List(self);
-  }
-
-  @protected
-  void sse_encode_list_prim_u_64_strict(
-      Uint64List self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putUint64List(self);
   }
 
   @protected
@@ -2277,6 +2713,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_subplot_cell(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_tick(List<Tick> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_tick(item, serializer);
     }
   }
 
@@ -2324,6 +2769,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_error_band(
+      ErrorBand? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_error_band(self, serializer);
     }
   }
 
@@ -2381,6 +2837,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_plot_color(PlotColor self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case PlotColor_Palette(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_8(field0, serializer);
+      case PlotColor_Rgba(r: final r, g: final g, b: final b, a: final a):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_8(r, serializer);
+        sse_encode_u_8(g, serializer);
+        sse_encode_u_8(b, serializer);
+        sse_encode_u_8(a, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_plot_figure(PlotFigure self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.figureId, serializer);
+    sse_encode_plot_spec(self.spec, serializer);
+  }
+
+  @protected
   void sse_encode_plot_spec(PlotSpec self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
@@ -2403,26 +2882,63 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_box_autoadd_axes_2_d(axes, serializer);
         sse_encode_opt_box_autoadd_legend(legend, serializer);
       case PlotSpec_Bar2D(
-          categories: final categories,
-          values: final values,
-          axes: final axes
+          series: final series,
+          width: final width,
+          horizontal: final horizontal,
+          stacked: final stacked,
+          axes: final axes,
+          legend: final legend
         ):
         sse_encode_i_32(2, serializer);
-        sse_encode_list_String(categories, serializer);
-        sse_encode_list_prim_f_64_strict(values, serializer);
+        sse_encode_list_series_2_d(series, serializer);
+        sse_encode_f_32(width, serializer);
+        sse_encode_bool(horizontal, serializer);
+        sse_encode_bool(stacked, serializer);
         sse_encode_box_autoadd_axes_2_d(axes, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
       case PlotSpec_Histogram(
           binEdges: final binEdges,
           counts: final counts,
-          axes: final axes
+          norm: final norm,
+          style: final style,
+          axes: final axes,
+          legend: final legend
         ):
         sse_encode_i_32(3, serializer);
         sse_encode_list_prim_f_64_strict(binEdges, serializer);
-        sse_encode_list_prim_u_64_strict(counts, serializer);
+        sse_encode_list_prim_f_64_strict(counts, serializer);
+        sse_encode_hist_norm(norm, serializer);
+        sse_encode_box_autoadd_line_style(style, serializer);
         sse_encode_box_autoadd_axes_2_d(axes, serializer);
-      case PlotSpec_Polar(series: final series):
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
+      case PlotSpec_Area2D(
+          series: final series,
+          baseline: final baseline,
+          axes: final axes,
+          legend: final legend
+        ):
         sse_encode_i_32(4, serializer);
         sse_encode_list_series_2_d(series, serializer);
+        sse_encode_f_64(baseline, serializer);
+        sse_encode_box_autoadd_axes_2_d(axes, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
+      case PlotSpec_Fill2D(series: final series, axes: final axes):
+        sse_encode_i_32(5, serializer);
+        sse_encode_list_series_2_d(series, serializer);
+        sse_encode_box_autoadd_axes_2_d(axes, serializer);
+      case PlotSpec_Polar(series: final series, legend: final legend):
+        sse_encode_i_32(6, serializer);
+        sse_encode_list_series_2_d(series, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
+      case PlotSpec_ErrorBar2D(
+          series: final series,
+          axes: final axes,
+          legend: final legend
+        ):
+        sse_encode_i_32(7, serializer);
+        sse_encode_list_error_series_2_d(series, serializer);
+        sse_encode_box_autoadd_axes_2_d(axes, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
       case PlotSpec_Quiver(
           x: final x,
           y: final y,
@@ -2430,7 +2946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           v: final v,
           axes: final axes
         ):
-        sse_encode_i_32(5, serializer);
+        sse_encode_i_32(8, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
         sse_encode_list_prim_f_64_strict(y, serializer);
         sse_encode_list_prim_f_64_strict(u, serializer);
@@ -2441,38 +2957,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           y: final y,
           z: final z,
           shading: final shading,
-          colormap: final colormap
+          colormap: final colormap,
+          caxis: final caxis,
+          colorbar: final colorbar
         ):
-        sse_encode_i_32(6, serializer);
+        sse_encode_i_32(9, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
         sse_encode_list_prim_f_64_strict(y, serializer);
         sse_encode_list_list_prim_f_64_strict(z, serializer);
         sse_encode_shading(shading, serializer);
         sse_encode_colormap(colormap, serializer);
+        sse_encode_opt_box_autoadd_limits(caxis, serializer);
+        sse_encode_bool(colorbar, serializer);
       case PlotSpec_Mesh(
           x: final x,
           y: final y,
           z: final z,
-          colormap: final colormap
+          colormap: final colormap,
+          caxis: final caxis,
+          colorbar: final colorbar
         ):
-        sse_encode_i_32(7, serializer);
+        sse_encode_i_32(10, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
         sse_encode_list_prim_f_64_strict(y, serializer);
         sse_encode_list_list_prim_f_64_strict(z, serializer);
         sse_encode_colormap(colormap, serializer);
+        sse_encode_opt_box_autoadd_limits(caxis, serializer);
+        sse_encode_bool(colorbar, serializer);
       case PlotSpec_Contour(
           x: final x,
           y: final y,
           z: final z,
-          levels: final levels
+          levels: final levels,
+          colormap: final colormap,
+          caxis: final caxis,
+          colorbar: final colorbar
         ):
-        sse_encode_i_32(8, serializer);
+        sse_encode_i_32(11, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
         sse_encode_list_prim_f_64_strict(y, serializer);
         sse_encode_list_list_prim_f_64_strict(z, serializer);
         sse_encode_list_prim_f_64_strict(levels, serializer);
+        sse_encode_colormap(colormap, serializer);
+        sse_encode_opt_box_autoadd_limits(caxis, serializer);
+        sse_encode_bool(colorbar, serializer);
       case PlotSpec_Plot3(series: final series, axes: final axes):
-        sse_encode_i_32(9, serializer);
+        sse_encode_i_32(12, serializer);
         sse_encode_list_series_3_d(series, serializer);
         sse_encode_box_autoadd_axes_3_d(axes, serializer);
       case PlotSpec_Subplot(
@@ -2480,7 +3010,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           cols: final cols,
           cells: final cells
         ):
-        sse_encode_i_32(10, serializer);
+        sse_encode_i_32(13, serializer);
         sse_encode_u_32(rows, serializer);
         sse_encode_u_32(cols, serializer);
         sse_encode_list_subplot_cell(cells, serializer);
@@ -2521,6 +3051,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_series_2_d(Series2D self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.id, serializer);
+    sse_encode_u_64(self.rawLen, serializer);
     sse_encode_list_prim_f_64_strict(self.x, serializer);
     sse_encode_list_prim_f_64_strict(self.y, serializer);
     sse_encode_line_style(self.style, serializer);
@@ -2547,6 +3079,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.row, serializer);
     sse_encode_u_32(self.col, serializer);
     sse_encode_plot_spec(self.spec, serializer);
+  }
+
+  @protected
+  void sse_encode_tick(Tick self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.position, serializer);
+    sse_encode_opt_String(self.label, serializer);
   }
 
   @protected
