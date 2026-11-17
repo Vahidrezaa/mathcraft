@@ -415,3 +415,48 @@ fn p2_chars_index_cmp_oracle_octave() {
     let ch = run_vec(src!("p2_22_chars_index_cmp.m"), "ch");
     assert_eq!(ch, vec![72.0, 105.0], "char([72 105])");
 }
+
+// ---------- structs minimal (ROADMAP 2.9 — بندهای ۶/۱۲→ساختار) ----------
+
+#[test]
+fn p2_structs_basics_oracle_octave() {
+    // p2_23 — سازنده/فیلد/پویا/builtin حداقلی/خانوادهٔ شکل ۱×۱
+    // (اوراکل: Octave 10.3 — probe_structs.m؛ مقادیر قطعی هر دو موتور یکی است)
+    let s = src!("p2_23_structs_basics.m");
+    assert_eq!(run(s, "a1"), 3.5);
+    assert_eq!(run_vec(s, "b3"), vec![2.0, 4.0, 6.0]);
+    assert_eq!(run(s, "f1"), 1.0);
+    assert_eq!(run(s, "f2"), 0.0);
+    assert_eq!(run_vec(s, "g"), vec![1.0, 2.0, 3.0]);
+    assert_eq!(run(s, "c9"), 9.0);
+    assert_eq!(run(s, "o"), 0.0, "setfield must not mutate the original");
+    assert_eq!(run(s, "c7"), 7.0);
+    assert_eq!(run(s, "d"), 3.5, "dynamic fieldname s.(nm)");
+    assert_eq!(run(s, "e5"), 5.0);
+    assert_eq!(run_vec(s, "sz"), vec![1.0, 1.0]);
+    assert_eq!(run(s, "cnt"), 1.0);
+    assert_eq!(run(s, "cls"), 1.0, "class(s) == 'struct'");
+    assert_eq!(run(s, "tyc"), 5.0, "nested auto-vivification");
+    assert_eq!(run(s, "eq1"), 1.0, "isequal order-insensitive");
+    assert_eq!(run(s, "eq2"), 0.0);
+    assert_eq!(run(s, "dv"), 2.0, "duplicate field: last wins");
+    assert_eq!(run(s, "n"), 1.0, "for over 1x1 struct iterates once");
+    assert_eq!(run(s, "tot"), 3.5);
+}
+
+#[test]
+fn p2_odeset_rng_struct_analytic() {
+    // p2_24 — خارج از manifest اکتاو (عدد مسیر حلگر و دنبالهٔ RNG مخصوص موتور
+    // است — الگوی vdp1000/RNG). ناوردا: شکل ساختاری ≡ جفتی، بیت‌به‌بیت.
+    let s = src!("p2_24_odeset_rng_struct.m");
+    assert_eq!(run(s, "inv"), 0.0, "struct form must equal named-pair form");
+    assert!(
+        approx(run(s, "err"), 0.0, 1e-6),
+        "y(2) vs e^-2: {}",
+        run(s, "err")
+    );
+    assert_eq!(run(s, "rt"), 1e-4, "merge: fresh pairs win");
+    assert_eq!(run(s, "at"), 1e-11, "merge keeps other fields");
+    assert_eq!(run_vec(s, "rep"), vec![1.0, 1.0], "rng restore replays");
+    assert_eq!(run(s, "sd"), 42.0, "Seed field of the status struct");
+}

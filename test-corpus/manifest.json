@@ -567,6 +567,30 @@
     "bl",
     "ch"
    ]
+  },
+  {
+   "script": "p2_23_structs_basics.m",
+   "vars": [
+    "a1",
+    "b3",
+    "f1",
+    "f2",
+    "g",
+    "c9",
+    "o",
+    "c7",
+    "d",
+    "e5",
+    "sz",
+    "cnt",
+    "cls",
+    "tyc",
+    "eq1",
+    "eq2",
+    "dv",
+    "n",
+    "tot"
+   ]
   }
  ]
 }
