@@ -6,8 +6,23 @@
 use std::fmt;
 
 /// شناسه‌های خطا مطابق کاتالوگ سند ۰۳ بخش ۱۴ (`MC:E*`).
+///
+/// تاکسونومی ROADMAP 2.11 (بند ۱۴ ممیزی، سطح‌بندی سند ۰۲ §9): E3001 فقط
+/// برای خطای **سینتکسی** (lexer/parser)؛ خطای معنایی ارزیابی خانوادهٔ خودش را
+/// می‌گیرد — نام‌ها (E1xxx)، دامنهٔ اندیس/ابعاد/نوع (E2xxx)، عددی (E2xxx)،
+/// منابع (E4xxx)، مرزهای صادقانه (E9xxx).
 pub mod ids {
     pub const UNDEFINED_VARIABLE: &str = "MC:E1001_UNDEFINED_VARIABLE";
+    // MC:E1002 — نام شناخته‌نشده در موقعیت فراخوانی (کاتالوگ سند ۰۳ §۱۴؛
+    // ROADMAP 2.11): `lenght(x)` → did-you-mean روی توابع/builtinها.
+    pub const UNDEFINED_FUNCTION: &str = "MC:E1002_UNDEFINED_FUNCTION";
+    // MC:E2001 — اندیس خارج از بازه (کاتالوگ؛ ROADMAP 2.11): همهٔ مسیرهای
+    // خواندن/نوشتنِ linear و دو بعدی.
+    pub const INDEX_OUT_OF_BOUNDS: &str = "MC:E2001_INDEX_OUT_OF_BOUNDS";
+    // MC:E2002 — خطای نوع/کاربرد در سطح اجرا (سطح ۲ «اجرایی» سند ۰۲ §9):
+    // کلاس نادرست، تعداد آرگومان، نام فیلد نامعتبر، هدف اندیس‌گذاری ناپذیر و…
+    // (خانهٔ خالی خانوادهٔ E2xxx؛ ROADMAP 2.11).
+    pub const TYPE_ERROR: &str = "MC:E2002_TYPE_ERROR";
     pub const SIZE_MISMATCH: &str = "MC:E2003_SIZE_MISMATCH";
     // MC:E2004 — خانواده عددی (mc-num): پیوت دقیقاً صفر در LU/مثلثی/Thomas (سند ۰۴ §3).
     pub const SINGULAR_MATRIX: &str = "MC:E2004_SINGULAR_MATRIX";

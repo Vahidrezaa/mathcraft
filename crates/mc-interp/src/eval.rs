@@ -105,7 +105,7 @@ fn eval_program_depth(program: &Program, env: &mut Environment, depth: usize) ->
         Ok(Flow::Break | Flow::Continue) => {
             // break/continue خارج حلقه — خطای صریح (سند ۰۳ §8)
             out.error = Some(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 "break/continue outside a loop.",
@@ -141,7 +141,78 @@ fn exec_stmts(
 
 // ---------- گزاره‌ها ----------
 
+/// پشتیبان موقعیت (ROADMAP 2.11 — بند ۱۴ ممیزی): خطاهای ساخته‌شده در
+/// کمکی‌ها/builtinها بدون موقعیت‌اند (0,0) — هیچ خطای کاربر نباید 0:0 بماند؛
+/// نزدیک‌ترین عبارت/گزاره جایگزین می‌شود (موقعیت واقعی هرگز بازنویسی نمی‌شود).
+fn with_pos(mut e: McError, line: u32, col: u32) -> McError {
+    if e.line == 0 && e.col == 0 {
+        e.line = line;
+        e.col = col;
+    }
+    e
+}
+
+/// موقعیت یک عبارت برای پشتیبان — گره‌های بی‌موقعیت (لفظ‌ها) (0,0) می‌دهند؛
+/// خطا روی لفظ خالص رخ نمی‌دهد.
+fn expr_pos(e: &Expr) -> (u32, u32) {
+    match e {
+        Expr::Var { line, col, .. }
+        | Expr::End { line, col }
+        | Expr::Binary { line, col, .. }
+        | Expr::Compare { line, col, .. }
+        | Expr::Logic { line, col, .. }
+        | Expr::Transpose { line, col, .. }
+        | Expr::Matrix { line, col, .. }
+        | Expr::Call { line, col, .. }
+        | Expr::AnonFn { line, col, .. }
+        | Expr::FnHandle { line, col, .. }
+        | Expr::Field { line, col, .. }
+        | Expr::Index { line, col, .. } => (*line, *col),
+        Expr::Unary { line, col, .. } | Expr::Range { line, col, .. } => (*line, *col),
+        Expr::Num(_) | Expr::Imag(_) | Expr::Str(_) => (0, 0),
+    }
+}
+
+/// موقعیت هدف انتساب (همهٔ اشکال هدف line/col دارند).
+fn target_pos(t: &AssignTarget) -> (u32, u32) {
+    match t {
+        AssignTarget::Var { line, col, .. }
+        | AssignTarget::Indexed { line, col, .. }
+        | AssignTarget::Field { line, col, .. }
+        | AssignTarget::IndexedField { line, col, .. } => (*line, *col),
+    }
+}
+
+/// موقعیت گزاره برای پشتیبانِ سطح گزاره.
+fn stmt_pos(s: &Stmt) -> (u32, u32) {
+    match s {
+        Stmt::Expr { expr, .. } => expr_pos(expr),
+        Stmt::Assign { target, .. } => target_pos(target),
+        Stmt::If { line, col, .. }
+        | Stmt::For { line, col, .. }
+        | Stmt::While { line, col, .. }
+        | Stmt::Break { line, col }
+        | Stmt::Continue { line, col }
+        | Stmt::Return { line, col }
+        | Stmt::FnDef { line, col, .. } => (*line, *col),
+        Stmt::MultiAssign { targets, .. } => targets.first().map_or((0, 0), |t| (t.line, t.col)),
+    }
+}
+
 fn exec_stmt(
+    stmt: &Stmt,
+    env: &mut Environment,
+    depth: usize,
+) -> Result<(Flow, Vec<String>), McError> {
+    // پشتیبان موقعیت سطح گزاره (ROADMAP 2.11) — خطاهای کمکی بدون موقعیت،
+    // موقعیت گزارهٔ در حال اجرا را می‌گیرند
+    exec_stmt_inner(stmt, env, depth).map_err(|e| {
+        let (l, c) = stmt_pos(stmt);
+        with_pos(e, l, c)
+    })
+}
+
+fn exec_stmt_inner(
     stmt: &Stmt,
     env: &mut Environment,
     depth: usize,
@@ -163,7 +234,7 @@ fn exec_stmt(
                         match flow {
                             Flow::Break | Flow::Continue => {
                                 return Err(McError::new(
-                                    ids::PARSE_ERROR,
+                                    ids::TYPE_ERROR,
                                     0,
                                     0,
                                     "break/continue outside a loop.",
@@ -219,7 +290,7 @@ fn exec_stmt(
                         match flow {
                             Flow::Break | Flow::Continue => {
                                 return Err(McError::new(
-                                    ids::PARSE_ERROR,
+                                    ids::TYPE_ERROR,
                                     0,
                                     0,
                                     "break/continue outside a loop.",
@@ -271,7 +342,7 @@ fn exec_stmt(
                         .map(|a| match a {
                             Expr::Str(s) => Ok(s.clone()),
                             _ => Err(McError::new(
-                                ids::PARSE_ERROR,
+                                ids::TYPE_ERROR,
                                 *line,
                                 *col,
                                 "format: mode must be a literal word (e.g. format short).",
@@ -542,7 +613,7 @@ fn exec_stmt(
                 Value::Struct(_) => vec![iter_val.clone()],
                 Value::Anon(_) => {
                     return Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::TYPE_ERROR,
                         0,
                         0,
                         "Cannot iterate over a function handle.",
@@ -636,7 +707,7 @@ fn truthy_condition(v: &Value) -> Result<bool, McError> {
 fn truthy_scalar(v: &Value) -> Result<bool, McError> {
     match v.as_scalar() {
         Some(x) if x.is_nan() => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Condition is NaN — cannot decide.",
@@ -644,7 +715,7 @@ fn truthy_scalar(v: &Value) -> Result<bool, McError> {
         )),
         Some(x) => Ok(x != 0.0),
         None => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Condition must be a scalar. For matrices use all(...) or any(...).",
@@ -688,7 +759,7 @@ fn indexed_assign(
     if let Some(v) = env.get(name) {
         if !matches!(v, Value::Double(_) | Value::Char(_)) {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 format!("'{name}' is not a numeric or char array; indexed assignment needs double/char."),
@@ -730,7 +801,7 @@ fn resolve_field_name(
             match v {
                 Value::Char(s) => Ok(s),
                 _ => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     line,
                     col,
                     "Dynamic field name s.(f) needs a char value (like f = 'name').",
@@ -770,7 +841,7 @@ fn load_struct_or_new(
         Some(Value::Struct(s)) => Ok(s.clone()),
         None => Ok(StructVal::new()),
         Some(other) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -799,7 +870,7 @@ fn struct_at_path(
             Some(Value::Struct(s)) => Ok(Some(s.clone())),
             None => Ok(None),
             Some(other) => Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 format!(
@@ -823,7 +894,7 @@ fn struct_at_path(
                 Some(Value::Struct(s)) => Ok(Some(s.clone())),
                 None => Ok(None),
                 Some(other) => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     line,
                     col,
                     format!(
@@ -838,7 +909,7 @@ fn struct_at_path(
             }
         }
         _ => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "Invalid assignment target: the base of a field assignment must be a variable or a field path.",
@@ -864,7 +935,7 @@ fn field_assign(
     // شده است؛ اکتاو نام‌های دلخواه می‌پذیرد — دلتای اوراکل مستند)
     if !crate::registry_p2::valid_field_name(&fname) {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -905,7 +976,7 @@ fn field_assign(
             )
         }
         _ => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "Invalid assignment target: field assignment needs a variable or field path on the left.",
@@ -984,7 +1055,7 @@ fn resolve_subs(
                     let idx = m.get(0, 0);
                     if idx <= 0.0 || idx.fract() != 0.0 {
                         return Err(McError::new(
-                            ids::PARSE_ERROR,
+                            ids::TYPE_ERROR,
                             0,
                             0,
                             "Indices must be positive integers (1-based).",
@@ -999,7 +1070,7 @@ fn resolve_subs(
                         let idx = m.get_linear(i);
                         if idx <= 0.0 || idx.fract() != 0.0 {
                             return Err(McError::new(
-                                ids::PARSE_ERROR,
+                                ids::TYPE_ERROR,
                                 0,
                                 0,
                                 "Indices must be positive integers (1-based).",
@@ -1015,7 +1086,7 @@ fn resolve_subs(
                     })
                 }
                 _ => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::UNSUPPORTED,
                     0,
                     0,
                     "Unsupported subscript type.",
@@ -1051,7 +1122,7 @@ fn index_read(
         Some(Value::Double(m)) => m.clone(),
         Some(_) => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 format!("'{name}' is not numeric; indexing needs a numeric array."),
@@ -1125,7 +1196,7 @@ fn index_double(m: &Matrix, resolved: &[Idx], line: u32, col: u32) -> Result<Val
             }
         },
         n => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::UNSUPPORTED,
             line,
             col,
             format!("Indexing with {n} subscripts is not supported (max 2)."),
@@ -1226,7 +1297,7 @@ fn index_value(
             "اندیس‌گذاری مستقیم مقدار مختلط هنوز پشتیبانی نمی‌شود؛ اول به متغیر منتسب کنید.",
         )),
         Value::Anon(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "A function handle is not indexable.",
@@ -1261,7 +1332,7 @@ fn indexed_write_value(
         Value::Char(s) => Value::char_codes_row(s),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "Only numeric or char row values can be assigned to indexed targets.",
@@ -1276,7 +1347,7 @@ fn indexed_write_value(
         None => Matrix::full(0, 0, 0.0),
         Some(_) => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "The indexing target is not a numeric array or char row.",
@@ -1295,7 +1366,7 @@ fn indexed_write_value(
             2 => matrix_assign(&mut out, &resolved[0], &resolved[1], &vmat, line, col)?,
             n => {
                 return Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::UNSUPPORTED,
                     line,
                     col,
                     format!("Indexed assignment with {n} subscripts is not supported (max 2)."),
@@ -1332,7 +1403,7 @@ fn indexed_field_assign(
     let fname = resolve_field_name(field, env, depth, line, col)?;
     if !crate::registry_p2::valid_field_name(&fname) {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -1353,7 +1424,7 @@ fn indexed_field_assign(
 fn linear_read(m: &Matrix, i: usize, line: u32, col: u32) -> Result<f64, McError> {
     if i == 0 || i > m.numel() {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::INDEX_OUT_OF_BOUNDS,
             line,
             col,
             format!("Linear index {i} is out of bounds (numel = {}).", m.numel()),
@@ -1598,7 +1669,7 @@ fn matrix_assign(
 
 fn index_out_of_bounds(line: u32, col: u32, r: usize, c: usize) -> McError {
     McError::new(
-        ids::PARSE_ERROR,
+        ids::INDEX_OUT_OF_BOUNDS,
         line,
         col,
         format!("Index ({r},{c}) out of bounds."),
@@ -1641,10 +1712,33 @@ fn undefined_var_in(name: &str, line: u32, col: u32, env: &Environment) -> McErr
     .with_suggestion(suggestion.unwrap_or_default())
 }
 
+/// خطای «تابع شناخته‌نشده» در موقعیت فراخوانی (ROADMAP 2.11 — MC:E1002،
+/// کاتالوگ سند ۰۳ §۱۴): نام در هیچ دامنه‌ای نبود و با پرانتز فراخوانی شده.
+/// did-you-mean همان سه دامنه (سند ۰۲ §9).
+fn undefined_fn_in(name: &str, line: u32, col: u32, env: &Environment) -> McError {
+    let candidates = [
+        registry::suggest_builtin(name),
+        env.suggest_name(name),
+        env.suggest_function(name),
+    ];
+    let suggestion = candidates
+        .into_iter()
+        .flatten()
+        .min_by_key(|c| (crate::env::levenshtein(name, c), c.clone()));
+    McError::new(
+        ids::UNDEFINED_FUNCTION,
+        line,
+        col,
+        format!("Function '{name}' not found."),
+        format!("تابع «{name}» یافت نشد."),
+    )
+    .with_suggestion(suggestion.unwrap_or_default())
+}
+
 /// «آرگومان ورودی کم است» — رفتار متلب برای نام برهنهٔ تابع پارامتردار.
 fn not_enough_inputs(name: &str, expected: usize, line: u32, col: u32) -> McError {
     McError::new(
-        ids::PARSE_ERROR,
+        ids::TYPE_ERROR,
         line,
         col,
         format!("Not enough input arguments. Function '{name}' expects {expected} argument(s)."),
@@ -1655,7 +1749,12 @@ fn not_enough_inputs(name: &str, expected: usize, line: u32, col: u32) -> McErro
 // ---------- عبارت‌ها ----------
 
 fn eval_expr(expr: &Expr, env: &mut Environment, depth: usize) -> Result<Value, McError> {
-    eval_expr_end(expr, env, depth, &Matrix::full(0, 0, 0.0), 0)
+    // پشتیبان موقعیت سطح عبارت (ROADMAP 2.11 — بند ۱۴ ممیزی): خطاهای کمکی/
+    // builtin بدون موقعیت (0,0) موقعیت عبارت را می‌گیرند؛ خطای کاربر 0:0 نمی‌ماند
+    eval_expr_end(expr, env, depth, &Matrix::full(0, 0, 0.0), 0).map_err(|e| {
+        let (l, c) = expr_pos(expr);
+        with_pos(e, l, c)
+    })
 }
 
 /// ارزیابی با زمینهٔ `end` — داخل اندیس‌گذاری، `end` به اندازهٔ بعد ترجمه می‌شود.
@@ -1674,7 +1773,7 @@ fn eval_expr_end(
         Expr::End { line, col } => {
             if target.is_empty() {
                 return Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     *line,
                     *col,
                     "'end' is only valid inside indexing.",
@@ -1705,7 +1804,7 @@ fn eval_expr_end(
                         // نام ثبت‌شده بدون فراخوانی؟ — سمانتیک متلب §9
                         match env.lookup_item(name) {
                             Some(StoredItem::Script(_)) => Err(McError::new(
-                                ids::PARSE_ERROR,
+                                ids::TYPE_ERROR,
                                 *line,
                                 *col,
                                 format!(
@@ -1730,7 +1829,7 @@ fn eval_expr_end(
                                         return Ok(v);
                                     }
                                     Err(McError::new(
-                                        ids::PARSE_ERROR,
+                                        ids::TYPE_ERROR,
                                         *line,
                                         *col,
                                         format!("Function '{name}' did not return a value."),
@@ -1764,7 +1863,7 @@ fn eval_expr_end(
                 }
             }
         },
-        Expr::Unary { op, operand } => {
+        Expr::Unary { op, operand, .. } => {
             let v = eval_expr_end(operand, env, depth, target, sub_i)?;
             match op {
                 UnOp::Pos => Ok(v),
@@ -1772,7 +1871,7 @@ fn eval_expr_end(
                 UnOp::Not => match v.as_scalar() {
                     Some(x) => Ok(Value::Double(Matrix::scalar((x == 0.0) as i32 as f64))),
                     None => Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::TYPE_ERROR,
                         0,
                         0,
                         "Logical NOT needs a scalar operand.",
@@ -1803,7 +1902,7 @@ fn eval_expr_end(
             let r = eval_expr_end(rhs, env, depth, target, sub_i)?;
             apply_compare(*op, &l, &r, *line, *col)
         }
-        Expr::Logic { op, lhs, rhs } => {
+        Expr::Logic { op, lhs, rhs, .. } => {
             // short-circuit — سمانتیک متلب (سند ۰۳ §8)
             let l = eval_expr_end(lhs, env, depth, target, sub_i)?;
             let lb = truthy_scalar(&l)?;
@@ -1862,14 +1961,14 @@ fn eval_expr_end(
                     }
                 }
                 Value::Anon(_) => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     *line,
                     *col,
                     "Cannot transpose a function handle.",
                     "ترانهاده function_handle ممکن نیست.",
                 )),
                 Value::Struct(_) => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     *line,
                     *col,
                     "Cannot transpose a struct.",
@@ -1878,7 +1977,9 @@ fn eval_expr_end(
             }
         }
         Expr::Matrix { rows, line, col } => build_matrix(rows, env, depth, *line, *col),
-        Expr::Range { start, step, end } => {
+        Expr::Range {
+            start, step, end, ..
+        } => {
             let a = eval_expr_end(start, env, depth, target, sub_i)?;
             let s = match step {
                 Some(e) => eval_expr_end(e, env, depth, target, sub_i)?,
@@ -1905,7 +2006,7 @@ fn eval_expr_end(
             let call: mc_core::AnonCall = std::sync::Arc::new(move |args: &[Value]| {
                 if args.len() != params_c.len() {
                     return Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::TYPE_ERROR,
                         0,
                         0,
                         format!(
@@ -1932,7 +2033,7 @@ fn eval_expr_end(
             });
             if depth >= MAX_CALL_DEPTH {
                 return Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     0,
                     0,
                     "Too many nested anonymous function calls.",
@@ -1958,7 +2059,7 @@ fn eval_expr_end(
                         return Ok(v);
                     }
                     Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::TYPE_ERROR,
                         0,
                         0,
                         "Function handle returned no value.",
@@ -2003,7 +2104,7 @@ fn eval_expr_end(
                 Value::Struct(s) => match s.get(&fname) {
                     Some(v) => Ok(v.clone()),
                     None => Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::TYPE_ERROR,
                         *line,
                         *col,
                         format!("Struct has no field '{fname}'."),
@@ -2011,7 +2112,7 @@ fn eval_expr_end(
                     )),
                 },
                 other => Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     *line,
                     *col,
                     format!(
@@ -2089,7 +2190,7 @@ fn call_named(
         }
         Some(_) if !args.is_empty() => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 format!("'{name}' is not indexable."),
@@ -2110,7 +2211,7 @@ fn call_named(
             return Ok(v);
         }
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!("Function '{name}' did not return a value."),
@@ -2120,7 +2221,7 @@ fn call_named(
     if let Some(StoredItem::Script(_)) = env.lookup_item(name) {
         // اسکریپت در عبارت/با آرگومان معنا ندارد (سمانتیک متلب)
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -2137,7 +2238,9 @@ fn call_named(
             .iter()
             .map(|a| eval_expr_end(a, env, depth, target, 0))
             .collect::<Result<_, _>>()?;
-        return f(&vals, 1);
+        // پشتیبان موقعیت (ROADMAP 2.11): خطاهای builtin بدون موقعیت (0,0)
+        // موقعیت فراخوانی را می‌گیرند
+        return f(&vals, 1).map_err(|e| with_pos(e, line, col));
     }
     if let Some(mf) = crate::registry_p2::lookup_multi(name) {
         let vals: Vec<Value> = args
@@ -2145,23 +2248,28 @@ fn call_named(
             .map(|a| eval_expr_end(a, env, depth, target, 0))
             .collect::<Result<_, _>>()?;
         let outs = mf(&vals, 1).map_err(|mut e| {
-            e.line = line;
-            e.col = col;
+            // پشتیبان موقعیت — مشروط (ROADMAP 2.11): فقط خانه‌های 0,0 پر می‌شوند
+            if e.line == 0 && e.col == 0 {
+                e.line = line;
+                e.col = col;
+            }
             e
         })?;
         if let Some(v) = outs.into_iter().next() {
             return Ok(v);
         }
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!("'{name}' returned no value."),
             format!("«{name}» مقداری برنگرداند."),
         ));
     }
-    // ۴) هیچ‌کدام — خطا با did-you-mean (builtin، متغیر، تعریف ثبت‌شده)
-    Err(undefined_var_in(name, line, col, env))
+    // ۴) هیچ‌کدام — خطا با did-you-mean (builtin، متغیر، تعریف ثبت‌شده).
+    // نامِ فراخوانی‌شده = خطای «تابع» (E1002 — ROADMAP 2.11؛ نام برهنه E1001
+    // می‌ماند: همان تمایز کاتالوگ سند ۰۳ §۱۴)
+    Err(undefined_fn_in(name, line, col, env))
 }
 
 /// فراخوانی تابع فایلی ثبت‌شده — سمانتیک متلب §9:
@@ -2181,7 +2289,7 @@ fn call_user_fn(
 ) -> Result<Vec<Value>, McError> {
     if depth >= MAX_CALL_DEPTH {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -2196,7 +2304,7 @@ fn call_user_fn(
     }
     if args.len() > def.params.len() {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -2226,7 +2334,7 @@ fn call_user_fn(
     match flow {
         Flow::Break | Flow::Continue => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 format!("break/continue outside a loop inside '{}'.", def.name),
@@ -2240,7 +2348,7 @@ fn call_user_fn(
     }
     if nargout > def.outputs.len() {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!(
@@ -2263,7 +2371,7 @@ fn call_user_fn(
             Some(v) => outs.push(v.clone()),
             None => {
                 return Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     line,
                     col,
                     format!(
@@ -2302,7 +2410,7 @@ fn eval_multi_assign(
         } => (name, args, *line, *col),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 "Only function calls can provide multiple outputs: [a,b] = f(...).",
@@ -2335,7 +2443,7 @@ fn eval_multi_assign(
             Ok(texts)
         }
         Some(StoredItem::Script(_)) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!("Script '{name}' cannot be used inside an expression or take arguments."),
@@ -2356,7 +2464,7 @@ fn eval_multi_assign(
                     })?;
                     if outs.len() != targets.len() {
                         return Err(McError::new(
-                            ids::PARSE_ERROR,
+                            ids::TYPE_ERROR,
                             line,
                             col,
                             format!(
@@ -2384,7 +2492,7 @@ fn eval_multi_assign(
             if let Some(f) = registry::lookup(name) {
                 if targets.len() > 1 {
                     return Err(McError::new(
-                        ids::PARSE_ERROR,
+                        ids::UNSUPPORTED,
                         line,
                         col,
                         format!(
@@ -2436,7 +2544,7 @@ fn build_matrix(
             // ([65 'a'] → 'Aa' — ROADMAP 2.8 بند ۶/۱۲ ممیزی)
             Value::Char(s) => Ok(Cell::Char(s.chars().collect())),
             Value::Anon(_) => Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "Cannot put a function handle inside a matrix.",
@@ -2444,7 +2552,7 @@ fn build_matrix(
             )),
             // ساختار در ماتریس لفظی = آرایهٔ ساختاری → انبساط E4 (ROADMAP 2.9)
             Value::Struct(_) => Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::UNSUPPORTED,
                 line,
                 col,
                 "Cannot put a struct inside a matrix; struct arrays are expansion E4.",
@@ -2486,7 +2594,7 @@ fn build_matrix(
         if parts.iter().any(|p| matches!(p, Cell::Char(_))) {
             if any_complex {
                 return Err(McError::new(
-                    ids::PARSE_ERROR,
+                    ids::TYPE_ERROR,
                     line,
                     col,
                     "Complex values cannot be converted to character codes.",
@@ -2645,7 +2753,7 @@ fn range_values(a: &Value, s: &Value, b: &Value) -> Result<Value, McError> {
         (Some(a), Some(s), Some(b)) => (a, s, b),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 "Colon operands must be scalars.",
@@ -2655,7 +2763,7 @@ fn range_values(a: &Value, s: &Value, b: &Value) -> Result<Value, McError> {
     };
     if sv == 0.0 {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Colon step cannot be zero.",
@@ -2710,7 +2818,7 @@ fn negate(v: &Value) -> Result<Value, McError> {
             Ok(Value::Complex(out))
         }
         _ => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Unary minus needs a numeric operand.",
@@ -2725,7 +2833,7 @@ fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result
     if complex_involved {
         if !matches!(op, CmpOp::Eq | CmpOp::Ne) {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "Ordered comparison (<, <=, >, >=) is not defined for complex values.",
@@ -2763,7 +2871,7 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
         Value::Double(m) => Ok(m.clone()),
         Value::Complex(z) if z.is_all_real() => Ok(z.real_part()),
         Value::Complex(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "Complex value in a real-only context (e.g. indexing or loop bounds).",
@@ -2775,14 +2883,14 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
             Ok(Value::char_codes_row(s))
         }
         Value::Anon(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "Function handle in numeric comparison.",
             "function_handle در مقایسه عددی.",
         )),
         Value::Struct(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "Struct in a numeric context; extract fields with s.f first.",

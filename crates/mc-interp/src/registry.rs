@@ -266,7 +266,7 @@ fn el_isreal(a: &[Value], _n: usize) -> Result<Value, McError> {
 
 fn arity_err(name: &str, want: &str, got: usize) -> McError {
     McError::new(
-        ids::PARSE_ERROR,
+        ids::TYPE_ERROR,
         0,
         0,
         format!("{name}: expected {want} argument(s), got {got}."),
@@ -276,7 +276,7 @@ fn arity_err(name: &str, want: &str, got: usize) -> McError {
 
 fn type_err(name: &str) -> McError {
     McError::new(
-        ids::PARSE_ERROR,
+        ids::UNSUPPORTED,
         0,
         0,
         format!("{name}: unsupported argument type in this milestone."),
@@ -288,14 +288,14 @@ fn need_matrix(args: &[Value], i: usize) -> Result<Matrix, McError> {
     match args.get(i) {
         Some(Value::Double(m)) => Ok(m.clone()),
         Some(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Numeric matrix expected.",
             "ماتریس عددی انتظار می‌رود.",
         )),
         None => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Missing argument.",
@@ -308,7 +308,7 @@ fn need_scalar(args: &[Value], i: usize) -> Result<f64, McError> {
     match args.get(i).and_then(Value::as_scalar) {
         Some(v) => Ok(v),
         None => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Scalar argument expected.",
@@ -321,7 +321,7 @@ fn need_int_scalar(args: &[Value], i: usize) -> Result<usize, McError> {
     let v = need_scalar(args, i)?;
     if v < 0.0 || v.fract() != 0.0 {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "Size must be a nonnegative integer.",
@@ -1233,7 +1233,7 @@ fn arg_char(v: &Value, fname: &str) -> Result<String, McError> {
     match v {
         Value::Char(s) => Ok(s.clone()),
         _ => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             format!("{fname}: flag must be a char row vector like 'descend'."),
@@ -1271,7 +1271,7 @@ fn bi_char(args: &[Value], _n: usize) -> Result<Value, McError> {
     }
     if matches!(&args[0], Value::Complex(z) if !z.is_all_real()) {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "char: complex values have no character codes.",
@@ -1280,7 +1280,7 @@ fn bi_char(args: &[Value], _n: usize) -> Result<Value, McError> {
     }
     if matches!(&args[0], Value::Anon(_)) {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "char: function handles have no character form.",
@@ -1293,7 +1293,7 @@ fn bi_char(args: &[Value], _n: usize) -> Result<Value, McError> {
         // نوع‌های دیگر بالاتر هندل شدند
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::UNSUPPORTED,
                 0,
                 0,
                 "char: unsupported input type.",
@@ -1331,14 +1331,14 @@ fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Complex(z) => Ok(Value::Complex(z.clone())),
         Value::Char(s) => Ok(Value::Double(Value::char_codes_row(s))),
         Value::Anon(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "double: function handles have no numeric form.",
             "double: function_handle شکل عددی ندارد.",
         )),
         Value::Struct(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "double: structs have no numeric form; extract fields with s.f first.",
@@ -1364,7 +1364,7 @@ fn bi_blanks(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Double(m) if m.is_scalar() => m.get(0, 0),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 "blanks: n must be a numeric scalar.",
@@ -1374,7 +1374,7 @@ fn bi_blanks(args: &[Value], _n: usize) -> Result<Value, McError> {
     };
     if n < 0.0 || n.fract() != 0.0 {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "blanks: n must be a non-negative integer.",
@@ -1396,7 +1396,7 @@ fn bi_str2double(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Char(s) => s.as_str(),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 "str2double: input must be a char row vector like '1.5'.",
@@ -1450,14 +1450,14 @@ fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
             "num2str: ورودی مختلط هنوز پشتیبانی نمی‌شود.",
         )),
         Value::Anon(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "num2str: function handles have no numeric text form.",
             "num2str: function_handle شکل متنی عددی ندارد.",
         )),
         Value::Struct(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             "num2str: structs have no numeric text form; extract fields with s.f first.",
@@ -1491,7 +1491,7 @@ fn bi_intmax(args: &[Value], _n: usize) -> Result<Value, McError> {
     match int_max_of(&cls) {
         Some(v) => Ok(scalar_val(v)),
         None => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             format!("intmax: unknown integer class '{cls}' (int8..int64, uint8..uint64)."),
@@ -1537,7 +1537,7 @@ fn bi_realmin(args: &[Value], _n: usize) -> Result<Value, McError> {
 fn bi_display_no_value(args: &[Value], _n: usize) -> Result<Value, McError> {
     let _ = args;
     Err(McError::new(
-        ids::PARSE_ERROR,
+        ids::TYPE_ERROR,
         0,
         0,
         "disp/fprintf produce console output and cannot be used inside an expression.",

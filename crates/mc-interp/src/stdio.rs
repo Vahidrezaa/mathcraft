@@ -19,7 +19,7 @@ pub fn disp_text(
 ) -> Result<String, McError> {
     if args.len() != 1 {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "disp: exactly one argument is required.",
@@ -36,7 +36,7 @@ pub fn disp_text(
 pub fn fprintf_text(args: &[Value], line: u32, col: u32) -> Result<String, McError> {
     if args.is_empty() {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "fprintf: a format string is required.",
@@ -47,7 +47,7 @@ pub fn fprintf_text(args: &[Value], line: u32, col: u32) -> Result<String, McErr
         Value::Char(s) => s.clone(),
         _ => {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "fprintf: the format must be a char string like 'x = %d\\n'.",
@@ -119,7 +119,7 @@ pub fn fprintf_text(args: &[Value], line: u32, col: u32) -> Result<String, McErr
         }
         if j >= chars.len() {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 line,
                 col,
                 "fprintf: incomplete format specifier (missing conversion character).",
@@ -174,7 +174,7 @@ pub fn fprintf_text(args: &[Value], line: u32, col: u32) -> Result<String, McErr
     }
     if argi < args.len() {
         return Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             "fprintf: more arguments than the format string consumes.",
@@ -197,7 +197,7 @@ fn next_number(
             Ok(m.get(0, 0))
         }
         Some(_) => Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             line,
             col,
             format!("fprintf: '%{spec_ch}' needs a scalar numeric argument."),
@@ -209,7 +209,7 @@ fn next_number(
 
 fn missing_arg(line: u32, col: u32) -> McError {
     McError::new(
-        ids::PARSE_ERROR,
+        ids::TYPE_ERROR,
         line,
         col,
         "fprintf: not enough arguments for the format string.",

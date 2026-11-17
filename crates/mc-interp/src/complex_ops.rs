@@ -13,7 +13,8 @@ use mc_core::{ComplexMatrix, Matrix, McError, Value};
 
 /// خطای استاندارد مختلط.
 fn cerr(line: u32, col: u32, en: impl Into<String>, fa: impl Into<String>) -> McError {
-    McError::new(mc_core::error::ids::PARSE_ERROR, line, col, en, fa)
+    // ROADMAP 2.11: خطای نوع/کاربرد سطح اجرا — نه پارس
+    McError::new(mc_core::error::ids::TYPE_ERROR, line, col, en, fa)
 }
 
 /// تبدیل به ماتریس مختلط (حقیقی → موهومی صفر).

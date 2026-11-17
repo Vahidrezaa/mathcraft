@@ -548,6 +548,8 @@ impl Parser {
                 op: LogicOp::Or,
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
             };
             let _ = t;
         }
@@ -557,12 +559,14 @@ impl Parser {
     fn parse_and(&mut self) -> Result<Expr, McError> {
         let mut lhs = self.parse_compare()?;
         while self.at(&Tok::AndAnd) {
-            self.bump();
+            let t = self.bump();
             let rhs = self.parse_compare()?;
             lhs = Expr::Logic {
                 op: LogicOp::And,
                 lhs: Box::new(lhs),
                 rhs: Box::new(rhs),
+                line: t.line,
+                col: t.col,
             };
         }
         Ok(lhs)
@@ -601,8 +605,15 @@ impl Parser {
             return Ok(first);
         }
         let mut parts = vec![first];
+        // نخستین «:» — موقعیت گرهٔ Range برای خطاهای ارزیابی (ROADMAP 2.11)
+        let mut colon_line = 0u32;
+        let mut colon_col = 0u32;
         while self.at(&Tok::Colon) {
-            self.bump();
+            let ct = self.bump();
+            if colon_line == 0 && colon_col == 0 {
+                colon_line = ct.line;
+                colon_col = ct.col;
+            }
             parts.push(self.parse_addsub()?);
         }
         // تاشدن چپ‌گرا: [a,b,c,d] → Range(Range(a,b,c), 1, d)
@@ -616,6 +627,8 @@ impl Parser {
                 start: Box::new(acc),
                 step: Some(Box::new(b)),
                 end: Box::new(c),
+                line: colon_line,
+                col: colon_col,
             };
         }
         if let Some(last) = rest.pop() {
@@ -623,6 +636,8 @@ impl Parser {
                 start: Box::new(acc),
                 step: None,
                 end: Box::new(last),
+                line: colon_line,
+                col: colon_col,
             };
         }
         Ok(acc)
@@ -691,6 +706,8 @@ impl Parser {
                 Ok(Expr::Unary {
                     op: UnOp::Neg,
                     operand: Box::new(operand),
+                    line: t.line,
+                    col: t.col,
                 })
             }
             Tok::Plus => {
@@ -699,6 +716,8 @@ impl Parser {
                 Ok(Expr::Unary {
                     op: UnOp::Pos,
                     operand: Box::new(operand),
+                    line: t.line,
+                    col: t.col,
                 })
             }
             Tok::Not => {
@@ -707,6 +726,8 @@ impl Parser {
                 Ok(Expr::Unary {
                     op: UnOp::Not,
                     operand: Box::new(operand),
+                    line: t.line,
+                    col: t.col,
                 })
             }
             _ => self.parse_pow(),
@@ -1066,10 +1087,14 @@ impl Parser {
                 Tok::Minus => Expr::Unary {
                     op: UnOp::Neg,
                     operand: Box::new(operand),
+                    line: op_tok.line,
+                    col: op_tok.col,
                 },
                 _ => Expr::Unary {
                     op: UnOp::Pos,
                     operand: Box::new(operand),
+                    line: op_tok.line,
+                    col: op_tok.col,
                 },
             };
             // ادامهٔ سطح-بالای عبارت را با این یگانی به‌عنوان شروع ادامه بده
@@ -1192,6 +1217,8 @@ impl Parser {
                 Ok(Expr::Unary {
                     op: UnOp::Neg,
                     operand: Box::new(operand),
+                    line: t.line,
+                    col: t.col,
                 })
             }
             Tok::Plus => {
@@ -1200,6 +1227,8 @@ impl Parser {
                 Ok(Expr::Unary {
                     op: UnOp::Pos,
                     operand: Box::new(operand),
+                    line: t.line,
+                    col: t.col,
                 })
             }
             _ => {

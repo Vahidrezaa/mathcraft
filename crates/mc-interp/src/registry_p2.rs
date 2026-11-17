@@ -84,7 +84,8 @@ static P2_MULTI: &[(&str, MultiBuiltin)] = &[
 // ---------- ابزارهای ورودی ----------
 
 fn err(en: &str, fa: &str) -> McError {
-    McError::new(mc_core::error::ids::PARSE_ERROR, 0, 0, en, fa)
+    // ROADMAP 2.11: نوع/کاربرد؛ موقعیت با پشتیبان call_named پر می‌شود
+    McError::new(mc_core::error::ids::TYPE_ERROR, 0, 0, en, fa)
 }
 
 fn scalar_val(v: f64) -> Value {
@@ -302,7 +303,7 @@ pub(crate) fn rng_apply(args: &[Value], line: u32, col: u32) -> Result<(), McErr
             }
         }
         [_, ..] => Err(McError::new(
-            mc_core::error::ids::PARSE_ERROR,
+            mc_core::error::ids::TYPE_ERROR,
             line,
             col,
             "rng: usage is rng, rng(seed), rng('default') or rng(state_struct).",

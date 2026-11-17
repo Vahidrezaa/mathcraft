@@ -45,7 +45,7 @@ pub fn register_source(
     if let Some(primary) = functions.first() {
         if primary != name && !has_script_part {
             return Err(McError::new(
-                ids::PARSE_ERROR,
+                ids::TYPE_ERROR,
                 0,
                 0,
                 format!(
@@ -97,7 +97,7 @@ fn validate_file_name(name: &str) -> Result<(), McError> {
         Ok(())
     } else {
         Err(McError::new(
-            ids::PARSE_ERROR,
+            ids::TYPE_ERROR,
             0,
             0,
             format!(

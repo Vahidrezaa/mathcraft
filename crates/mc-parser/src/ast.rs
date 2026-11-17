@@ -66,6 +66,9 @@ pub enum Expr {
     Unary {
         op: UnOp,
         operand: Box<Expr>,
+        /// موقعیت عملگر — برای خطاهای زمان اجرا (ROADMAP 2.11 — span سراسر AST).
+        line: u32,
+        col: u32,
     },
     Binary {
         op: BinOp,
@@ -86,6 +89,9 @@ pub enum Expr {
         op: LogicOp,
         lhs: Box<Expr>,
         rhs: Box<Expr>,
+        /// موقعیت عملگر && / || (ROADMAP 2.11).
+        line: u32,
+        col: u32,
     },
     /// ترانهاده: `conj=true` برای `'` و `false` برای `.'`
     Transpose {
@@ -105,6 +111,9 @@ pub enum Expr {
         start: Box<Expr>,
         step: Option<Box<Expr>>,
         end: Box<Expr>,
+        /// موقعیت نخستین «:» (ROADMAP 2.11).
+        line: u32,
+        col: u32,
     },
     /// فراخوانی/اندیس — در زمان اجرا تصمیم: متغیر؟ builtin؟ تابع بی‌نام؟ (سمانتیک متلب §9)
     Call {
