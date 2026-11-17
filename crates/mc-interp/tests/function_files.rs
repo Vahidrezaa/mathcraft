@@ -17,6 +17,7 @@ fn run(env: &mut Environment, src: &str) -> mc_interp::EvalOutcome {
         Err(e) => mc_interp::EvalOutcome {
             outputs: Vec::new(),
             error: Some(e),
+            ..Default::default()
         },
     }
 }

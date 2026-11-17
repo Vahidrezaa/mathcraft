@@ -1,0 +1,205 @@
+//! گرام عملیات رسم (PlotOp) — زبان میانیِ ساطع‌شده از مفسر و جمع‌شده در
+//! [`crate::figure::FigureState`].
+//!
+//! **چرا عملیات و نه جهش مستقیم:** مفسر خالص می‌ماند (بدون حالت پنهان)؛
+//! دنبالهٔ عملیات قابل بازپخش و تست واحد است و CLI می‌تواند آن را نادیده
+//! بگیرد یا متنی‌سازی کند. این گرام **داخلی** است و نسخه‌بندی نمی‌خواهد —
+//! نسخهٔ قرارداد فقط روی DTO انتقالی (mc-ffi) است.
+
+pub use crate::histogram::HistNorm;
+
+/// یک سری داده: دامنه (x) و مقدار (y) — معنا بسته به نوع عملیات
+/// (پلار: x = θ رادیان، y = شعاع؛ bar: x = مراکز میله).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SeriesData {
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+}
+
+/// رنگ در گرام موتور: توکن معنایی پالت (resolve در Dart طبق تم) یا RGB دقیق.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlotColorSpec {
+    /// 0..=7 — سیکل پالت سند ۰۶ §3.
+    Palette(u8),
+    /// رنگ صریح (خط‌اسپک متلب `'r'` یا `[r g b]`).
+    Rgb { r: u8, g: u8, b: u8 },
+}
+
+/// سبک خط — `Invisible` یعنی فقط مارکر (پارتی `'b*'` متلب).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashSpec {
+    Solid,
+    Dashed,
+    Dotted,
+    DashDot,
+    Invisible,
+}
+
+/// مارکر — جدول متلب (زیرمجموعهٔ ۹تایی DTO).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerSpec {
+    Point,
+    Circle,
+    Square,
+    Diamond,
+    Cross,
+    Plus,
+    Star,
+    TriangleUp,
+    TriangleDown,
+}
+
+/// استایل با اجزای اختیاری — None یعنی «پیش‌فرض موتور» (در کاهش‌دهنده
+/// resolve می‌شود: رنگ = سیکل پالت، خط = صاف یا نامرئی بسته به نوع، …).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct StyleSpec {
+    pub color: Option<PlotColorSpec>,
+    pub width: Option<f32>,
+    pub dash: Option<DashSpec>,
+    pub marker: Option<MarkerSpec>,
+    pub label: Option<String>,
+}
+
+/// نوار خطا — قرینه یا ناقرینه (مقادیر ≥ 0؛ خالی = بدون خطای آن محور).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ErrBand {
+    pub neg: Vec<f64>,
+    pub pos: Vec<f64>,
+}
+
+/// یک سری در یک فراخوانی: داده + استایل همان سری (رنگِ غایب = سیکل پالت).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SeriesPair {
+    pub data: SeriesData,
+    pub style: StyleSpec,
+}
+
+/// سری errorbar در یک فراخوانی.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorPair {
+    pub data: SeriesData,
+    pub x_err: Option<ErrBand>,
+    pub y_err: Option<ErrBand>,
+    pub style: StyleSpec,
+}
+
+/// یک عملیات رسم — کاهش‌پذیر روی [`crate::figure::FigureState`].
+/// هر عملیات داده‌ای، **همهٔ سری‌های همان فراخوانی** را یکجا حمل می‌کند
+/// (مثلاً `plot(X, Y_matrix)` = یک Line با چند سری) تا تصمیم جایگزینی/الحاق
+/// (hold) فقط یک‌بار برای کل فراخوانی گرفته شود.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlotOp {
+    /// `figure(n)` / `figure` — فعال‌سازی یا ایجاد شکل (None = شناسهٔ تازه).
+    ActivateFigure {
+        id: Option<u64>,
+    },
+    /// `hold on/off` — پرچم محور فعال.
+    Hold {
+        on: bool,
+    },
+    /// `subplot(m,n,p)` — شبکهٔ سلولی شکل فعال (p یک‌مبنا و خطی؛
+    /// اعتبارسنجی دامنه در لایهٔ builtin، کاهش‌دهنده دفاعاً clamps می‌کند).
+    SubplotSelect {
+        rows: u32,
+        cols: u32,
+        index: u32,
+    },
+    /// `plot` / `fplot` — سری‌های خطی.
+    Line {
+        series: Vec<SeriesPair>,
+    },
+    /// `scatter` — سری‌های نقطه‌ای.
+    Scatter {
+        series: Vec<SeriesPair>,
+    },
+    /// `bar` — میله‌ای (چند سری = گروهی یا انباشته).
+    Bar {
+        series: Vec<SeriesPair>,
+        width: Option<f32>,
+        horizontal: bool,
+        stacked: bool,
+    },
+    /// `histogram` — بسته‌بندی از پیش محاسبه‌شده (همیشه جایگزین).
+    Histogram {
+        edges: Vec<f64>,
+        counts: Vec<f64>,
+        norm: HistNorm,
+        style: StyleSpec,
+    },
+    /// `area` — سطح زیر خط با خط مبنا.
+    Area {
+        series: Vec<SeriesPair>,
+        baseline: f64,
+    },
+    /// `fill` — چندضلعی‌های بستهٔ یک فراخوانی (استایل مشترک؛ وجه از رنگ).
+    Fill {
+        polys: Vec<SeriesData>,
+        style: StyleSpec,
+    },
+    /// `polarplot` — x = θ (رادیان)، y = شعاع.
+    Polar {
+        series: Vec<SeriesPair>,
+    },
+    /// `errorbar` — سری‌های با نوار خطا.
+    ErrorBar {
+        series: Vec<ErrorPair>,
+    },
+    /// `legend('a','b')` / `legend off` — None = خاموش.
+    Legend {
+        entries: Option<Vec<String>>,
+    },
+    /// `title` / `xlabel` / `ylabel`.
+    Title {
+        text: String,
+    },
+    XLabel {
+        text: String,
+    },
+    YLabel {
+        text: String,
+    },
+    /// `grid on/off`.
+    Grid {
+        on: bool,
+    },
+    /// `axis([a b c d])`.
+    AxisLimits {
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+    },
+    /// `axis equal`.
+    AxisEqual {
+        on: bool,
+    },
+    /// `axis on/off`.
+    AxisVisible {
+        on: bool,
+    },
+    /// `axis tight` — چسبیدن حدود به داده.
+    AxisTight,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn styles_default_to_engine_resolution() {
+        let s = StyleSpec::default();
+        assert_eq!(s.color, None);
+        assert_eq!(s.dash, None);
+        assert_eq!(s.marker, None);
+        assert_eq!(s.label, None);
+    }
+
+    #[test]
+    fn series_data_is_plain_pairs() {
+        let d = SeriesData {
+            x: vec![1.0, 2.0],
+            y: vec![3.0, 4.0],
+        };
+        assert_eq!(d.x.len(), d.y.len());
+    }
+}

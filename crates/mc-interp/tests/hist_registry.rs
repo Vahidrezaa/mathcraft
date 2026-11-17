@@ -97,20 +97,20 @@ fn histcounts_auto_row_outputs() {
 }
 
 #[test]
-fn histogram_binwidth_option() {
+fn histcounts_binwidth_option() {
     let env = eval_script(
         "x = [0.2 0.7 1.1];\n\
-         [N, edges] = histogram(x, 'BinWidth', 0.5);\n",
+         [N, edges] = histcounts(x, 'BinWidth', 0.5);\n",
     );
     assert_eq!(row_of(&env, "edges"), vec![0.0, 0.5, 1.0, 1.5]);
     assert_eq!(row_of(&env, "N"), vec![1.0, 1.0, 1.0]);
 }
 
 #[test]
-fn histogram_binlimits_option() {
+fn histcounts_binlimits_option() {
     let env = eval_script(
         "x = [-5 -0.5 0.2 0.9 5];\n\
-         [N, edges] = histogram(x, 'BinLimits', [-1 1], 'BinWidth', 0.5);\n",
+         [N, edges] = histcounts(x, 'BinLimits', [-1 1], 'BinWidth', 0.5);\n",
     );
     // مرزها با محدوده: [-1 -0.5 0 0.5 1]؛ دادهٔ بیرون محدوده شمرده نمی‌شود؛
     // -0.5 دقیقاً روی مرز میانی → بین سمت راست (قرارداد متلب edges(k) ≤ x)
@@ -119,20 +119,20 @@ fn histogram_binlimits_option() {
 }
 
 #[test]
-fn histogram_binmethod_option() {
+fn histcounts_binmethod_option() {
     let env = eval_script(
         "x = 1:32;\n\
-         [N, edges] = histogram(x, 'BinMethod', 'sturges');\n",
+         [N, edges] = histcounts(x, 'BinMethod', 'sturges');\n",
     );
     assert_eq!(row_of(&env, "edges").len(), 7, "sturges: 6 bins for n=32");
     assert_eq!(row_of(&env, "N").iter().sum::<f64>(), 32.0);
 }
 
 #[test]
-fn histogram_single_output_capture() {
+fn histcounts_single_output_capture() {
     // خروجی تنها = counts (رفتار ناحیهٔ عددی؛ اکوی برهنه `ans` در لایهٔ
     // session/evaluate_line انجام می‌شود — تأیید mc-cli در DoD گام)
-    let env = eval_script("x = [0.5 1.5 1.7];\nz = histogram(x, [0 1 2]);\n");
+    let env = eval_script("x = [0.5 1.5 1.7];\nz = histcounts(x, [0 1 2]);\n");
     assert_eq!(row_of(&env, "z"), vec![1.0, 2.0]);
 }
 
@@ -143,11 +143,11 @@ fn hist_family_honest_errors() {
     expect_error("N = histcounts([1 2], 'auto');", "char second arg");
     expect_error("[a,b,c,d] = histcounts([1 2 3]);", "more than 3 outputs");
     expect_error(
-        "h = histogram([1 2 3], 'NumBins', 4);",
-        "unsupported option NumBins",
+        "h = histcounts([1 2 3], 'NumBins', 4);",
+        "unsupported option",
     );
     expect_error(
-        "h = histogram([1 2 3], 'BinMethod', 'auto', 'scott');",
+        "h = histcounts([1 2 3], 'BinMethod', 'auto', 'scott');",
         "dangling option value",
     );
 }

@@ -9,4 +9,5 @@ authors.workspace = true
 [dependencies]
 mc-core.workspace = true
 mc-parser.workspace = true
+mc-plot = { path = "../mc-plot" }
 mc-num.workspace = true

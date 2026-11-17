@@ -33,6 +33,9 @@ pub struct StmtOutput {
 pub struct EvalOutcome {
     pub outputs: Vec<StmtOutput>,
     pub error: Option<McError>,
+    /// عملیات‌های رسم این اجرا (P3-a) — ساطع‌شده به سینک mc-plot و این‌جا
+    /// تخلیه می‌شود؛ حالت شکل‌ها در mc-ffi از این دنباله fold می‌شود.
+    pub plot_ops: Vec<mc_plot::spec::PlotOp>,
 }
 
 /// سیگنال جریان کنترل — break/continue فقط در حلقه جاری (سند ۰۳ §8)؛
@@ -101,6 +104,9 @@ fn eval_program_depth(program: &Program, env: &mut Environment, depth: usize) ->
     let mut out = EvalOutcome::default();
     let mut texts = Vec::new();
     let result = exec_stmts(&program.stmts, env, depth, &mut texts);
+    // تخلیهٔ سینک رسم در هر حالت (موفق/خطا) — متلب نمودارهای پیش از خطا را
+    // نگه می‌دارد (P3-a)
+    out.plot_ops = mc_plot::session::take();
     out.outputs = texts.into_iter().map(|t| StmtOutput { text: t }).collect();
     match result {
         Ok(Flow::Break | Flow::Continue) => {
@@ -402,6 +408,29 @@ fn exec_stmt_inner(
                         .map(|a| eval_expr(a, env, depth))
                         .collect::<Result<_, _>>()?;
                     crate::registry_p2::rng_apply(&vals, *line, *col)?;
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
+            // توابع رسم گزاره‌ای (P3-a — ROADMAP 3.2) — الگوی disp/rng:
+            // بدون اکو، بدون ans، فقط اثر جانبی (emit به سینک mc-plot)؛
+            // فراخوانی داخل عبارت به رجیستری می‌خورد و خطای روشن می‌دهد.
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if crate::plot_builtins::is_plot_statement_fn(name)
+                    && env.get(name).is_none()
+                    && env.lookup_item(name).is_none()
+                {
+                    let vals: Vec<Value> = args
+                        .iter()
+                        .map(|a| eval_expr(a, env, depth))
+                        .collect::<Result<_, _>>()?;
+                    crate::plot_builtins::apply(name, &vals, *line, *col)?;
                     return Ok((Flow::Normal, Vec::new()));
                 }
             }

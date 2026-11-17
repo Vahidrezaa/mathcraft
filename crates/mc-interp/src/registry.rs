@@ -129,6 +129,24 @@ static REGISTRY: &[(&str, Builtin)] = &[
     // disp/fprintf به‌عنوان گزاره در eval.rs هندل می‌شوند (خروجی مستقل از
     // «;» و بدون مقدار) — اینجا فقط برای خطای صادقانه در بافت عبارت:
     ("disp", bi_display_no_value),
+    ("plot", bi_plot_no_value),
+    ("scatter", bi_plot_no_value),
+    ("bar", bi_plot_no_value),
+    ("histogram", bi_plot_no_value),
+    ("area", bi_plot_no_value),
+    ("fill", bi_plot_no_value),
+    ("polarplot", bi_plot_no_value),
+    ("errorbar", bi_plot_no_value),
+    ("fplot", bi_plot_no_value),
+    ("subplot", bi_plot_no_value),
+    ("legend", bi_plot_no_value),
+    ("axis", bi_plot_no_value),
+    ("grid", bi_plot_no_value),
+    ("xlabel", bi_plot_no_value),
+    ("ylabel", bi_plot_no_value),
+    ("title", bi_plot_no_value),
+    ("hold", bi_plot_no_value),
+    ("figure", bi_plot_no_value),
     ("fprintf", bi_display_no_value),
 ];
 
@@ -1542,6 +1560,18 @@ fn bi_display_no_value(args: &[Value], _n: usize) -> Result<Value, McError> {
         0,
         "disp/fprintf produce console output and cannot be used inside an expression.",
         "disp/fprintf خروجی کنسول می‌دهند و داخل عبارت قابل استفاده نیستند.",
+    ))
+}
+
+/// توابع رسم گزاره‌ای‌اند (الگوی disp — P3-a): اثرشان PlotOp است نه مقدار؛
+/// فراخوانی داخل عبارت/انتساب خطای روشن می‌دهد (MATLAB-lite ثبت‌شده).
+fn bi_plot_no_value(_args: &[Value], _n: usize) -> Result<Value, McError> {
+    Err(McError::new(
+        ids::TYPE_ERROR,
+        0,
+        0,
+        "plotting functions are statement-only and cannot be used inside an expression.",
+        "توابع رسم فقط گزاره‌ای‌اند و داخل عبارت قابل استفاده نیستند.",
     ))
 }
 

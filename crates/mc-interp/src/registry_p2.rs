@@ -78,7 +78,6 @@ static P2_MULTI: &[(&str, MultiBuiltin)] = &[
     ("qr", bi_qr_multi),
     ("svd", bi_svd_multi),
     ("histcounts", bi_histcounts),
-    ("histogram", bi_histogram),
 ];
 
 // ---------- ابزارهای ورودی ----------
@@ -1334,6 +1333,10 @@ fn bi_histcounts(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> 
             num::stats::validate_edges(&e)?;
             e
         }
+        // فرم گزینه‌ای متلب (P3-a): histcounts(X, 'BinMethod', ... | 'BinWidth',
+        // w | 'BinLimits', [a b]) — هم‌ارث histogram داده‌ایِ سابق که حالا
+        // «رسم» است (COMPATIBILITY §4.5 بسته شد)
+        Some(Value::Char(_)) => return bi_hist_options(args, nargout),
         Some(_) => {
             return Err(err(
                 "histcounts: second argument must be a bin count or an edges vector.",
@@ -1344,13 +1347,12 @@ fn bi_histcounts(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> 
     hist_outputs(&x, (xm.rows(), xm.cols()), &edges, nargout, 3, NAME)
 }
 
-/// [N, edges] = histogram(X, 'BinMethod', m | 'BinWidth', w | 'BinLimits', [a b])
-///
-/// انحراف مستند (COMPATIBILITY §4.5): متلب آبجکت Histogram می‌سازد و رسم
-/// می‌کند — رسم در P3 (گام 3.2) می‌آید؛ هستهٔ عددی همین‌جا ارائه می‌شود و
-/// شکل خروجی [counts، edges] است.
-fn bi_histogram(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
-    const NAME: &str = "histogram";
+/// histcounts(X, 'BinMethod', m | 'BinWidth', w | 'BinLimits', [a b]) — فرم
+/// گزینه‌ای (پارتی متلب). تا P3-a همین کار را «histogram» انجام می‌داد
+/// (COMPATIBILITY §4.5 — انحراف موقتِ ثبت‌شده)؛ از P3-a رسمِ histogram خودِ
+/// متلب است و هستهٔ عددی کامل به histcounts آمد.
+fn bi_hist_options(args: &[Value], nargout: usize) -> Result<Vec<Value>, McError> {
+    const NAME: &str = "histcounts";
     if args.is_empty() {
         return Err(err(
             "histogram: needs a data vector or matrix.",
