@@ -129,9 +129,27 @@ pub enum Expr {
         line: u32,
         col: u32,
     },
+    /// دسترسی به فیلد ساختار `s.f` (نامی) یا `s.(expr)` (پویا) — ROADMAP 2.9
+    /// تسک ۱. اندیس‌گذاری پس از فیلد (`s.f(2)`) با گام 2.10 می‌آید (اندیس‌گذاری
+    /// زنجیره‌ای) — در v1 خطای صادقانه است.
+    Field {
+        base: Box<Expr>,
+        field: FieldName,
+        line: u32,
+        col: u32,
+    },
 }
 
-/// هدف انتساب: `x = ...` یا `A(i,j) = ...` (سند ۰۳ §6 اندیس‌گذاری).
+/// نام فیلد در دسترسی/انتساب فیلد — نامی `s.f` یا پویا `s.(expr)` (ROADMAP 2.9).
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldName {
+    Name(String),
+    /// عبارتی که به نام فیلد (char) ارزیابی می‌شود.
+    Dynamic(Box<Expr>),
+}
+
+/// هدف انتساب: `x = ...` یا `A(i,j) = ...` (سند ۰۳ §6 اندیس‌گذاری) یا
+/// `s.f = ...` / `s.(f) = ...` (ROADMAP 2.9 — پایه باید متغیر یا زنجیرهٔ فیلد باشد).
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssignTarget {
     Var {
@@ -142,6 +160,12 @@ pub enum AssignTarget {
     Indexed {
         name: String,
         subs: Vec<Expr>,
+        line: u32,
+        col: u32,
+    },
+    Field {
+        base: Box<Expr>,
+        field: FieldName,
         line: u32,
         col: u32,
     },

@@ -329,6 +329,19 @@ impl Parser {
                     line,
                     col,
                 },
+                // `s.f = v` / `s.(f) = v` — ROADMAP 2.9؛ آدرس‌پذیری پایه
+                // (متغیر یا زنجیرهٔ فیلد) در ارزیاب بررسی می‌شود
+                Expr::Field {
+                    base,
+                    field,
+                    line,
+                    col,
+                } => AssignTarget::Field {
+                    base,
+                    field,
+                    line,
+                    col,
+                },
                 _ => {
                     return Err(self.err(
                         &start,
@@ -722,10 +735,26 @@ impl Parser {
                         col: t.col,
                     };
                 }
+                // دسترسی به فیلد ساختار `s.f` / `s.(expr)` — ROADMAP 2.9 تسک ۱.
+                // بعد از هر عملوند کامل مجاز است (متلب: s.f، f(x).a، s.f.g،
+                // (s).f)؛ معناداریِ نوع پایه را ارزیاب بررسی می‌کند.
+                Tok::Dot => {
+                    expr = self.parse_dot_field(expr)?;
+                }
                 Tok::LParen => {
                     // فراخوانی/اندیس — نام پایه باید Var باشد (سمانتیک متلب: نام‌محور)
                     let name = match &expr {
                         Expr::Var { name, .. } => name.clone(),
+                        // اندیس‌گذاری پس از فیلد (s.f(2)) = اندیس‌گذاری زنجیره‌ای —
+                        // ROADMAP 2.10؛ در v1 خطای صادقانه با اشاره به گام آینده
+                        Expr::Field { .. } => {
+                            let t = self.peek().clone();
+                            return Err(self.err(
+                                &t,
+                                "Indexing a struct field like s.f(2) is not supported yet; chained indexing arrives with ROADMAP 2.10.",
+                                "اندیس‌گذاری فیلد ساختار مثل s.f(2) هنوز پشتیبانی نمی‌شود؛ اندیس‌گذاری زنجیره‌ای در ROADMAP 2.10 می‌آید.",
+                            ));
+                        }
                         _ => {
                             let t = self.peek().clone();
                             return Err(self.err(
@@ -771,6 +800,45 @@ impl Parser {
             }
         }
         Ok(expr)
+    }
+
+    /// بدنهٔ مشترک بازوی `.` پسوندی — `s.f` نامی یا `s.(expr)` پویا (ROADMAP 2.9).
+    fn parse_dot_field(&mut self, expr: Expr) -> Result<Expr, McError> {
+        let t = self.bump(); // .
+        match self.peek().tok.clone() {
+            Tok::Ident(n) if !KEYWORDS.contains(&n.as_str()) => {
+                self.bump();
+                Ok(Expr::Field {
+                    base: Box::new(expr),
+                    field: FieldName::Name(n),
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            Tok::LParen => {
+                self.bump(); // (
+                let inner = self.parse_expr()?;
+                self.expect_tok(
+                    &Tok::RParen,
+                    "')' after the dynamic field name",
+                    "«)» بعد از نام فیلد پویا",
+                )?;
+                Ok(Expr::Field {
+                    base: Box::new(expr),
+                    field: FieldName::Dynamic(Box::new(inner)),
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+            other => {
+                let t2 = self.peek().clone();
+                Err(self.err(
+                    &t2,
+                    format!("Expected a field name after '.' (s.f or s.(f)), found {other:?}."),
+                    format!("بعد از «.» نام فیلد می‌آید (s.f یا s.(f))؛ {other:?} یافت شد."),
+                ))
+            }
+        }
     }
 
     fn parse_primary(&mut self) -> Result<Expr, McError> {
@@ -1064,6 +1132,10 @@ impl Parser {
                         line: t.line,
                         col: t.col,
                     };
+                }
+                // دسترسی فیلد داخل ماتریس لفظی هم مثل متلب مجاز است: [s.f 2]
+                Tok::Dot => {
+                    lhs = self.parse_dot_field(lhs)?;
                 }
                 _ => break,
             }

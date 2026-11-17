@@ -23,5 +23,7 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
-pub use ast::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
+pub use ast::{
+    AssignTarget, BinOp, CmpOp, Expr, FieldName, LogicOp, OutTarget, Program, Stmt, UnOp,
+};
 pub use parser::parse;

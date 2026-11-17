@@ -37,6 +37,9 @@ pub enum Tok {
     Transpose,
     /// ترانهاده بدون مزدوج `.'`
     DotTranspose,
+    /// نقطهٔ تنها — دسترسی به فیلد ساختار `s.f` / `s.(f)` (ROADMAP 2.9).
+    /// عملگرهای عنصری و اعداد اعشاری در بالا هندل شده‌اند.
+    Dot,
     Colon,
     Eq,
     Ne,
@@ -88,6 +91,7 @@ impl Token {
             Tok::DotCaret => "'.^'".to_owned(),
             Tok::Transpose => "'''".to_owned(),
             Tok::DotTranspose => "\" .'\"".to_owned(),
+            Tok::Dot => "'.'".to_owned(),
             Tok::Colon => "':'".to_owned(),
             Tok::Eq => "'=='".to_owned(),
             Tok::Ne => "'~='".to_owned(),
@@ -260,12 +264,12 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, McError> {
                         lx.advance();
                         lx.last_was_operand_end = true;
                     }
+                    // نقطهٔ تنها = دسترسی به فیلد ساختار `s.f` (ROADMAP 2.9) —
+                    // عدد اعشاری (`.` + رقم) و عملگرهای عنصری در بالا هندل شدند.
                     _ => {
-                        return Err(lx.err_here(
-                            ids::UNSUPPORTED,
-                            "Unsupported '.' usage (elementwise ops are .* ./ .^ .').",
-                            "استفادهٔ ناشناخته از «.» (عملگرهای عنصری: .* ./ .^ .').",
-                        ));
+                        out.push(lx.make(Tok::Dot));
+                        lx.advance();
+                        lx.last_was_operand_end = false;
                     }
                 }
             }
