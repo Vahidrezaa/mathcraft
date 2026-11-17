@@ -35,6 +35,13 @@ static P2_REGISTRY: &[(&str, crate::registry::Builtin)] = &[
     ("randn", bi_randn),
     ("randi", bi_randi),
     ("randperm", bi_randperm),
+    // ---- ساختار (ROADMAP 2.9 — مجموعهٔ حداقلی تسک ۲) ----
+    ("struct", bi_struct),
+    ("fieldnames", bi_fieldnames),
+    ("isfield", bi_isfield),
+    ("getfield", bi_getfield),
+    ("setfield", bi_setfield),
+    ("odeset", bi_odeset),
     // ---- چندجمله‌ای (سند ۰۴ §6 + §5.2) ----
     ("roots", bi_roots),
     ("polyfit", bi_polyfit),
@@ -160,25 +167,402 @@ fn value_to_vec(v: &Value, name: &str) -> Result<Vec<f64>, McError> {
     }
 }
 
-// ---------- RNG (سند ۰۴ §7) ----------
+// ---------- RNG (سند ۰۴ §7) + ساختار وضعیت (ROADMAP 2.9 — تسک ۴) ----------
 
-/// rng(seed) — تکرارپذیری؛ خروجی ساختاری rng() متلب در P2-b می‌آید (ساختار لازم دارد).
+/// u128 → ۴ عدد f64 دقیق (نیم‌واژه‌های ۳۲بیتی، از بالا به پایین) — فیلد
+/// State ساختار rng. هر u32 در f64 دقیق است → رفت‌وبرگشت بدون خطا.
+fn u128_to_exact_doubles(x: u128) -> [f64; 4] {
+    [
+        (x >> 96) as u32 as f64,
+        (x >> 64) as u32 as f64,
+        (x >> 32) as u32 as f64,
+        x as u32 as f64,
+    ]
+}
+
+fn exact_doubles_to_u128(halves: [f64; 4]) -> Option<u128> {
+    let mut acc: u128 = 0;
+    for h in halves {
+        if h < 0.0 || h.fract() != 0.0 || h > u32::MAX as f64 {
+            return None;
+        }
+        acc = (acc << 32) | (h as u32 as u128);
+    }
+    Some(acc)
+}
+
+/// ساختار وضعیت rng از وضعیت جاری — فیلدهای متلب‌گونه Type/Seed/State با
+/// مقادیر صادقانهٔ موتور: Type='PCG64' (دنبالهٔ مستقل از Mersenne Twister —
+/// انحراف مستند سند ۰۴ §7)؛ State = ۱۶×۱ (هر u128 = ۴×u32: state و inc هر
+/// دو مولد). قالب State مخصوص موتور است (متلب: 625×1 uint32) — مستند.
+fn rng_status_value() -> Value {
+    let st = num::rng::capture();
+    // ۴ مقدار u128 (state/inc هر دو مولد) × ۴ نیم‌واژهٔ ۳۲بیتی = ۱۶ عدد دقیق
+    let mut state = Matrix::full(16, 1, 0.0);
+    let mut k = 0usize;
+    for x in [st.uniform.0, st.uniform.1, st.normal.0, st.normal.1] {
+        for h in u128_to_exact_doubles(x) {
+            state.set_linear(k, h);
+            k += 1;
+        }
+    }
+    let mut s = mc_core::StructVal::new();
+    s.set("Type", Value::Char("PCG64".to_owned()));
+    s.set("Seed", scalar_val(st.seed as f64));
+    s.set("State", Value::Double(state));
+    Value::Struct(s)
+}
+
+/// اثر جانبی شکل‌های rng — مشترک بین مسیر گزاره‌ای (بدون خروجی) و bi_rng:
+/// rng / rng(seed) / rng('default') / rng(struct).
+pub(crate) fn rng_apply(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    match args {
+        [] => Ok(()), // گرفتن وضعیت بدون مصرف — فقط با خروجی‌گیری معنا دارد
+        [Value::Double(m)] if m.is_scalar() => {
+            let s = m.get(0, 0);
+            if s < 0.0 || s.fract() != 0.0 || !s.is_finite() {
+                return Err(err(
+                    "rng: seed must be a non-negative integer.",
+                    "rng: seed باید عدد صحیح نامنفی باشد.",
+                ));
+            }
+            num::rng::reseed(s as u64);
+            Ok(())
+        }
+        [Value::Char(w)] => match w.as_str() {
+            "default" => {
+                num::rng::reseed(0);
+                Ok(())
+            }
+            // انتخاب مولد و 'shuffle' نیازمند منبع غیرقطعی/مولد دیگر است —
+            // موتور PCG64 واحد دارد (انحراف مستند)؛ خطای صادقانه
+            other => Err(err(
+                &format!(
+                    "rng: '{other}' is not supported. MathCraft's generator is PCG64 (documented deviation); use rng(seed) or rng('default')."
+                ),
+                &format!(
+                    "rng: «{other}» پشتیبانی نمی‌شود. مولد MathCraft PCG64 است (انحراف مستند)؛ از rng(seed) یا rng('default') استفاده کنید."
+                ),
+            )),
+        },
+        [Value::Struct(s)] => {
+            // بازیابی وضعیت: rng(s) — اعتبارسنجی فیلدها و بازگرداندن دقیق
+            let ty = match s.get("Type") {
+                Some(Value::Char(t)) => t.clone(),
+                _ => {
+                    return Err(err(
+                        "rng: the struct form needs a Type field like the one rng returns (s = rng).",
+                        "rng: شکل ساختاری به فیلد Type مانند خروجی rng نیاز دارد (s = rng).",
+                    ))
+                }
+            };
+            if ty != "PCG64" {
+                return Err(err(
+                    &format!("rng: unknown generator Type '{ty}' (MathCraft's generator is PCG64)."),
+                    &format!("rng: مولد ناشناختهٔ Type «{ty}» (مولد MathCraft PCG64 است)."),
+                ));
+            }
+            let seed = match s.get("Seed") {
+                Some(Value::Double(m)) if m.is_scalar() => m.get(0, 0),
+                _ => {
+                    return Err(err(
+                        "rng: the Seed field must be a scalar (as returned by rng).",
+                        "rng: فیلد Seed باید اسکالر باشد (مثل خروجی rng).",
+                    ))
+                }
+            };
+            let state = match s.get("State") {
+                Some(Value::Double(m)) if m.rows() == 16 && m.cols() == 1 => m.clone(),
+                _ => {
+                    return Err(err(
+                        "rng: the State field must be the 16x1 vector returned by rng.",
+                        "rng: فیلد State باید بردار ۱۶×۱ خروجی rng باشد.",
+                    ))
+                }
+            };
+            let halves: [f64; 16] = std::array::from_fn(|i| state.get_linear(i));
+            let words: Vec<Option<u128>> = halves
+                .chunks(4)
+                .map(|c| exact_doubles_to_u128([c[0], c[1], c[2], c[3]]))
+                .collect();
+            let [u_state, u_inc, n_state, n_inc] = [&words[0], &words[1], &words[2], &words[3]];
+            match (u_state, u_inc, n_state, n_inc) {
+                (Some(a), Some(b), Some(c), Some(d)) => {
+                    num::rng::restore(&num::rng::RngStatus {
+                        seed: seed as u64,
+                        uniform: (*a, *b),
+                        normal: (*c, *d),
+                    });
+                    Ok(())
+                }
+                _ => Err(err(
+                    "rng: the State vector must contain the exact integers returned by rng.",
+                    "rng: بردار State باید اعداد صحیح دقیقِ خروجی rng باشد.",
+                )),
+            }
+        }
+        [_, ..] => Err(McError::new(
+            mc_core::error::ids::PARSE_ERROR,
+            line,
+            col,
+            "rng: usage is rng, rng(seed), rng('default') or rng(state_struct).",
+            "rng: شکل صحیح rng، rng(seed)، rng('default') یا rng(ساختار وضعیت) است.",
+        )),
+    }
+}
+
+/// rng — گرفتن/ست‌کردن/بازیابی وضعیت؛ شکل گزاره‌ای بدون خروجی است (eval)،
+/// شکل عبارتی ساختار وضعیت برمی‌گرداند (بستهٔ ROADMAP 2.9 برای بند §4.5).
 fn bi_rng(args: &[Value], _n: usize) -> Result<Value, McError> {
-    if args.is_empty() {
+    rng_apply(args, 0, 0)?;
+    Ok(rng_status_value())
+}
+
+// ---------- ساختار (ROADMAP 2.9 — تسک ۲: مجموعهٔ حداقلی) ----------
+
+/// نام فیلد معتبر متلب: حرف آغازین، سپس حرف/رقم/_، حداکثر ۶۳ نویسه (سند ۰۳
+/// §2 — همان قاعدهٔ شناسه؛ پرچم پین رفتار struct() با MATLAB واقعی).
+pub(crate) fn valid_field_name(n: &str) -> bool {
+    match n.chars().next() {
+        Some(c) if c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    n.chars().count() <= 63 && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn invalid_field_name_err(name: &str, fname: &str) -> McError {
+    err(
+        &format!(
+            "{fname}: '{name}' is not a valid field name (a letter, then letters/digits/underscore; at most 63 chars)."
+        ),
+        &format!(
+            "{fname}: «{name}» نام فیلد معتبری نیست (یک حرف، سپس حرف/رقم/زیرخط؛ حداکثر ۶۳ نویسه)."
+        ),
+    )
+}
+
+fn need_struct<'a>(
+    args: &'a [Value],
+    i: usize,
+    name: &str,
+) -> Result<&'a mc_core::StructVal, McError> {
+    match args.get(i) {
+        Some(Value::Struct(s)) => Ok(s),
+        _ => Err(err(
+            &format!("{name}: argument {} must be a struct.", i + 1),
+            &format!("{name}: آرگومان {} باید ساختار باشد.", i + 1),
+        )),
+    }
+}
+
+/// struct('f', v, ...) — سازنده؛ نام تکراری: مقدار آخری می‌برد (اوراکل
+/// Octave 10.3). struct() = ساختار ۱×۱ بدون فیلد. مقادیر فیلد هر Value؛
+/// آرایهٔ ساختاری (با سلول) در v1 قابل بیان نیست = انبساط E4.
+fn bi_struct(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if !args.len().is_multiple_of(2) {
         return Err(err(
-            "rng: seed form rng(seed) is supported; the state-struct form arrives in P2-b.",
-            "rng: شکل rng(seed) پشتیبانی می‌شود؛ شکل ساختارِ وضعیت در P2-b می‌آید.",
+            "struct: additional arguments must come as 'field', VALUE pairs.",
+            "struct: آرگومان‌های اضافی باید به شکل «فیلد»، مقدار بیایند.",
         ));
     }
-    let s = need_scalar(args, 0, "rng")?;
-    if s < 0.0 || s.fract() != 0.0 || !s.is_finite() {
+    let mut s = mc_core::StructVal::new();
+    let mut i = 0;
+    while i < args.len() {
+        let name = need_char(args, i, "struct")?;
+        if !valid_field_name(&name) {
+            return Err(invalid_field_name_err(&name, "struct"));
+        }
+        s.set(&name, args[i + 1].clone());
+        i += 2;
+    }
+    let v = Value::Struct(s);
+    crate::eval::ensure_struct_depth(&v, 0, 0)?;
+    Ok(v)
+}
+
+/// fieldnames — انحراف مستند: متلب cell آرایهٔ نام‌ها می‌دهد؛ cell در v1
+/// نیست (E4) → ردیف char با جداکنندهٔ فاصله. نام فیلد‌ها همیشه شناسهٔ
+/// معتبرند (اعتبارسنجی در مسیرهای نوشتن) پس جداکنندهٔ فاصله بدون ابهام است.
+fn bi_fieldnames(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let s = need_struct(args, 0, "fieldnames")?;
+    if args.len() != 1 {
         return Err(err(
-            "rng: seed must be a non-negative integer.",
-            "rng: seed باید عدد صحیح نامنفی باشد.",
+            "fieldnames: exactly one struct argument is required.",
+            "fieldnames: دقیقاً یک آرگومان ساختاری لازم است.",
         ));
     }
-    num::rng::reseed(s as u64);
-    Ok(scalar_val(s))
+    let joined = s
+        .fields
+        .iter()
+        .map(|(n, _)| n.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(Value::Char(joined))
+}
+
+/// isfield(s, 'name') — پرس‌وجو؛ نام نامعتبر/false برمی‌گرداند نه خطا.
+fn bi_isfield(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let s = need_struct(args, 0, "isfield")?;
+    let name = need_char(args, 1, "isfield")?;
+    if args.len() != 2 {
+        return Err(err(
+            "isfield: exactly two arguments (struct, name) are required.",
+            "isfield: دقیقاً دو آرگومان (ساختار، نام) لازم است.",
+        ));
+    }
+    Ok(scalar_val(s.get(&name).is_some() as i32 as f64))
+}
+
+fn bi_getfield(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let s = need_struct(args, 0, "getfield")?;
+    let name = need_char(args, 1, "getfield")?;
+    if args.len() != 2 {
+        return Err(err(
+            "getfield: exactly two arguments (struct, name) are required.",
+            "getfield: دقیقاً دو آرگومان (ساختار، نام) لازم است.",
+        ));
+    }
+    s.get(&name).cloned().ok_or_else(|| {
+        err(
+            &format!("getfield: structure has no field '{name}'."),
+            &format!("getfield: ساختار فیلدی به نام «{name}» ندارد."),
+        )
+    })
+}
+
+/// setfield(s, 'name', v) — ساختار تازه برمی‌گرداند (ارزش کپی؛ اصل دست‌نخورده
+/// می‌ماند — اوراکل Octave 10.3)؛ فیلد غایب اضافه می‌شود.
+fn bi_setfield(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let s = need_struct(args, 0, "setfield")?;
+    let name = need_char(args, 1, "setfield")?;
+    if args.len() != 3 {
+        return Err(err(
+            "setfield: exactly three arguments (struct, name, value) are required.",
+            "setfield: دقیقاً سه آرگومان (ساختار، نام، مقدار) لازم است.",
+        ));
+    }
+    if !valid_field_name(&name) {
+        return Err(invalid_field_name_err(&name, "setfield"));
+    }
+    let mut out = s.clone();
+    out.set(&name, args[2].clone());
+    let v = Value::Struct(out);
+    crate::eval::ensure_struct_depth(&v, 0, 0)?;
+    Ok(v)
+}
+
+// ---------- odeset — گزینه‌های ساختاری ode (ROADMAP 2.9 — تسک ۴) ----------
+
+/// فهرست گزینه‌های ode که موتور واقعاً می‌فهمد (سند ۰۴ §4). فهرست کامل
+/// ۲۲گزینه‌ای متلب جعل نمی‌شود — گزینهٔ بی‌اثر در ساختار تحویل داده نمی‌شود.
+pub(crate) const ODE_OPTIONS: [&str; 4] = ["RelTol", "AbsTol", "MaxStep", "InitialStep"];
+
+/// اعمال یک گزینهٔ ode روی OdeOpts — مقدار [] یعنی «پیش‌فرض/خودکار» برای
+/// همهٔ گزینه‌ها (قرارداد متلب: [] در odeset = بازگشت به پیش‌فرض). نام
+/// ناشناخته = خطای صادقانه (اکتاو فقط هشدار می‌دهد — دلتای اوراکل مستند).
+fn apply_ode_option(
+    opts: &mut num::solvers::OdeOpts,
+    key: &str,
+    val: &Value,
+    fname: &str,
+) -> Result<(), McError> {
+    let scalar = match val {
+        Value::Double(m) if m.is_scalar() => Some(m.get(0, 0)),
+        Value::Double(m) if m.is_empty() => None,
+        _ => {
+            return Err(err(
+                &format!("{fname}: option '{key}' needs a scalar value (or [] for the default)."),
+                &format!("{fname}: گزینهٔ «{key}» به مقدار اسکالر نیاز دارد (یا [] برای پیش‌فرض)."),
+            ))
+        }
+    };
+    let default = num::solvers::OdeOpts::default();
+    match (key, scalar) {
+        ("RelTol", Some(v)) => opts.reltol = v,
+        ("AbsTol", Some(v)) => opts.abstol = v,
+        ("MaxStep", Some(v)) => opts.max_step = v,
+        ("InitialStep", Some(v)) => opts.initial_step = Some(v),
+        // [] = بازگشت به پیش‌فرض موتور (قرارداد متلب)
+        ("RelTol", None) => opts.reltol = default.reltol,
+        ("AbsTol", None) => opts.abstol = default.abstol,
+        ("MaxStep", None) => opts.max_step = default.max_step,
+        ("InitialStep", None) => opts.initial_step = None,
+        (other, Some(_)) => {
+            return Err(err(
+                &format!(
+                "{fname}: unsupported option '{other}' (RelTol | AbsTol | MaxStep | InitialStep)."
+            ),
+                &format!(
+                "{fname}: گزینهٔ پشتیبانی‌نشدهٔ «{other}» (RelTol | AbsTol | MaxStep | InitialStep)."
+            ),
+            ))
+        }
+        // نام ناشناخته با مقدار [] — همان خطای گزینهٔ ناشناخته
+        (other, None) => {
+            return Err(err(
+                &format!(
+                "{fname}: unsupported option '{other}' (RelTol | AbsTol | MaxStep | InitialStep)."
+            ),
+                &format!(
+                "{fname}: گزینهٔ پشتیبانی‌نشدهٔ «{other}» (RelTol | AbsTol | MaxStep | InitialStep)."
+            ),
+            ))
+        }
+    }
+    Ok(())
+}
+
+/// odeset() → چهار گزینهٔ پشتیبانی‌شده با پیش‌فرض‌ها ([] = خودکار)؛
+/// odeset('Name',v, ...) → فقط همان گزینه‌ها؛
+/// odeset(old, 'Name',v, ...) → ادغام؛ جفت‌های تازه برنده‌اند (اولویت متلب).
+fn bi_odeset(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let mut s = mc_core::StructVal::new();
+    s.set("RelTol", scalar_val(1e-3));
+    s.set("AbsTol", scalar_val(1e-6));
+    s.set("MaxStep", Value::Double(Matrix::full(0, 0, 0.0)));
+    s.set("InitialStep", Value::Double(Matrix::full(0, 0, 0.0)));
+    let mut i = 0usize;
+    // آرگومان اول می‌تواند ساختار گزینه‌های موجود باشد (ادغام — متلب)
+    if let [Value::Struct(old), rest @ ..] = args {
+        if rest.is_empty() || matches!(rest.first(), Some(Value::Char(_))) {
+            for (n, v) in &old.fields {
+                if !ODE_OPTIONS.contains(&n.as_str()) {
+                    return Err(err(
+                        &format!(
+                            "odeset: unsupported option '{n}' (RelTol | AbsTol | MaxStep | InitialStep)."
+                        ),
+                        &format!(
+                            "odeset: گزینهٔ پشتیبانی‌نشدهٔ «{n}» (RelTol | AbsTol | MaxStep | InitialStep)."
+                        ),
+                    ));
+                }
+                s.set(n, v.clone());
+            }
+            i = 1;
+        }
+    }
+    if !(args.len() - i).is_multiple_of(2) {
+        return Err(err(
+            "odeset: options must come in name/value pairs.",
+            "odeset: گزینه‌ها باید جفت نام/مقدار بیایند.",
+        ));
+    }
+    while i < args.len() {
+        let name = need_char(args, i, "odeset")?;
+        if !ODE_OPTIONS.contains(&name.as_str()) {
+            return Err(err(
+                &format!(
+                    "odeset: unsupported option '{name}' (RelTol | AbsTol | MaxStep | InitialStep)."
+                ),
+                &format!(
+                    "odeset: گزینهٔ پشتیبانی‌نشدهٔ «{name}» (RelTol | AbsTol | MaxStep | InitialStep)."
+                ),
+            ));
+        }
+        s.set(&name, args[i + 1].clone());
+        i += 2;
+    }
+    Ok(Value::Struct(s))
 }
 
 /// rand() / rand(n) / rand(m, n) — یکنواخت [0,1).
@@ -840,7 +1224,10 @@ fn bi_angle(args: &[Value], _n: usize) -> Result<Value, McError> {
 fn bi_isreal(args: &[Value], _n: usize) -> Result<Value, McError> {
     match args.first() {
         Some(Value::Complex(z)) => Ok(scalar_val(if z.is_all_real() { 1.0 } else { 0.0 })),
-        Some(Value::Double(_)) | Some(Value::Char(_)) => Ok(scalar_val(1.0)),
+        // ساختار مختلط نیست (ROADMAP 2.9 — رفتار متلب)
+        Some(Value::Double(_)) | Some(Value::Char(_)) | Some(Value::Struct(_)) => {
+            Ok(scalar_val(1.0))
+        }
         _ => Ok(scalar_val(0.0)),
     }
 }
@@ -1126,29 +1513,30 @@ fn ode_driver(args: &[Value], nargout: usize, method: OdeMethod) -> Result<Vec<V
     }
     let y0: Vec<f64> = (0..y0v.numel()).map(|k| y0v.get_linear(k)).collect();
 
-    // گزینه‌های name/value از آرگومان چهارم (انحراف مستند از odeset — سند ۰۴ §4)
+    // گزینه‌ها (ROADMAP 2.9 — تسک ۴): از آرگومان چهارم، یا ساختار odeset یا
+    // جفت‌های نام/مقدار (شکل قدیمی — رگرسیون حفظ می‌شود). ترکیب هر دو در یک
+    // فراخوانی خطا می‌دهد؛ ادغام راه متلب را دارد: odeset(old, 'Name', v).
     let mut opts = num::solvers::OdeOpts::default();
     let mut i = 3;
-    while i + 1 < args.len() {
-        #[allow(unused_assignments)]
-        let key = need_char(args, i, fname)?;
-        let val = need_scalar(args, i + 1, fname)?;
-        match key.as_str() {
-            "RelTol" => opts.reltol = val,
-            "AbsTol" => opts.abstol = val,
-            "MaxStep" => opts.max_step = val,
-            "InitialStep" => opts.initial_step = Some(val),
-            _ => {
-                return Err(err(
-                    &format!(
-                        "{fname}: unsupported option '{key}' (RelTol | AbsTol | MaxStep | InitialStep)."
-                    ),
-                    &format!(
-                        "{fname}: گزینهٔ پشتیبانی‌نشدهٔ «{key}» (RelTol | AbsTol | MaxStep | InitialStep)."
-                    ),
-                ))
-            }
+    if let Some(Value::Struct(s)) = args.get(3) {
+        if args.len() > 4 {
+            return Err(err(
+                &format!(
+                    "{fname}: pass either an odeset struct or name/value pairs, not both (merge via odeset(old, ...))."
+                ),
+                &format!(
+                    "{fname}: یا ساختار odeset بدهید یا جفت‌های نام/مقدار، نه هر دو (ادغام با odeset(old, ...))."
+                ),
+            ));
         }
+        for (n, v) in &s.fields {
+            apply_ode_option(&mut opts, n, v, fname)?;
+        }
+        i = args.len();
+    }
+    while i + 1 < args.len() {
+        let key = need_char(args, i, fname)?;
+        apply_ode_option(&mut opts, &key, &args[i + 1], fname)?;
         i += 2;
     }
     if i < args.len() {

@@ -4,12 +4,65 @@
 //! تک‌کوتیشن (سند ۰۳ §10) + function handle بی‌نام (سند ۰۳ §9 — capture-by-value).
 //! واریانت‌های بعدی طبق سند ۰۲ بخش ۵ در P2+ اضافه می‌شوند:
 //! `Logical`، `String`، `Complex`، `Cell`، `Struct`، `Sym`.
+//! ROADMAP 2.9: `Struct` (ساختار ۱×۱ با نقشهٔ فیلد مرتب) اضافه شد —
+//! آرایهٔ ساختاری (struct array) = انبساط E4.
 
 use crate::complex::ComplexMatrix;
 use crate::error::McError;
 use crate::matrix::Matrix;
 use std::fmt;
 use std::sync::Arc;
+
+/// حداکثر عمق تودرتویی ساختارها — گارد منابع در روح گام 2.5 (بودجهٔ حافظه):
+/// Drop بازگشتی و محاسبهٔ عمق روی زنجیره‌های بی‌انتها هزینه می‌شوند؛ متلب
+/// سقف مستندی ندارد (انحراف مستند COMPATIBILITY §1).
+pub const MAX_STRUCT_DEPTH: usize = 256;
+
+/// ساختار ۱×۱ با فیلدهای نام‌دار — نقشهٔ مرتب (ترتیب درج حفظ می‌شود،
+/// سند ۰۳ §3). جست‌وجوی خطی: فیلدها کم‌شمارند. فقط ۱×۱؛ آرایهٔ ساختاری
+/// نیاز به سلول دارد = انبساط E4 (خطای صادقانه).
+#[derive(Debug, Clone, Default)]
+pub struct StructVal {
+    /// فیلدها به ترتیب درج — نام تکراری در ساخت کننده رد می‌شود.
+    pub fields: Vec<(String, Value)>,
+}
+
+impl StructVal {
+    pub fn new() -> Self {
+        StructVal { fields: Vec::new() }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.fields.iter().find(|(n, _)| n == name).map(|(_, v)| v)
+    }
+
+    /// درج/جایگزینی — نام موجود مقدارش عوض می‌شود، نام تازه انتها می‌رود.
+    pub fn set(&mut self, name: &str, value: Value) {
+        match self.fields.iter_mut().find(|(n, _)| n == name) {
+            Some(slot) => slot.1 = value,
+            None => self.fields.push((name.to_owned(), value)),
+        }
+    }
+
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+}
+
+/// عمق تودرتویی مقدار — مقدار غیرساختاری ۰ است؛ ساختارِ بدون فیلد ساختاری ۱.
+pub fn struct_depth(v: &Value) -> usize {
+    match v {
+        Value::Struct(s) => {
+            1 + s
+                .fields
+                .iter()
+                .map(|(_, v)| struct_depth(v))
+                .max()
+                .unwrap_or(0)
+        }
+        _ => 0,
+    }
+}
 
 /// فراخوانیِ تابع بی‌نام — بدنهٔ AST و متغیرهای گرفته‌شده (capture-by-value)
 /// داخل closure در mc-interp زندگی می‌کنند؛ mc-core فقط قرارداد فراخوانی را می‌بیند.
@@ -51,6 +104,8 @@ pub enum Value {
     Char(String),
     /// تابع بی‌نام (function handle).
     Anon(AnonFn),
+    /// ساختار ۱×۱ با فیلدهای نام‌دار (ROADMAP 2.9 — سند ۰۳ §3/§10).
+    Struct(StructVal),
 }
 
 impl PartialEq for Value {
@@ -65,6 +120,14 @@ impl PartialEq for Value {
                 b.is_all_real() && a == &b.real_part()
             }
             (Value::Char(a), Value::Char(b)) => a == b,
+            // ساختارها: مجموعهٔ فیلد یکسان (ترتیب بی‌اثر — اوراکل Octave 10.3:
+            // isequal(struct('a',1,'b',2), struct('b',2,'a',1)) = 1؛ رفتار متلب)
+            (Value::Struct(a), Value::Struct(b)) => {
+                a.fields.len() == b.fields.len()
+                    && a.fields
+                        .iter()
+                        .all(|(n, v)| b.fields.iter().any(|(n2, v2)| n == n2 && v == v2))
+            }
             _ => false,
         }
     }
@@ -78,6 +141,7 @@ impl Value {
             Value::Double(_) | Value::Complex(_) => "double",
             Value::Char(_) => "char",
             Value::Anon(_) => "function_handle",
+            Value::Struct(_) => "struct",
         }
     }
 
@@ -95,6 +159,8 @@ impl Value {
             Value::Complex(m) => (m.rows(), m.cols()),
             Value::Char(s) => (1, s.chars().count()),
             Value::Anon(_) => (1, 1),
+            // فقط ۱×۱ — آرایهٔ ساختاری = انبساط E4 (سند ۰۳ §3)
+            Value::Struct(_) => (1, 1),
         }
     }
 

@@ -113,6 +113,15 @@ impl VarSummary {
                 preview: Vec::new(),
             };
         }
+        // struct: ۱×۱ بدون پیش‌نمایش عددی (ROADMAP 2.9 — الگوی char/handle)
+        if let Value::Struct(_) = value {
+            return Self {
+                name: name.to_owned(),
+                class: "struct".to_owned(),
+                shape: vec![1, 1],
+                preview: Vec::new(),
+            };
+        }
         let m = match value {
             Value::Double(m) => m,
             // هندل پیش‌نمایش عددی ندارد — فقط کلاس گزارش می‌شود (سند ۰۲ §3)

@@ -16,7 +16,7 @@
 //! بزرگ/ریز یک «ضریب مقیاس مشترک» `1.0e+03 *` می‌گیرد (فقط short).
 //! چیدمان FB-1 دست‌نخورده ماند — فقط رشتهٔ هر عضو عوض می‌شود.
 
-use mc_core::{ComplexMatrix, Matrix, Value};
+use mc_core::{ComplexMatrix, Matrix, StructVal, Value};
 
 /// حالت نمایش عددی — `format` command (ROADMAP 2.4 — آیتم ۱۱ ممیزی).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -259,8 +259,79 @@ pub fn format_value_spec(v: &Value, spec: &DisplaySpec) -> String {
         Value::Complex(z) => format_complex_matrix(z, spec),
         Value::Char(s) => format!("'{s}'"),
         Value::Anon(_) => "function_handle".to_owned(),
+        Value::Struct(s) => format_struct(s, spec),
     };
     format!("{body}\n")
+}
+
+/// حداکثر نویسهٔ پیش‌نمایش خطی یک فیلد — آستانهٔ قرارداد موتور با پرچم پین
+/// متلب (الگوی آستانه‌های 2.4/2.8): کوچک‌تر از این، درون‌خطی چاپ می‌شود
+/// (`b: [1 2 3]`)، بزرگ‌تر به‌صورت `[m×n double]`.
+const FIELD_PREVIEW_INLINE_MAX: usize = 30;
+
+/// نمایش ساختار به سبک متلب (ROADMAP 2.9 — تسک ۳):
+/// `  struct with fields:` + سطر خالی + فیلدها با تورفتگی ۴ فاصله.
+/// متن اکتاو متفاوت است («scalar structure containing the fields») — قرارداد
+/// متلبِ سند ۰۳ §11 ملاک است (الگوی نمایش char در 2.8؛ COMPATIBILITY §1).
+fn format_struct(s: &StructVal, spec: &DisplaySpec) -> String {
+    if s.fields.is_empty() {
+        return "  struct with no fields.".to_owned();
+    }
+    let mut lines = vec!["  struct with fields:".to_owned(), String::new()];
+    for (name, v) in &s.fields {
+        lines.push(format!("    {name}: {}", field_preview(v, spec)));
+    }
+    lines.join("\n")
+}
+
+/// پیش‌نمایش مقدار یک فیلد — اسکالر با قالب فعال؛ رشتهٔ کوچک داخل کوتیشن؛
+/// بردار کوچک فشرده درون‌خطی (`[1 2 3]`)؛ ماتریس دوبعدی همیشه `[m×n double]`
+/// (رفتار متلب — فقط بردارها درون‌خطی می‌شوند)؛ ساختار تو در تو همیشه
+/// `[1x1 struct]` (مثل متلب — از بازگشت نمایش عمیق جلوگیری می‌شود).
+fn field_preview(v: &Value, spec: &DisplaySpec) -> String {
+    match v {
+        Value::Double(m) => {
+            if m.is_empty() {
+                return "[]".to_owned();
+            }
+            if m.is_scalar() {
+                return format_elem(m.get(0, 0), spec.num);
+            }
+            // ماتریس دوبعدی واقعی هرگز درون‌خطی نمی‌شود (رفتار متلب)
+            if m.rows() != 1 && m.cols() != 1 {
+                return format!("[{}x{} double]", m.rows(), m.cols());
+            }
+            let compact = m
+                .as_column_slice()
+                .iter()
+                .map(|&x| format_elem(x, spec.num))
+                .collect::<Vec<_>>()
+                .join(" ");
+            if compact.chars().count() <= FIELD_PREVIEW_INLINE_MAX {
+                format!("[{compact}]")
+            } else {
+                format!("[{}x{} double]", m.rows(), m.cols())
+            }
+        }
+        Value::Complex(z) => {
+            if z.is_scalar() {
+                let (re, im) = z.get(0, 0);
+                return format_complex(re, im);
+            }
+            format!("[{}x{} double]", z.rows(), z.cols())
+        }
+        Value::Char(s) => {
+            if s.chars().count() <= FIELD_PREVIEW_INLINE_MAX {
+                format!("'{}'", s.replace('\'', "''"))
+            } else {
+                format!("[1x{} char]", s.chars().count())
+            }
+        }
+        // متلب متن هندل را نشان می‌دهد؛ ما متن مبدأ را نگه نمی‌داریم (انحراف
+        // مستند — COMPATIBILITY §1)
+        Value::Anon(_) => "[function_handle]".to_owned(),
+        Value::Struct(_) => "[1x1 struct]".to_owned(),
+    }
 }
 
 /// متن کامل انتساب — `x =\n<body>\n`.

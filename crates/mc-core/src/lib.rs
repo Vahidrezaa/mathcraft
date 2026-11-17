@@ -34,4 +34,4 @@ pub use complex::ComplexMatrix;
 pub use error::{ids, McError};
 pub use job::{JobSignals, JobSnapshot, INDETERMINATE_BP};
 pub use matrix::Matrix;
-pub use value::{AnonCall, AnonFn, Value};
+pub use value::{struct_depth, AnonCall, AnonFn, StructVal, Value, MAX_STRUCT_DEPTH};

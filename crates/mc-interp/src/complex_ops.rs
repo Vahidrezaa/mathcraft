@@ -32,6 +32,12 @@ pub fn to_complex(v: &Value, line: u32, col: u32) -> Result<ComplexMatrix, McErr
             "Function handle in numeric expression.",
             "function_handle در عبارت عددی.",
         )),
+        Value::Struct(_) => Err(cerr(
+            line,
+            col,
+            "Struct in numeric expression; extract fields with s.f first.",
+            "ساختار در عبارت عددی؛ ابتدا فیلد را با s.f بیرون بکشید.",
+        )),
     }
 }
 

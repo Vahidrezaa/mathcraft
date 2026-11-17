@@ -37,6 +37,12 @@ impl Pcg64 {
         rng
     }
 
+    /// بازسازی از قطعات خام (state, inc) — برای `rng(struct)` بازیابی وضعیت
+    /// (ROADMAP 2.9). دنبالهٔ بعدی دقیقاً ادامهٔ دنبالهٔ قبلی است.
+    pub fn from_parts(state: u128, inc: u128) -> Self {
+        Pcg64 { state, inc }
+    }
+
     fn step(&mut self) {
         self.state = self
             .state
@@ -203,6 +209,9 @@ fn zig_table() -> &'static ZigTable {
 struct GlobalRng {
     uniform: Pcg64,
     normal: Pcg64,
+    /// آخرین seed صریح (شروع = 0) — برای فیلد Seed ساختار وضعیت rng
+    /// (ROADMAP 2.9). بازیابی کامل وضعیت last_seed را هم برمی‌گرداند.
+    last_seed: u64,
 }
 
 static GLOBAL: Mutex<Option<GlobalRng>> = Mutex::new(None);
@@ -214,6 +223,7 @@ fn with_global<T>(f: impl FnOnce(&mut GlobalRng) -> T) -> T {
     let g = guard.get_or_insert_with(|| GlobalRng {
         uniform: Pcg64::new(0, 0xDA3E_39CB_94B9_5BDB),
         normal: Pcg64::new(0x853C_49E6_748F_EA9B, 0xDA3E_39CB_94B9_5BDB),
+        last_seed: 0,
     });
     f(g)
 }
@@ -223,6 +233,35 @@ pub fn reseed(seed: u64) {
     with_global(|g| {
         g.uniform = Pcg64::new(seed, 0xDA3E_39CB_94B9_5BDB);
         g.normal = Pcg64::new(seed ^ 0x853C_49E6_748F_EA9B, 0x9E37_79B9_7F4A_7C15);
+        g.last_seed = seed;
+    });
+}
+
+/// وضعیت کامل مولدها — `s = rng` گرفتن و `rng(s)` بازیابی (ROADMAP 2.9).
+/// (state, inc) خام هر دو مولد؛ لایهٔ interp آن را به/از ۸ عدد صحیحِ
+/// دقیق (هر u128 = ۴×u32) در فیلد State می‌برد.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RngStatus {
+    pub seed: u64,
+    pub uniform: (u128, u128),
+    pub normal: (u128, u128),
+}
+
+/// گرفتن وضعیت جاری — دنبالهٔ بعدی تغییری نمی‌کند.
+pub fn capture() -> RngStatus {
+    with_global(|g| RngStatus {
+        seed: g.last_seed,
+        uniform: (g.uniform.state, g.uniform.inc),
+        normal: (g.normal.state, g.normal.inc),
+    })
+}
+
+/// بازیابی وضعیت — `rand`/`randn`/`randi`/`randperm` از همان نقطه ادامه می‌دهند.
+pub fn restore(st: &RngStatus) {
+    with_global(|g| {
+        g.uniform = Pcg64::from_parts(st.uniform.0, st.uniform.1);
+        g.normal = Pcg64::from_parts(st.normal.0, st.normal.1);
+        g.last_seed = st.seed;
     });
 }
 

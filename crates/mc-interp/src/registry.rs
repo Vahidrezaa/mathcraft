@@ -497,6 +497,17 @@ fn tri_extract(args: &[Value], lower: bool) -> Result<Value, McError> {
 }
 
 fn bi_size(args: &[Value], _n: usize) -> Result<Value, McError> {
+    // ساختار ۱×۱ (ROADMAP 2.9) — size = [1 1]؛ ابعاد بالاتر 1
+    if let Some(Value::Struct(_)) = args.first() {
+        if args.len() == 2 {
+            let dim = need_int_scalar(args, 1)?;
+            return Ok(scalar_val(if dim == 0 { 2.0 } else { 1.0 }));
+        }
+        let mut out = Matrix::full(1, 2, 0.0);
+        out.set(0, 0, 1.0);
+        out.set(0, 1, 1.0);
+        return Ok(Value::Double(out));
+    }
     let m = need_matrix(args, 0)?;
     if args.len() == 2 {
         let dim = need_int_scalar(args, 1)?;
@@ -516,6 +527,8 @@ fn bi_length(args: &[Value], _n: usize) -> Result<Value, McError> {
     match &args.first() {
         Some(Value::Double(m)) => Ok(scalar_val(m.rows().max(m.cols()) as f64)),
         Some(Value::Char(s)) => Ok(scalar_val(s.chars().count() as f64)), // یونیکد صحیح (سند ۰۳ §10)
+        // ساختار ۱×۱ (ROADMAP 2.9)
+        Some(Value::Struct(_)) => Ok(scalar_val(1.0)),
         _ => Err(type_err("length")),
     }
 }
@@ -524,21 +537,33 @@ fn bi_numel(args: &[Value], _n: usize) -> Result<Value, McError> {
     match &args.first() {
         Some(Value::Double(m)) => Ok(scalar_val(m.numel() as f64)),
         Some(Value::Char(s)) => Ok(scalar_val(s.chars().count() as f64)),
+        // ساختار ۱×۱ (ROADMAP 2.9)
+        Some(Value::Struct(_)) => Ok(scalar_val(1.0)),
         _ => Err(type_err("numel")),
     }
 }
 
 fn bi_isempty(args: &[Value], _n: usize) -> Result<Value, McError> {
+    // ساختار ۱×۱ هرگز خالی نیست (حتی بدون فیلد — اوراکل Octave 10.3)
+    if matches!(args.first(), Some(Value::Struct(_))) {
+        return Ok(scalar_val(0.0));
+    }
     let m = need_matrix(args, 0)?;
     Ok(scalar_val(m.is_empty() as i32 as f64))
 }
 
 fn bi_isvector(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if matches!(args.first(), Some(Value::Struct(_))) {
+        return Ok(scalar_val(1.0));
+    }
     let m = need_matrix(args, 0)?;
     Ok(scalar_val((m.rows() == 1 || m.cols() == 1) as i32 as f64))
 }
 
 fn bi_isscalar(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if matches!(args.first(), Some(Value::Struct(_))) {
+        return Ok(scalar_val(1.0));
+    }
     let m = need_matrix(args, 0)?;
     Ok(scalar_val(m.is_scalar() as i32 as f64))
 }
@@ -1228,6 +1253,7 @@ fn bi_class(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Double(_) | Value::Complex(_) => "double",
         Value::Char(_) => "char",
         Value::Anon(_) => "function_handle",
+        Value::Struct(_) => "struct",
     };
     Ok(Value::Char(name.to_owned()))
 }
@@ -1310,6 +1336,13 @@ fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
             0,
             "double: function handles have no numeric form.",
             "double: function_handle شکل عددی ندارد.",
+        )),
+        Value::Struct(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "double: structs have no numeric form; extract fields with s.f first.",
+            "double: ساختار شکل عددی ندارد؛ ابتدا فیلد را با s.f بیرون بکشید.",
         )),
     }
 }
@@ -1422,6 +1455,13 @@ fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
             0,
             "num2str: function handles have no numeric text form.",
             "num2str: function_handle شکل متنی عددی ندارد.",
+        )),
+        Value::Struct(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            0,
+            0,
+            "num2str: structs have no numeric text form; extract fields with s.f first.",
+            "num2str: ساختار شکل متنی عددی ندارد؛ ابتدا فیلد را با s.f بیرون بکشید.",
         )),
     }
 }

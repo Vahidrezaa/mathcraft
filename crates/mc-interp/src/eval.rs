@@ -11,8 +11,12 @@
 use std::cell::Cell;
 use std::sync::Arc;
 
-use mc_core::{budget, ids, job, AnonFn, Matrix, McError, Value};
-use mc_parser::{AssignTarget, BinOp, CmpOp, Expr, LogicOp, OutTarget, Program, Stmt, UnOp};
+use mc_core::{
+    budget, ids, job, struct_depth, AnonFn, Matrix, McError, StructVal, Value, MAX_STRUCT_DEPTH,
+};
+use mc_parser::{
+    AssignTarget, BinOp, CmpOp, Expr, FieldName, LogicOp, OutTarget, Program, Stmt, UnOp,
+};
 
 use crate::complex_ops as cx;
 use crate::env::{Environment, StoredItem, UserFnDef};
@@ -308,6 +312,33 @@ fn exec_stmt(
                     return Ok((Flow::Normal, vec![text]));
                 }
             }
+            // `rng(...)` گزاره‌ای — مثل متلب بدون اکو و بدون ans (ROADMAP 2.9):
+            // شکل‌های rng / rng(seed) / rng('default') / rng(struct) فقط اثر
+            // جانبی دارند؛ مقدار ساختار وضعیت فقط با خروجی‌گیری می‌آید (s = rng).
+            // متغیر/تابع هم‌نام تقدم دارد (الگوی disp/fPrintf بالای همین تابع).
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if name == "rng" && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    let vals: Vec<Value> = args
+                        .iter()
+                        .map(|a| eval_expr(a, env, depth))
+                        .collect::<Result<_, _>>()?;
+                    crate::registry_p2::rng_apply(&vals, *line, *col)?;
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
+            // `rng` برهنه — بدون خروجی اثری ندارد (وضعیت گرفته و دور ریخته می‌شود)
+            if let Expr::Var { name, .. } = expr {
+                if name == "rng" && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
             // `format` برهنه — بازگشت به پیش‌فرض short (رفتار متلب)
             if let Expr::Var { name, .. } = expr {
                 if name == "format" && env.get(name).is_none() && env.lookup_item(name).is_none() {
@@ -363,6 +394,27 @@ fn exec_stmt(
                         let text = crate::format::format_assignment_spec(
                             name,
                             env.get(name)
+                                .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
+                            &spec,
+                        );
+                        Ok((Flow::Normal, vec![text]))
+                    } else {
+                        Ok((Flow::Normal, Vec::new()))
+                    }
+                }
+                // `s.f = v` / `s.(f) = v` — ROADMAP 2.9؛ نمایش مثل متلب روی
+                // متغیرِ ریشه است (کل ساختار، نه فقط فیلد)
+                AssignTarget::Field {
+                    base,
+                    field,
+                    line,
+                    col,
+                } => {
+                    let root = field_assign(env, base, field, value, *line, *col, depth)?;
+                    if !*suppress {
+                        let text = crate::format::format_assignment_spec(
+                            &root,
+                            env.get(&root)
                                 .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
                             &spec,
                         );
@@ -462,6 +514,9 @@ fn exec_stmt(
                     }
                 }
                 Value::Char(s) => s.chars().map(|ch| Value::Char(ch.to_string())).collect(),
+                // ساختار ۱×۱ = یک تکرار با خود ساختار (رفتار متلب/Octave 10.3 —
+                // آرایهٔ ساختاری نداریم پس پیمایش همیشه تک‌عضوی است؛ ROADMAP 2.9)
+                Value::Struct(_) => vec![iter_val.clone()],
                 Value::Anon(_) => {
                     return Err(McError::new(
                         ids::PARSE_ERROR,
@@ -683,6 +738,207 @@ fn indexed_assign(
 
 fn depth_of(_line: u32) -> usize {
     0 // اندیس‌ها بدون تو در توی خاص ارزیابی می‌شوند
+}
+
+// ---------- انتساب فیلد ساختار (ROADMAP 2.9 — تسک ۱) ----------
+
+/// نام فیلد از FieldName — نامی مستقیم؛ پویا با ارزیابی عبارت به char.
+fn resolve_field_name(
+    field: &FieldName,
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<String, McError> {
+    match field {
+        FieldName::Name(n) => Ok(n.clone()),
+        FieldName::Dynamic(e) => {
+            let v = eval_expr(e, env, depth)?;
+            match v {
+                Value::Char(s) => Ok(s),
+                _ => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    "Dynamic field name s.(f) needs a char value (like f = 'name').",
+                    "نام فیلد پویای s.(f) به مقدار char نیاز دارد (مثل f = 'name').",
+                )),
+            }
+        }
+    }
+}
+
+/// گارد عمق تودرتویی — سقف منابع mc-core (روح گام 2.5؛ انحراف مستند).
+/// ساختنده‌های builtin (struct/setfield) هم از همین گارد می‌گذرند.
+pub(crate) fn ensure_struct_depth(root: &Value, line: u32, col: u32) -> Result<(), McError> {
+    if struct_depth(root) > MAX_STRUCT_DEPTH {
+        return Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            format!(
+                "Struct nesting exceeds the maximum depth of {MAX_STRUCT_DEPTH} (resource guard)."
+            ),
+            format!("تودرتویی ساختار از حداکثر عمق {MAX_STRUCT_DEPTH} بیشتر شد (گارد منابع)."),
+        ));
+    }
+    Ok(())
+}
+
+/// ساختارِ متغیر نام‌دار — تعریف‌نشده = ساختار تازه (auto-vivification متلب:
+/// `q.a = 1` خودِ q را می‌سازد)؛ نوع دیگر = خطای متلب‌گونه.
+fn load_struct_or_new(
+    env: &mut Environment,
+    name: &str,
+    line: u32,
+    col: u32,
+) -> Result<StructVal, McError> {
+    match env.get(name) {
+        Some(Value::Struct(s)) => Ok(s.clone()),
+        None => Ok(StructVal::new()),
+        Some(other) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "'{name}' is a {}; fields can only be assigned on structs.",
+                other.class_name()
+            ),
+            format!(
+                "«{name}» از نوع {} است؛ فیلد فقط روی ساختارها انتساب می‌پذیرد.",
+                other.class_name()
+            ),
+        )),
+    }
+}
+
+/// ساختار موجود در مسیر فیلد (بدون ساخت خودکار) — None = متغیر/فیلد غایب
+/// (زنجیره با auto-viv ساخته می‌شود)؛ نوع غیرساختاری = خطا.
+fn struct_at_path(
+    env: &mut Environment,
+    place: &Expr,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Option<StructVal>, McError> {
+    match place {
+        Expr::Var { name, .. } => match env.get(name) {
+            Some(Value::Struct(s)) => Ok(Some(s.clone())),
+            None => Ok(None),
+            Some(other) => Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                format!(
+                    "'{name}' is a {}; nested field assignment needs a struct.",
+                    other.class_name()
+                ),
+                format!(
+                    "«{name}» از نوع {} است؛ انتساب فیلد تودرتو به ساختار نیاز دارد.",
+                    other.class_name()
+                ),
+            )),
+        },
+        Expr::Field { base, field, .. } => {
+            let parent = struct_at_path(env, base, depth, line, col)?;
+            let Some(parent) = parent else {
+                // والد غایب — کل زنجیره با انتساب ساخته می‌شود (رفتار متلب)
+                return Ok(None);
+            };
+            let fname = resolve_field_name(field, env, depth, line, col)?;
+            match parent.get(&fname) {
+                Some(Value::Struct(s)) => Ok(Some(s.clone())),
+                None => Ok(None),
+                Some(other) => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    format!(
+                        "Field '{fname}' is a {}; a nested struct is required.",
+                        other.class_name()
+                    ),
+                    format!(
+                        "فیلد «{fname}» از نوع {} است؛ اینجا ساختار تودرتو لازم است.",
+                        other.class_name()
+                    ),
+                )),
+            }
+        }
+        _ => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "Invalid assignment target: the base of a field assignment must be a variable or a field path.",
+            "هدف انتساب نامعتبر: پایهٔ انتساب فیلد باید متغیر یا مسیر فیلد باشد.",
+        )),
+    }
+}
+
+/// `place.field = value` — بازگشتی: زیرساختارِ جایگاه گرفته/ساخته می‌شود،
+/// فیلد در آن ست می‌شود و کل زنجیره به والد نوشته می‌شود (auto-vivification).
+/// نام متغیر ریشه برای نمایش برگردانده می‌شود؛ عمق فقط یک‌بار در ریشه چک می‌شود.
+fn field_assign(
+    env: &mut Environment,
+    place: &Expr,
+    field: &FieldName,
+    value: Value,
+    line: u32,
+    col: u32,
+    depth: usize,
+) -> Result<String, McError> {
+    let fname = resolve_field_name(field, env, depth, line, col)?;
+    // نام داینامیک هم باید شناسهٔ معتبر متلب باشد (مسیر نامی از پارسر تضمین
+    // شده است؛ اکتاو نام‌های دلخواه می‌پذیرد — دلتای اوراکل مستند)
+    if !crate::registry_p2::valid_field_name(&fname) {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "'{fname}' is not a valid field name (a letter, then letters/digits/underscore; at most 63 chars)."
+            ),
+            format!(
+                "«{fname}» نام فیلد معتبری نیست (یک حرف، سپس حرف/رقم/زیرخط؛ حداکثر ۶۳ نویسه)."
+            ),
+        ));
+    }
+    match place {
+        Expr::Var { name, .. } => {
+            let mut st = load_struct_or_new(env, name, line, col)?;
+            st.set(&fname, value);
+            let root = Value::Struct(st);
+            ensure_struct_depth(&root, line, col)?;
+            env.set(name.clone(), root);
+            Ok(name.clone())
+        }
+        Expr::Field {
+            base,
+            field: inner_field,
+            ..
+        } => {
+            // مقدارِ خودِ این جایگاه (place = مسیر کامل) باید ساختار باشد یا
+            // غایب (auto-viv)؛ فیلد در آن ست می‌شود و نتیجه بازگشتی در جایگاه
+            // می‌نشیند. اینجا فقط همین سطح دست می‌خورد — نه ساختارِ والد.
+            let mut inner = struct_at_path(env, place, depth, line, col)?.unwrap_or_default();
+            inner.set(&fname, value);
+            field_assign(
+                env,
+                base,
+                inner_field,
+                Value::Struct(inner),
+                line,
+                col,
+                depth,
+            )
+        }
+        _ => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "Invalid assignment target: field assignment needs a variable or field path on the left.",
+            "هدف انتساب نامعتبر: انتساب فیلد در سمت چپ به متغیر یا مسیر فیلد نیاز دارد.",
+        )),
+    }
 }
 
 /// کلمات فرمان `format` → حالت نمایش (ROADMAP 2.4 — آیتم ۱۱).
@@ -1468,6 +1724,13 @@ fn eval_expr_end(
                     "Cannot transpose a function handle.",
                     "ترانهاده function_handle ممکن نیست.",
                 )),
+                Value::Struct(_) => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    *line,
+                    *col,
+                    "Cannot transpose a struct.",
+                    "ترانهاده ساختار ممکن نیست.",
+                )),
             }
         }
         Expr::Matrix { rows, line, col } => build_matrix(rows, env, depth, *line, *col),
@@ -1582,6 +1845,41 @@ fn eval_expr_end(
                 }));
             }
             Err(undefined_var_in(name, *line, *col, env))
+        }
+        // دسترسی به فیلد ساختار `s.f` / `s.(expr)` (ROADMAP 2.9 — تسک ۱)
+        Expr::Field {
+            base,
+            field,
+            line,
+            col,
+        } => {
+            let fname = resolve_field_name(field, env, depth, *line, *col)?;
+            let base_val = eval_expr_end(base, env, depth, target, sub_i)?;
+            match base_val {
+                Value::Struct(s) => match s.get(&fname) {
+                    Some(v) => Ok(v.clone()),
+                    None => Err(McError::new(
+                        ids::PARSE_ERROR,
+                        *line,
+                        *col,
+                        format!("Struct has no field '{fname}'."),
+                        format!("ساختار فیلدی به نام «{fname}» ندارد."),
+                    )),
+                },
+                other => Err(McError::new(
+                    ids::PARSE_ERROR,
+                    *line,
+                    *col,
+                    format!(
+                        "Dot access ('.') needs a struct on its left; got {}.",
+                        other.class_name()
+                    ),
+                    format!(
+                        "دسترسی فیلد («.») در سمت چپ به ساختار نیاز دارد؛ {} دریافت شد.",
+                        other.class_name()
+                    ),
+                )),
+            }
         }
     }
 }
@@ -1972,6 +2270,14 @@ fn build_matrix(
                 "Cannot put a function handle inside a matrix.",
                 "function_handle داخل ماتریس قرار نمی‌گیرد.",
             )),
+            // ساختار در ماتریس لفظی = آرایهٔ ساختاری → انبساط E4 (ROADMAP 2.9)
+            Value::Struct(_) => Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "Cannot put a struct inside a matrix; struct arrays are expansion E4.",
+                "ساختار داخل ماتریس قرار نمی‌گیرد؛ آرایهٔ ساختاری انبساط E4 است.",
+            )),
         }
     }
     // تلفیق افقی/عمودی روی (re، im) — برای سلول حقیقی im صفر است
@@ -2302,6 +2608,13 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
             col,
             "Function handle in numeric comparison.",
             "function_handle در مقایسه عددی.",
+        )),
+        Value::Struct(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "Struct in a numeric context; extract fields with s.f first.",
+            "ساختار در زمینهٔ عددی؛ ابتدا فیلد را با s.f بیرون بکشید.",
         )),
     }
 }
