@@ -263,13 +263,18 @@ capture-by-value در لحظه ساخت (رفتار MATLAB). recursive anonymous
 | MC:E1001 | undefined variable | Undefined variable 'x'. Did you mean 'y'? | متغیر 'x' تعریف نشده. منظورتان 'y' بود؟ |
 | MC:E1002 | undefined function | Function 'lenght' not found. Did you mean 'length'? | تابع 'lenght' یافت نشد. منظورتان 'length' بود؟ |
 | MC:E2001 | index out of bounds | Index exceeds array bounds: A is 3×3, tried A(4,2). | اندیس خارج از محدوده: A سه‌درسه است ولی A(4,2) خواسته شد. |
+| MC:E2002 | type/usage (سطح اجرا — گام 2.11) | 's' is not indexable. / Function 'f' expects 2 argument(s), got 1. | «s» اندیس‌پذیر نیست. / تابع «f» ۲ آرگومان می‌خواهد، ۱ دریافت شد. |
 | MC:E2003 | size mismatch | Inner matrix dimensions must agree: (2×3)*(4×3). | ابعاد داخلی ماتریس‌ها نمی‌خواند: (2×3)*(4×3). |
+| MC:E2004 | singular matrix | Matrix is singular to working precision (exact zero pivot in LU). | ماتریس در دقت کاری منفرد است (پیوت دقیقاً صفر در LU). |
+| MC:E2005 | not positive definite | Cholesky failed: the matrix is not symmetric positive definite. | شکست Cholesky: ماتریس متقارن مثبت معین نیست. |
 | MC:E3001 | parse error | Unexpected ')': expected expression. | ')' غیرمنتظره: عبارت انتظار می‌رفت. |
 | MC:E4001 | ode integration | ODE solver failed to meet tolerance (RelTol=1e-3) at t=…; result flagged. | حلگر به تحمل خطا نرسید؛ نتیجه با برچسب «مشکوک» برگردانده شد. |
 | MC:E4002 | cancelled | Operation terminated by user. | عملیات به درخواست کاربر متوقف شد. |
 | MC:E4003 | out of memory | Out of memory: requested 100000x100000 array (80000.0 MB) exceeds the allocation budget (800 MB). Reduce the problem size. | خارج از حافظه: آرایهٔ 100000×100000 (80000.0 مگابایت) از بودجهٔ تخصیص (۸۰۰ مگابایت) فراتر می‌رود. اندازهٔ مسئله را کاهش دهید. |
 
 قاعده: هر خطا حتماً یکی از: (الف) راه اصلاح، (ب) لینک مستند، (ج) توضیح مفهومی کوتاه داشته باشد. خطای خالی ممنوع.
+
+**اجرا تاکسونومی (گام 2.11 — بند ۱۴ ممیزی، ۲۰۲۶-۱۱-۱۷):** E3001 فقط برای خطای **سینتکسی** (lexer/parser) است؛ خطای معناییِ ارزیابی خانوادهٔ خودش را می‌گیرد — نام‌ها (E1001 متغیر برهنه / E1002 فراخوانی)، دامنهٔ اندیس/ابعاد/نوع (E2001/E2002/E2003)، عددی (E2004/E2005)، منابع (E4001-4003)، مرز صادقانه (E9xxx). پشتیبان موقعیت: خطاهای کمکی/builtin بدون موقعیت، موقعیت عبارت/گزاره/فراخوانیِ درگیر را می‌گیرند — هیچ خطای کاربر `line 0:0` نمی‌ماند (تنها استثنا: پنیک داخلی مهارشدهٔ مرز FFI، مستند در COMPATIBILITY).
 
 ---
 

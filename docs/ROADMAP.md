@@ -280,8 +280,16 @@ shipping a plotter on top of a half-language would force rework.
   3. Lexer recovery (continue after first error): default **deferred** (stop-at-first stays
      for v1, documented) — revisit only if cheap during the span work.
 - **DoD:**
-  - [ ] Audit item 14 repro cases produce distinct IDs with correct `line:col`.
-  - [ ] Error-catalog table in COMPATIBILITY updated; ≥ 10 new tests.
+  - [x] Audit item 14 repro cases produce distinct IDs with correct `line:col` —
+        E3001 now syntax-only (lexer/parser); semantic eval errors carry their
+        catalog family (E1002 undefined fn · E2001 bounds · E2002 type/usage —
+        new family, level-2 of doc 02 §9 · E2003 dims · E9xxx boundaries);
+        position backstops (expression/statement/call-site) mean no user error
+        keeps `line 0:0` (sole documented exception: contained FFI panics).
+        11 tests in tests/diagnostics_step211.rs; 527 workspace green (was 516).
+  - [x] Error-catalog table updated: doc 03 §14 rows E1002/E2001/E2002 added
+        (+E2004/E2005 pre-existing gaps surfaced by the new catalog test);
+        COMPATIBILITY audit row 14 closed. ≥ 10 new tests ✓ (11).
 - **Tests:** span correctness across multi-line inputs; catalog completeness check.
 - **Risks:** span plumbing is wide but mechanical — schedule immediately after 2.10 while
   parser context is warm.
@@ -535,8 +543,33 @@ quote/transpose context rule (`x'` is transpose, `[65 'a']` is concat — advers
 suite); 460 tests green; corpus p2_21/p2_22 with the Octave 10.3 sandbox oracle.
 Deviations documented in COMPATIBILITY §1. Recorded in STATUS §3.10.
 
-**Next: step 2.11 — diagnostics workshop (audit item 14, §4).** No session may
-start any other step without the user explicitly reordering (§ Governance).
+**Next: Phase 3 — plotting (§5; first step: 3.1 PlotSpec contract freeze).**
+P2-c and with it **P2 (numeric + language) is code-complete pending this delivery's
+user push + CI + device checklist** — no session may start any other step without the
+user explicitly reordering (§ Governance).
+
+**Step 2.11 — diagnostics workshop — executed per plan 2026-11-17 (pending user
+push + CI).** The error taxonomy of doc 03 §14 is now actually enforced: E3001 is
+syntax-only (lexer/parser); every semantic eval error carries its family — E1002
+for called-but-unknown names (`lenght(x)` → "Function 'lenght' not found." +
+did-you-mean 'length'), E2001 for all bounds paths (name-based, chained, field),
+E2002 (new family, the "executable" level of doc 02 §9) for type/usage/arity
+errors, E2003 for dimension mismatches, E9xxx for honest v1 boundaries — 90
+sites reclassified across eval/registry/stdio/source/complex_ops. Spans were
+extended through the whole AST (Unary/Range/Logic got operator positions —
+`-s` reports the minus, `a && a` the `&&`, `1:x` the colon), and three position
+backstops (expression, statement, call-site — the latter also fixing the single
+registry path that didn't patch builtin errors) mean **no user error keeps
+`line 0:0`**; anonymous-function arity now reports the call site, not 0:0. The
+FFI DTO already carried id+line+col; the UI error card now *shows* the position
+("Line 2, column 7" / «سطر ۲، ستون ۷») — Dart-only change, l10n en/fa,
+verified against the real gen-l10n and `flutter analyze` (no FRB regen needed).
+The catalog test (ids ↔ doc 03 §14) surfaced and closed two pre-existing gaps
+(E2004/E2005 rows). Lexer recovery stays deferred (stop-at-first, documented).
+527 tests green (was 516; +11 diagnostics). Same delivery: the user's app logo
+is now the Android launcher icon (overlay over the flutter-create template,
+exactly the five `ic_launcher.png` densities the real 3.24.5 template ships).
+Recorded in STATUS §3.13.
 
 **Step 2.10 — chained indexing — executed per plan 2026-11-17 (pending user
 push + CI).** Postfix indexing on any expression result: `[1 2 3](2)`,
@@ -588,3 +621,4 @@ no cap — documented deviation). Oracle: Octave 10.3 sandbox probe
 | 1.0 | 2026-11-13 | Step 2.8 executed per plan (§4 tasks 1-4): char type & strings — mixed concat promotion (`[65 'a']`→`'Aa'`), numeric promotion (real+complex), char indexing + indexed assignment (class-of-target wins), honest E4 errors for 2-D char, builtins char/double/ischar/blanks/str2double, MATLAB no-space quote/transpose lexer rule; corpus p2_21/p2_22 (Octave 10.3 sandbox oracle; manifest 74→76); 460 tests green; COMPATIBILITY ledger rows 6/12 closed. User approval: «خب اوکیه. بریم ادامه.» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.9 executed per plan (§4 tasks 1-4): structs minimal — `Value::Struct` (ordered field map, 1×1; struct arrays = E4 honest error), syntax `s.f` / `s.f = v` / nested auto-viv / dynamic `s.(expr)`, builtins struct/fieldnames/isfield/getfield/setfield, MATLAB-style struct display, `odeset` + struct-form ode options (pair form unchanged; merge precedence via odeset(old,...)), `rng` status struct {Type:'PCG64',Seed,State} with capture/restore replay (closes §4.5 deviation), rng statement form echo-free; depth guard 256; corpus p2_23 (manifest 76→77) + p2_24 (engine-internal, outside Octave manifest); 501 tests green (was 460). User approval: «خب اوکی بریم ادامه» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.9 CLOSED (user pushed 2620328 = tree bac9f15f ✓, CI green, full device checklist confirmed). Step 2.10 executed per plan (§4 tasks 1-2): chained indexing — `Expr::Index` postfix on any expression result (literals/calls/anon/parens/transpose chains/char literals/matrix-literal elements), `s.f(2)` read+write incl. nested + auto-viv from empty, cell idiom `x(1)(2)` = honest E4 (MATLAB rejects; Octave chains freely = documented delta); adversarial suite written before code (chained_step210, 14 tests); corpus p2_25 (manifest 77→78, Octave 10.3 oracle); 516 tests green (was 501). **Governance note (user):** Python/other languages acceptable as *tools* (product stays Rust-in-APK); multiple short steps may be batched per turn at the assistant's judgment — 2.11 deliberately deferred to a dedicated session (span+FFI+UI work). User approval: «خب بیلد شد. چک لیست رو تست کردم اوکی بود…» | User (chat) |
+| 1.0 | 2026-11-17 | Step 2.10 CLOSED (user pushed 21a7b59 = tree ef961d00 ✓, CI green, in-app tests confirmed). Step 2.11 executed per plan (§4 tasks 1-3) — **P2-c code-complete; with it P2 (numeric + language) fully closed pending this delivery's push/CI/checklist**: E3001 → syntax-only; 90 semantic sites reclassified (E1002 undefined fn with did-you-mean, E2001 bounds, E2002 new type/usage family, E2003 dims, E9xxx boundaries); AST spans for Unary/Range/Logic; three position backstops → no user error keeps line 0:0; UI error card shows the position (Dart-only, l10n en/fa, gen-l10n-verified, flutter analyze clean — FFI DTO already carried id+span); doc 03 §14 rows E1002/E2001/E2002 (+E2004/E2005 pre-existing gaps); lexer recovery stays deferred; 11 diagnostics tests; 527 green (was 516). Same delivery: user's logo → Android launcher icon (overlay over flutter-create template, verified against the real 3.24.5 template). User approval: «بله بیلد کامل شد. تست های داخل برنامه موفق بود. بریم گام بعد.» | User (chat) |
