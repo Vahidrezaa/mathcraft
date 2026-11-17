@@ -57,10 +57,32 @@ fn while_one_cancelled_from_other_thread() {
     let _guard = serial_guard();
     let _ctx = CtxGuard::install();
 
-    // لغو ۱۰۰ms پس از شروع ارزیابی — حلقهٔ بی‌نهایت باید همان‌جا تمام شود
+    // لغو پس از ≥۱ گذرِ تثبیت‌شدهٔ حلقه (رفع CI قرمز ۲۰۲۶-۱۱-۱۷ — قبلاً
+    // sleep ثابت ۱۰۰ms بود: روی runner گرسنگ‌CPU می‌توانست لغو پیش از نخستین
+    // تکرار بیفتد و x هرگز ست نشود). حالا تا نخستین چک‌پوینتِ گذر‌شده صبر
+    // می‌کنیم: تکرار اول آغاز شده و `x = 1` قطعاً کامیت می‌شود (لغو فقط مرز
+    // تکرار بعدی دیده می‌شود) — ادعای «x باقی می‌ماند» از قطعیت برمی‌خیزد.
     let canceler_ctx = Arc::clone(&_ctx.0);
     let canceller = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        let mut ready = false;
+        for _ in 0..5_000 {
+            if canceler_ctx
+                .loop_passes
+                .load(std::sync::atomic::Ordering::Relaxed)
+                >= 1
+            {
+                ready = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert!(
+            ready,
+            "engine must pass >=1 loop checkpoint before cancel (got {})",
+            canceler_ctx
+                .loop_passes
+                .load(std::sync::atomic::Ordering::Relaxed)
+        );
         canceler_ctx
             .cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);

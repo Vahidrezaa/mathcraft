@@ -645,6 +645,20 @@ pub fn active_job_id() -> Option<u64> {
         .map(|(id, _)| *id)
 }
 
+/// شمارش گذرهای چک‌پوینت حلقهٔ job فعال (هر تکرار for/while) — فقط برای
+/// تست‌های داخل کرِیت: تست لغو تا ≥۱ گذرِ تثبیت‌شده صبر می‌کند تا نتیجه
+/// قطعی باشد (رفع CI قرمز ۲۰۲۶-۱۱-۱۷ — رقابت «ثبت job» با «نخستین کامیت»).
+/// `#[cfg(test)]` + خارج از قرارداد FFI (codegen فقط pub غیرِ‌شرطی را
+/// می‌بیند؛ بدون تغییر API_CONTRACT_VERSION).
+#[cfg(test)]
+pub(crate) fn active_job_loop_passes() -> Option<u64> {
+    ACTIVE_JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+        .map(|(_, ctx)| ctx.loop_passes.load(Ordering::Relaxed))
+}
+
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
 /// `whos` کنسول ترمینال (توابع الحاقی P0.1 — سند ۰۲ بخش ۳).
 pub fn workspace_vars() -> Vec<VarSummary> {
@@ -991,6 +1005,27 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         let job_id = job_id.expect("running job must be observable via active_job_id");
+
+        // قطعیت (درس CI قرمز ۲۰۲۶-۱۱-۱۷): «فعال‌بودن job» فقط یعنی ثبت شده؛
+        // لغوِ پیش از نخستین چک‌پوینتِ حلقه = خروج با ورک‌اسپیس خالی — که
+        // رفتار درست موتور است (متلب هم اگر پیش از هر گزاره stop کنید هیچ
+        // نمی‌ماند). پس تا ≥۱ گذرِ تثبیت‌شدهٔ حلقه صبر می‌کنیم: آنگاه تکرار
+        // اول آغاز شده و `x = 1` قطعاً کامیت می‌شود (لغو فقط مرز تکرار بعدی
+        // دیده می‌شود، وسط گزاره نه) — ادعای «مثل stop متلب: x باقی می‌ماند»
+        // این‌جا از قطعیت برمی‌خیزد، نه از شانس زمان‌بندی runner.
+        let mut ready = false;
+        for _ in 0..5_000 {
+            if matches!(active_job_loop_passes(), Some(n) if n >= 1) {
+                ready = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(
+            ready,
+            "engine must pass >=1 loop checkpoint before we cancel (got {:?})",
+            active_job_loop_passes()
+        );
 
         // لغو پذیرفته می‌شود؛ id ناموجود رد می‌شود
         assert!(cancel_job(job_id));

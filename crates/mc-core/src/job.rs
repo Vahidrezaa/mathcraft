@@ -29,6 +29,10 @@ pub struct JobSignals {
     pub stage: Mutex<String>,
     /// درصد × ۱۰۰ (0..=10_000) یا [`INDETERMINATE_BP`].
     pub percent_bp: AtomicU32,
+    /// شمارش گذرهای چک‌پوینت حلقه (هر تکرار for/while) — سیگنال «موتور واقعاً
+    /// اجرا شده» (ROADMAP 2.11 / رفع CI قرمز ۲۰۲۶-۱۱-۱۷): تست لغو تا ≥۱ گذرِ
+    /// تثبیت‌شده صبر می‌کند تا نتیجه قطعی باشد، نه شانسی.
+    pub loop_passes: AtomicU64,
     /// نخِ ارزیابِ این job — در install ثبت می‌شود؛ چک لغو/گزارش فقط از
     /// همین نخ معنادار است (هم ایزوله‌سازی تست‌های موازی cargo، هم
     /// جلوگیری از آلودگی cross-thread در زمان اجرا).
@@ -43,6 +47,7 @@ impl JobSignals {
             cancel: AtomicBool::new(false),
             stage: Mutex::new("eval".to_owned()),
             percent_bp: AtomicU32::new(INDETERMINATE_BP),
+            loop_passes: AtomicU64::new(0),
             eval_thread: std::thread::current().id(),
         }
     }
@@ -119,6 +124,22 @@ pub fn cancel_requested() -> bool {
     if ctx.eval_thread != std::thread::current().id() {
         return false;
     }
+    ctx.cancel.load(Ordering::Relaxed)
+}
+
+/// چک‌پوینت حلقه (هر تکرار for/while): یک بار کانتکست خوانده می‌شود — هم چک
+/// لغو، هم شمارش گذر (`loop_passes`؛ مسیر داغ: دو بار current() نداریم).
+/// گذرِ شمرده‌شده یعنی این تکرار شروع شده و بدنه‌اش تا پایان می‌رود (لغو فقط
+/// مرز گزاره/تکرار دیده می‌شود) — پایهٔ قطعیت تست لغوی cross-thread.
+/// true = لغو خواسته شده. بدون کانتکست یا از نخِ غیرارزیاب: no-op (false).
+pub fn loop_checkpoint() -> bool {
+    let Some(ctx) = current() else {
+        return false;
+    };
+    if ctx.eval_thread != std::thread::current().id() {
+        return false;
+    }
+    ctx.loop_passes.fetch_add(1, Ordering::Relaxed);
     ctx.cancel.load(Ordering::Relaxed)
 }
 

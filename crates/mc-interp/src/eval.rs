@@ -83,9 +83,10 @@ fn stmt_cancel_checkpoint() -> Result<(), McError> {
     })
 }
 
-/// چک لغو هر تکرار حلقه (for/while).
+/// چک لغو هر تکرار حلقه (for/while) — گذرِ تکرار هم شمرده می‌شود
+/// (job::loop_checkpoint — قطعیت تست لغو، رفع CI قرمز ۲۰۲۶-۱۱-۱۷).
 fn loop_cancel_checkpoint() -> Result<(), McError> {
-    if job::cancel_requested() {
+    if job::loop_checkpoint() {
         Err(cancel_error())
     } else {
         Ok(())
