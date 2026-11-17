@@ -20,6 +20,9 @@ dependencies:
   flutter_svg: ">=2.0.0 <3.0.0"
   # نیاز flutter_rust_bridge_codegen — برای انواع تولیدی قرارداد (سند ۰۲ بخش ۳)
   freezed_annotation: ">=2.2.0 <3.0.0"
+  # نمایشگر نمودار (P3-a — سند ۰۶ §7.3): ذخیره PNG و اشتراک
+  path_provider: ">=2.1.0 <3.0.0"
+  share_plus: ">=10.0.0 <11.0.0"
 
 dev_dependencies:
   flutter_test:

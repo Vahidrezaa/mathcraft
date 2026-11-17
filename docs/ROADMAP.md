@@ -330,8 +330,11 @@ shipping a plotter on top of a half-language would force rework.
 - **Goal:** interactive plotting on device, Craft-look, RTL-aware.
 - **Tasks:** plot page; zoom/pan/crosshair; export PNG + share; CDS palette tokens; LTR
   island inside RTL layout (docs/06); Craft Icons only.
-- **DoD:** [ ] widget tests; [ ] device verification by user (demo: crosshair on
-  `plot(sin(x))`).
+- **DoD:** [x] widget tests (30 new: g4-format mirror table, palette/two-layer
+  resolve, pure layout+inverse, snap binary/scan, plots state merge, page
+  empty/3D-honest/list-toggle, crosshair long-hold callback — 37 total green,
+  analyze clean on the pinned 3.24.5); [ ] device verification by user (demo:
+  crosshair on `plot(sin(x))`) — pending this push + APK build.
 - **Risks:** rendering perf on low-end → decimation + draw lists (already designed).
 
 ### Step 3.5 — CI for plots
@@ -502,20 +505,22 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**P3-a engine core is code-complete (2026-11-17): steps 3.1–3.3 delivered in one
-batch (617 tests green, glue fresh, analyze clean) — pending only the user push +
-CI green.** Contract v2 is the frozen base the viewer builds on; 3D variants and
-the reserved `Overlay` are additive on top of it (no rewrite needed — the
-versioned DTO, semantic palette colors, Rust-side ticks and raw-data re-decimation
-hooks are all in place).
+**Step 3.4 (Flutter plot viewer) is code-complete (2026-11-17):** the Plots tab
+shows engine figures pulled via `get_plots()` on tab activation + push-merge from
+`EvalResult.plots`; CustomPainter renders the frozen contract v2 (axes box,
+dotted grid at 30%, Rust-computed 1-2-5 tick labels incl. `10^{k}` superscripts,
+line/scatter/bar/histogram/area/fill/polar/errorbar, legend chips, subplot grid);
+gestures per doc 06 §7.3 — pinch around the focal point, pan, double-tap reset,
+hold-500ms crosshair snapped to the nearest vertex (chip in JetBrains Mono);
+PNG export (documents dir) + share via the floating Craft-Icons bar; LTR island
+for axes inside the RTL chrome; honest states for empty/3D/Quiver (P3-b).
+Palette tokens resolve in Dart (`PlotColor_Palette` → CDS 8-color plot palette)
+— theme changes restyle plots without engine rebuilds.
 
-**Next up — Step 3.4 (Flutter plot viewer):** plot page from `get_plots()` /
-`EvalResult.plots`; CustomPainter renderer (draw from the Rust-computed ticks and
-LTTB-decimated series); zoom/pan as an affine transform on painted coordinates
-(no FFI in the frame loop); crosshair; export PNG + share; CDS palette tokens
-(the `Palette(i)` color resolves in Dart per doc 06 §3); LTR island inside RTL
-layout; Craft Icons only. Then 3.5 (CI golden images + perf budget), then P3-b
-(3D) with `surf(peaks)` finger-rotation demo.
+**Pending for step 3.4 close:** user push → CI green → APK → device checklist
+(crosshair demo on `plot(sin(x))`, pinch around focal, double-tap reset, PNG
+save/share, dark+light themes, fa+en). Then 3.5 (CI golden images + perf
+budget), then P3-b (3D, `surf(peaks)` demo).
 
 ## 12. Change log
 
@@ -532,3 +537,4 @@ layout; Craft Icons only. Then 3.5 (CI golden images + perf budget), then P3-b
 | 1.0 | 2026-11-17 | Step 2.9 CLOSED (user pushed 2620328 = tree bac9f15f ✓, CI green, full device checklist confirmed). Step 2.10 executed per plan (§4 tasks 1-2): chained indexing — `Expr::Index` postfix on any expression result (literals/calls/anon/parens/transpose chains/char literals/matrix-literal elements), `s.f(2)` read+write incl. nested + auto-viv from empty, cell idiom `x(1)(2)` = honest E4 (MATLAB rejects; Octave chains freely = documented delta); adversarial suite written before code (chained_step210, 14 tests); corpus p2_25 (manifest 77→78, Octave 10.3 oracle); 516 tests green (was 501). **Governance note (user):** Python/other languages acceptable as *tools* (product stays Rust-in-APK); multiple short steps may be batched per turn at the assistant's judgment — 2.11 deliberately deferred to a dedicated session (span+FFI+UI work). User approval: «خب بیلد شد. چک لیست رو تست کردم اوکی بود…» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.10 CLOSED (user pushed 21a7b59 = tree ef961d00 ✓, CI green, in-app tests confirmed). Step 2.11 executed per plan (§4 tasks 1-3) — **P2-c code-complete; with it P2 (numeric + language) fully closed pending this delivery's push/CI/checklist**: E3001 → syntax-only; 90 semantic sites reclassified (E1002 undefined fn with did-you-mean, E2001 bounds, E2002 new type/usage family, E2003 dims, E9xxx boundaries); AST spans for Unary/Range/Logic; three position backstops → no user error keeps line 0:0; UI error card shows the position (Dart-only, l10n en/fa, gen-l10n-verified, flutter analyze clean — FFI DTO already carried id+span); doc 03 §14 rows E1002/E2001/E2002 (+E2004/E2005 pre-existing gaps); lexer recovery stays deferred; 11 diagnostics tests; 527 green (was 516). Same delivery: user's logo → Android launcher icon (overlay over flutter-create template, verified against the real 3.24.5 template). User approval: «بله بیلد کامل شد. تست های داخل برنامه موفق بود. بریم گام بعد.» | User (chat) |
 | 1.0 | 2026-11-17 | Steps 3.1 + 3.2 + 3.3 executed in one turn (user-approved batching): **PlotSpec contract v2 frozen** (PlotColor palette/exact-RGB, Rust-side 1-2-5 ticks + %.4g, Area/Fill/ErrorBar, Bar series-mode, HistNorm, series id+raw_len for zoom re-decimation, caxis/colorbar reserved, PlotFigure + get_plots pull; PLOT_CONTRACT_VERSION=2); mc-plot v2 (ops grammar + FigureState fold + LTTB ≤4000 with <1% area-error quality test + linespec parser + histogram binning, 52 tests); 17 statement plot builtins in mc-interp (disp/rng pattern — no echo/no ans; expression use = clear error), hold/figure/subplot/legend/axis/grid/labels/fplot(400 samples); **histogram data-form retired for MATLAB parity — Bin* options merged into histcounts (COMPATIBILITY §4.5 closed)**, corpus p2_20 migrated; FFI: Engine.figure_state + push/pull plots + 5 round-trip tests; FRB glue regenerated (6 files, byte-stable re-run) + flutter analyze clean; 617 tests green (was 527). Next per §11: 3.4 Flutter plot viewer | User (chat: «بریم سراغ فاز ۳… بدون افت کیفیت در یک نوبت») |
+| 1.0 | 2026-11-17 | Step 3.4 executed per plan (§7.3 tasks): Plots tab live — pull `get_plots()` on tab activation + push-merge of `EvalResult.plots`; CustomPainter for contract v2 (axes/grid/ticks incl. `10^{k}` superscripts/line-scatter-bar-histogram-area-fill-polar-errorbar/legend chips/subplot grid); gestures pinch-around-focal + pan + double-tap reset + hold-500ms crosshair (raw Listener+Timer — scale recognizer never wins the arena on a stationary press); PNG export + share (path_provider + share_plus 10.x, Craft-Icons floating bar); LTR island; honest 3D/Quiver state; format_g4 Dart mirror with manual round-half-even (Dart toStringAsFixed is half-away — divergence from Rust/C caught by the mirrored table test); 30 new tests (37 total, analyze clean). Device verification pending user push | User (chat: «بریم گام بعدی. Ci سبز شد.») |

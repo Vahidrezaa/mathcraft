@@ -6,8 +6,10 @@ import '../../core/icons/craft_icons.dart';
 import '../console/console_page.dart';
 import '../editor/editor_page.dart';
 import '../empty/empty_tabs.dart';
+import '../plots/plots_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../state/app_settings.dart';
+import '../../state/plots_state.dart';
 
 /// پوسته ناوبری پرتره — ۵ تب (سند ۰۶ بخش ۵.۱).
 /// لنداسکیپ/تبلت (ریل کناری و سه‌پنل) با breakpoint در همین فایل توسعه می‌یابد
@@ -82,6 +84,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIndex: _index,
         onDestinationSelected: (i) {
           setState(() => _index = i);
+          ref.read(activeTabProvider.notifier).state = i;
         },
         destinations: [
           for (var i = 0; i < _tabIcons.length; i++)

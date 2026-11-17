@@ -35,6 +35,9 @@ abstract class EngineClient {
 
   /// لغو job فعال — true اگر job فعالی لغو شد.
   Future<bool> cancelActive();
+
+  /// pull کامل شکل‌های نشست (قرارداد رسم v2 — سند ۰۴ §8.4).
+  Future<List<api.PlotFigure>> getPlots();
 }
 
 /// کلاینت واقعی روی موتور Rust (libmathcraft.so — سند ۰۲ بخش ۸).
@@ -74,6 +77,12 @@ class RustEngineClient implements EngineClient {
     final id = await api.activeJobId();
     if (id == null) return false;
     return api.cancelJob(jobId: id);
+  }
+
+  @override
+  Future<List<api.PlotFigure>> getPlots() async {
+    await ensureInitialized();
+    return api.getPlots();
   }
 }
 

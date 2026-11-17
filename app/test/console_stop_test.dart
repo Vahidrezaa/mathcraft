@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mathcraft/app.dart';
 import 'package:mathcraft/core/rust/engine_client.dart';
+import 'package:mathcraft/src/rust/api.dart' show PlotFigure;
 import 'package:mathcraft/core/rust/engine_provider.dart';
 
 /// موتور ساختگی قابل‌کنترل برای قرارداد v2 (ROADMAP 2.3 — سند ۰۸ بخش ۶):
@@ -43,6 +44,9 @@ class ControllableFakeEngine implements EngineClient {
 
   @override
   Stream<ScriptEvent> runScript(String code) => controller.stream;
+
+  @override
+  Future<List<PlotFigure>> getPlots() async => const [];
 
   @override
   Future<bool> cancelActive() async {

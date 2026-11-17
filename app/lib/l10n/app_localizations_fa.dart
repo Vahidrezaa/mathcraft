@@ -73,12 +73,6 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
-  String get emptyPlotsTitle => 'نمودار با مایل‌استون P3 می‌آید';
-
-  @override
-  String get emptyPlotsHint => 'ایده اولین نمودار: fxplot(sin, [0 6])';
-
-  @override
   String get emptyVarsTitle => 'بازرس متغیرها با مایل‌استون P5 می‌آید';
 
   @override
@@ -101,4 +95,103 @@ class AppLocalizationsFa extends AppLocalizations {
 
   @override
   String get editorClearTooltip => 'پاک‌کردن ادیتور';
+
+  @override
+  String get plotsEmptyTitle => 'هنوز نموداری نیست';
+
+  @override
+  String get plotsEmptyHint => 'در کنسول plot(...) اجرا کنید — شکل‌ها همین‌جا می‌آیند.';
+
+  @override
+  String get plotsEngineError => 'موتور در دسترس نیست';
+
+  @override
+  String plotsFigureLabel(int n) {
+    return 'شکل $n';
+  }
+
+  @override
+  String get plotsListTooltip => 'فهرست شکل‌ها';
+
+  @override
+  String get plotsSaveTooltip => 'ذخیرهٔ PNG';
+
+  @override
+  String get plotsShareTooltip => 'اشتراک PNG';
+
+  @override
+  String get plotsInfoTooltip => 'اطلاعات شکل';
+
+  @override
+  String plotsSavedTo(String path) {
+    return 'PNG ذخیره شد: $path';
+  }
+
+  @override
+  String plotsExportFailed(String error) {
+    return 'خروجی ناموفق: $error';
+  }
+
+  @override
+  String get plotsInfoTitle => 'اطلاعات شکل';
+
+  @override
+  String get plotsInfoFigureId => 'شناسهٔ شکل';
+
+  @override
+  String get plotsInfoKind => 'نوع';
+
+  @override
+  String get plotsInfoSeries => 'سری‌ها';
+
+  @override
+  String get plotsInfoPoints => 'نقاط رسم‌شده';
+
+  @override
+  String get plotsInfoRawPoints => 'نقاط خام (نزد موتور)';
+
+  @override
+  String get plotsCrosshairHint => 'برای دیدن مقادیر نگه دارید — با دو انگشت زوم و با دو تپ بازنشانی.';
+
+  @override
+  String get plotsNot3dTitle => 'نمودارهای سه‌بعدی و برداری با به‌روزرسانی بعدی می‌آیند';
+
+  @override
+  String get plotsNot3dHint => 'surf/mesh/contour/plot3/quiver از حالا در قرارداد آماده‌اند (P3-b).';
+
+  @override
+  String get plotsSubplotNote => 'Subplot — سلول‌ها در این نسخه فقط‌نمایش‌اند.';
+
+  @override
+  String get plotsKindLine => 'خط';
+
+  @override
+  String get plotsKindScatter => 'پراکنده';
+
+  @override
+  String get plotsKindBar => 'میله‌ای';
+
+  @override
+  String get plotsKindHist => 'هیستوگرام';
+
+  @override
+  String get plotsKindArea => 'سطح';
+
+  @override
+  String get plotsKindFill => 'چندضلعی';
+
+  @override
+  String get plotsKindPolar => 'قطبی';
+
+  @override
+  String get plotsKindError => 'نوار خطا';
+
+  @override
+  String get plotsKindQuiver => 'برداری';
+
+  @override
+  String get plotsKind3d => 'سه‌بعدی';
+
+  @override
+  String get plotsKindSubplot => 'چندقابی';
 }

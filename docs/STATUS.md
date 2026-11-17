@@ -212,6 +212,18 @@ v1.0 انتشار       ⬜
 - **محیط:** sandbox از صفر بازسازی شد (rustup 1.99.1 + Flutter 3.24.5 + codegen از سورس — همهٔ پین‌های CI)
 - **وضعیت تحویل:** ۲ کامیت (هستهٔ موتور / انتقال+glue+مستندات) روی 6a26f6e کاربر؛ بستهٔ وصله + sha256 + تمرین سیاست #۱
 
+## ۳.۱۵. گام 3.4 — نمایشگر نمودار Flutter (۲۰۲۶-۱۱-۱۷)
+
+- **قرارداد به UI:** `get_plots()` pull در فعال‌شدن تب (activeTabProvider در shell) + push-merge از `EvalResult.plots` در plotsProvider (ادغام با شناسهٔ شکل، مرتب) — مدل pull سند ۰۲ §7 عیناً
+- **رندر:** PlotPainter با layout خالص تست‌پذیر (CellLayout.build بدون canvas): کادر محور + grid نقطه‌چین ۳۰٪ + تیک‌های Rust با برچسب `%.4g` (لگاریتم `10^{k}` با superscript واقعی) + خط/پراکنده/میله گروهی-انباشته (slot از min-delta)/هیستوگرام/سطح/چندضلعی/پلار حلقوی/نوار خطا با کپ + legend chips با موقعیت‌های north/south/east/west؛ subplot شبکهٔ سلولی فقط‌نمایش؛ ژست‌ها فقط روی «داده» transform می‌شوند (فریم/تیک ثابت — سند ۰۲ §7)
+- **تعامل:** pinch حول focal (o′ = o − ((F−c−o)/s)(s′−s))، pan، double-tap reset، نگه‌داشتن ۵۰۰ms بی‌حرکت = crosshair با snap به نزدیک‌ترین رأس (binary روی یکنوا، scan روی نامنظم) + chip (x, y) با mono — نکتهٔ arena: scale با فشار بی‌حرکت هرگز نمی‌برد؛ Listener خام + Timer (frame timestamp مونوتیک — تست‌پذیر با pump)
+- **خروجی:** RepaintBoundary → PNG با pixelRatio ۳؛ ذخیره در documents + اشتراک از حافظه (XFile.fromData) — نوار شناور با ۴ آیکون Craft جدید (save/share/info/plot-list)
+- **هم‌ارزی فرمت:** آینهٔ Dart format_g4 با گرد نیم‌به‌زوج دستی — انحراف Dart (نیم‌به‌بالا) از Rust/C توسط تست جدول مشترک کشف و رفع شد (1234.5)
+- **حالت‌های صادقانه:** خالی/خطای موتور/سه‌بعدی و Quiver «با P3-b می‌آید»/یادداشت فقط‌نمایش subplot
+- **وابستگی‌های جدید:** path_provider + share_plus 10.x (پین <11 برای پرهیز از API منسوخ) — pubspec.lock به‌روز
+- **تست‌ها:** ‏۳۰ جدید (فرمت جدول آینه، پالت دولایه، layout/وارون، snap، ادغام state، صفحه خالی/شکل/لیست/۳بعدی، callback crosshair) → **۳۷/۳۷ ویجت + تحلیل بدون مشکل** روی پین 3.24.5
+- **وضعیت تحویل:** ۱ کامیت Dart-only روی 1cb9032 کاربر؛ وصله + sha256 + تمرین سیاست #۱ (am + pub get + analyze + test) — راستی‌آزمایی دستگاه با کاربر (DoD گام 3.4: دمو crosshair روی `plot(sin(x))`)
+
 ## ۴. پروتکل تداوم جلسات (ضدپاک‌شدگی — الزامی، نسخه ۲ بعد از حادثه دوم)
 
 مشکل رخ‌داده (دو بار): بازنشانی sandbox ⇒ پاک‌شدن کانتکست گفتگو، محیط (Rust/target)، **کامیتهای گیت داخل sandbox**، worklog و بسته download — همه به نقطه‌پایان جلسه قبلی برمی‌گشت.

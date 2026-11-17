@@ -215,18 +215,6 @@ abstract class AppLocalizations {
   /// **'Line {line}, column {col}'**
   String errorPosition(int line, int col);
 
-  /// No description provided for @emptyPlotsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Plots ship in milestone P3'**
-  String get emptyPlotsTitle;
-
-  /// No description provided for @emptyPlotsHint.
-  ///
-  /// In en, this message translates to:
-  /// **'First plot idea: fxplot(sin, [0 6])'**
-  String get emptyPlotsHint;
-
   /// No description provided for @emptyVarsTitle.
   ///
   /// In en, this message translates to:
@@ -274,6 +262,192 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear editor'**
   String get editorClearTooltip;
+
+  /// No description provided for @plotsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No plots yet'**
+  String get plotsEmptyTitle;
+
+  /// No description provided for @plotsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Run plot(...) in the Console — figures land here instantly.'**
+  String get plotsEmptyHint;
+
+  /// No description provided for @plotsEngineError.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine unavailable'**
+  String get plotsEngineError;
+
+  /// No description provided for @plotsFigureLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Figure {n}'**
+  String plotsFigureLabel(int n);
+
+  /// No description provided for @plotsListTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Figure list'**
+  String get plotsListTooltip;
+
+  /// No description provided for @plotsSaveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Save PNG'**
+  String get plotsSaveTooltip;
+
+  /// No description provided for @plotsShareTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Share PNG'**
+  String get plotsShareTooltip;
+
+  /// No description provided for @plotsInfoTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Figure info'**
+  String get plotsInfoTooltip;
+
+  /// No description provided for @plotsSavedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'PNG saved: {path}'**
+  String plotsSavedTo(String path);
+
+  /// No description provided for @plotsExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed: {error}'**
+  String plotsExportFailed(String error);
+
+  /// No description provided for @plotsInfoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Figure info'**
+  String get plotsInfoTitle;
+
+  /// No description provided for @plotsInfoFigureId.
+  ///
+  /// In en, this message translates to:
+  /// **'Figure id'**
+  String get plotsInfoFigureId;
+
+  /// No description provided for @plotsInfoKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get plotsInfoKind;
+
+  /// No description provided for @plotsInfoSeries.
+  ///
+  /// In en, this message translates to:
+  /// **'Series'**
+  String get plotsInfoSeries;
+
+  /// No description provided for @plotsInfoPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Drawn points'**
+  String get plotsInfoPoints;
+
+  /// No description provided for @plotsInfoRawPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw points (kept in engine)'**
+  String get plotsInfoRawPoints;
+
+  /// No description provided for @plotsCrosshairHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold on the plot to inspect values — pinch to zoom, double-tap to reset.'**
+  String get plotsCrosshairHint;
+
+  /// No description provided for @plotsNot3dTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'3D and vector plots arrive in the next update'**
+  String get plotsNot3dTitle;
+
+  /// No description provided for @plotsNot3dHint.
+  ///
+  /// In en, this message translates to:
+  /// **'surf/mesh/contour/plot3/quiver are already contract-ready (P3-b).'**
+  String get plotsNot3dHint;
+
+  /// No description provided for @plotsSubplotNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Subplot — cells are read-only in this release.'**
+  String get plotsSubplotNote;
+
+  /// No description provided for @plotsKindLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Line'**
+  String get plotsKindLine;
+
+  /// No description provided for @plotsKindScatter.
+  ///
+  /// In en, this message translates to:
+  /// **'Scatter'**
+  String get plotsKindScatter;
+
+  /// No description provided for @plotsKindBar.
+  ///
+  /// In en, this message translates to:
+  /// **'Bar'**
+  String get plotsKindBar;
+
+  /// No description provided for @plotsKindHist.
+  ///
+  /// In en, this message translates to:
+  /// **'Histogram'**
+  String get plotsKindHist;
+
+  /// No description provided for @plotsKindArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get plotsKindArea;
+
+  /// No description provided for @plotsKindFill.
+  ///
+  /// In en, this message translates to:
+  /// **'Filled polygon'**
+  String get plotsKindFill;
+
+  /// No description provided for @plotsKindPolar.
+  ///
+  /// In en, this message translates to:
+  /// **'Polar'**
+  String get plotsKindPolar;
+
+  /// No description provided for @plotsKindError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error bar'**
+  String get plotsKindError;
+
+  /// No description provided for @plotsKindQuiver.
+  ///
+  /// In en, this message translates to:
+  /// **'Quiver'**
+  String get plotsKindQuiver;
+
+  /// No description provided for @plotsKind3d.
+  ///
+  /// In en, this message translates to:
+  /// **'3D'**
+  String get plotsKind3d;
+
+  /// No description provided for @plotsKindSubplot.
+  ///
+  /// In en, this message translates to:
+  /// **'Subplot'**
+  String get plotsKindSubplot;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

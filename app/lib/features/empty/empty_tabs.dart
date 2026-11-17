@@ -7,19 +7,7 @@ import '../../l10n/app_localizations.dart';
 /// نه لوگوی خالی؛ و طبق اصل صداقت (سند ۰۰ اصل ۵)، مایل‌استون واقعی رسیدن
 /// هر قابلیت اعلام می‌شود (سند ۰۷).
 /// (تب ادیتور از P1 فعال شد — features/editor/editor_page.dart)
-class PlotsTab extends StatelessWidget {
-  const PlotsTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return _EmptyTab(
-      title: l10n.emptyPlotsTitle,
-      hint: l10n.emptyPlotsHint,
-      codeSample: 'fxplot(sin, [0 6])',
-    );
-  }
-}
+/// (تب نمودار از P3-a فعال شد — features/plots/plots_page.dart)
 
 class VarsTab extends StatelessWidget {
   const VarsTab({super.key});

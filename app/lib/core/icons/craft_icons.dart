@@ -34,6 +34,12 @@ class CraftIcons {
   static const actionLang = CraftIconData('ic_action_lang');
   static const actionClear = CraftIconData('ic_action_clear');
   static const actionHistory = CraftIconData('ic_action_history');
+
+  // اکشن‌های نمودار (P3-a — سند ۰۶ §7.3 نوار شناور)
+  static const actionSave = CraftIconData('ic_action_save');
+  static const actionShare = CraftIconData('ic_action_share');
+  static const actionInfo = CraftIconData('ic_action_info');
+  static const plotList = CraftIconData('ic_plot_list');
 }
 
 /// ویجت آیکون CDS — SVG با `currentColor` (رنگ فقط از توکن‌ها می‌آید؛

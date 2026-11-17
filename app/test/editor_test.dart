@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mathcraft/app.dart';
 import 'package:mathcraft/core/rust/engine_client.dart';
+import 'package:mathcraft/src/rust/api.dart' show PlotFigure;
 import 'package:mathcraft/core/rust/engine_provider.dart';
 import 'package:mathcraft/features/editor/editor_page.dart';
 import 'package:mathcraft/features/editor/matlab_highlight.dart';
@@ -51,6 +52,9 @@ class FakeEngineClient implements EngineClient {
   Stream<ScriptEvent> runScript(String code) async* {
     yield ScriptEvent_Done(result: _resultFor(code));
   }
+
+  @override
+  Future<List<PlotFigure>> getPlots() async => const [];
 
   @override
   Future<bool> cancelActive() async => false;

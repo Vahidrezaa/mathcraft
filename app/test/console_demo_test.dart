@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mathcraft/app.dart';
 import 'package:mathcraft/core/rust/engine_client.dart';
+import 'package:mathcraft/src/rust/api.dart' show PlotFigure;
 import 'package:mathcraft/core/rust/engine_provider.dart';
 
 /// موتور ساختگی برای تست UI بدون libmathcraft.so (سند ۰۸ بخش ۶ — UI golden/test).
@@ -49,6 +50,9 @@ class FakeEngineClient implements EngineClient {
   Stream<ScriptEvent> runScript(String code) async* {
     yield ScriptEvent_Done(result: _resultFor(code));
   }
+
+  @override
+  Future<List<PlotFigure>> getPlots() async => const [];
 
   @override
   Future<bool> cancelActive() async => false;
