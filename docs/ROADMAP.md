@@ -260,7 +260,11 @@ shipping a plotter on top of a half-language would force rework.
   2. Eval: generalize index application to temporary values; `x(1)(2)` (cell content) →
      honest "cell arrays not supported yet" error (cells = expansion E4).
 - **DoD:**
-  - [ ] Audit item 13 repro tests green; ≥ 8 new tests.
+  - [x] Audit item 13 repro tests green — `[1 2 3](2)`, `ones(3,3)(2,2)`, `f(x)(1)`
+        plus `end`/ranges/char literals/field chains all green against the Octave 10.3
+        oracle; ≥ 8 new tests — 14 adversarial tests in tests/chained_step210.rs
+        (written before code per the step rule) + corpus p2_25 (manifest 77 → 78);
+        516 workspace green (was 501).
 - **Tests:** precedence interactions with transpose/imag suffixes (adversarial).
 - **Risks:** parser precedence traps → tests before code, per project rule.
 - **Deliverable:** commit + package.
@@ -531,8 +535,26 @@ quote/transpose context rule (`x'` is transpose, `[65 'a']` is concat — advers
 suite); 460 tests green; corpus p2_21/p2_22 with the Octave 10.3 sandbox oracle.
 Deviations documented in COMPATIBILITY §1. Recorded in STATUS §3.10.
 
-**Next: step 2.10 — chained indexing (audit item 13, §4).** No session may
+**Next: step 2.11 — diagnostics workshop (audit item 14, §4).** No session may
 start any other step without the user explicitly reordering (§ Governance).
+
+**Step 2.10 — chained indexing — executed per plan 2026-11-17 (pending user
+push + CI).** Postfix indexing on any expression result: `[1 2 3](2)`,
+`ones(3,3)(2,2)`, `f(x)(1)` (anon and builtin), `(1:4)(3)`, char literals
+`'abc'(2)`, transpose chains `[1 2 3]'(1)` / `A(1,:)'(2)`, deeper chains
+`f(x)(1)(2)` until natural bounds, indexing inside matrix literals
+`[[1 2](1) 5]`, and the full field chain `s.f(2)` read **and** write
+(`s.f(2) = v` incl. nested `w.x.y(2) = v` and MATLAB auto-viv from empty:
+`t.b(3) = 5` → `[0 0 5]`) — the promise made by the 2.9 error message is
+kept. The cell idiom `x(1)(2)` (and `A(1,2)(1)`, in both read and assignment
+forms) is an honest E4 error per this step's spec: MATLAB rejects `()()`
+chaining; Octave chains freely (`A(1,2)(1)` even works) — documented oracle
+delta. `index_value` generalizes the name-based machinery to temporary
+values (`end` resolves against the base value); `indexed_write_value` is the
+shared write core for the name path and the field path. Known boundary kept:
+direct `( )` indexing of complex values (name path parity — pre-existing).
+Oracle: Octave 10.3 sandbox probe (scripts/probe_chain210.m). 516 tests
+green. Recorded in STATUS §3.12.
 
 **Step 2.9 — structs minimal (`Value::Struct`) — executed per plan 2026-11-17
 (pending user push + CI).** Ordered-field-map `Value::Struct` (1×1 only; struct
@@ -565,3 +587,4 @@ no cap — documented deviation). Oracle: Octave 10.3 sandbox probe
 | 1.0 | 2026-11-05 | Phase 2 formally closed at step 2.7: user pushed annotated tag `p2-code-complete` at `e189195` (CI #18 + Android #18 green) and confirmed the full device checklist (pendulum ode45 demo < 1 s + progress bar, FB-1, FB-2); §2.7 DoD all ticked; §11 rewritten (Phase 2 CLOSED, next = P2-c step 2.8); STATUS §3.9 + phase map + FB rows updated; package v0.9 | User (chat: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار میکردند») |
 | 1.0 | 2026-11-13 | Step 2.8 executed per plan (§4 tasks 1-4): char type & strings — mixed concat promotion (`[65 'a']`→`'Aa'`), numeric promotion (real+complex), char indexing + indexed assignment (class-of-target wins), honest E4 errors for 2-D char, builtins char/double/ischar/blanks/str2double, MATLAB no-space quote/transpose lexer rule; corpus p2_21/p2_22 (Octave 10.3 sandbox oracle; manifest 74→76); 460 tests green; COMPATIBILITY ledger rows 6/12 closed. User approval: «خب اوکیه. بریم ادامه.» | User (chat) |
 | 1.0 | 2026-11-17 | Step 2.9 executed per plan (§4 tasks 1-4): structs minimal — `Value::Struct` (ordered field map, 1×1; struct arrays = E4 honest error), syntax `s.f` / `s.f = v` / nested auto-viv / dynamic `s.(expr)`, builtins struct/fieldnames/isfield/getfield/setfield, MATLAB-style struct display, `odeset` + struct-form ode options (pair form unchanged; merge precedence via odeset(old,...)), `rng` status struct {Type:'PCG64',Seed,State} with capture/restore replay (closes §4.5 deviation), rng statement form echo-free; depth guard 256; corpus p2_23 (manifest 76→77) + p2_24 (engine-internal, outside Octave manifest); 501 tests green (was 460). User approval: «خب اوکی بریم ادامه» | User (chat) |
+| 1.0 | 2026-11-17 | Step 2.9 CLOSED (user pushed 2620328 = tree bac9f15f ✓, CI green, full device checklist confirmed). Step 2.10 executed per plan (§4 tasks 1-2): chained indexing — `Expr::Index` postfix on any expression result (literals/calls/anon/parens/transpose chains/char literals/matrix-literal elements), `s.f(2)` read+write incl. nested + auto-viv from empty, cell idiom `x(1)(2)` = honest E4 (MATLAB rejects; Octave chains freely = documented delta); adversarial suite written before code (chained_step210, 14 tests); corpus p2_25 (manifest 77→78, Octave 10.3 oracle); 516 tests green (was 501). **Governance note (user):** Python/other languages acceptable as *tools* (product stays Rust-in-APK); multiple short steps may be batched per turn at the assistant's judgment — 2.11 deliberately deferred to a dedicated session (span+FFI+UI work). User approval: «خب بیلد شد. چک لیست رو تست کردم اوکی بود…» | User (chat) |
