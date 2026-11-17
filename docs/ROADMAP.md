@@ -240,9 +240,13 @@ shipping a plotter on top of a half-language would force rework.
   4. Switch `odeset/ode45/ode23` options to accept struct form; named pairs stay accepted.
      `rng(seed)` returns a status struct like MATLAB (closes §4.5 deviation).
 - **DoD:**
-  - [ ] `opts = odeset('RelTol',1e-6); [T,Y]=ode45(f,tspan,y0,opts);` works; named-pair form
-        still works (regression).
-  - [ ] ≥ 15 new tests.
+  - [x] `opts = odeset('RelTol',1e-6); [T,Y]=ode45(f,tspan,y0,opts);` works; named-pair form
+        still works (regression) — executed 2026-11-17: struct form is bit-identical to the
+        named-pair form (invariance test, max|ΔY| = 0); odeset() defaults / pairs /
+        odeset(old, ...) merge with fresh-pairs-win precedence; `[]` = reset-to-default.
+  - [x] ≥ 15 new tests — 41 delivered: 39 in tests/structs_step29.rs + corpus p2_23
+        (Octave-compared, manifest 76 → 77) + p2_24 (engine-internal, outside the Octave
+        manifest — same precedent as vdp1000/RNG); 501/501 workspace green (was 460).
 - **Tests:** struct round-trips; option-precedence tests (struct vs named pairs).
 - **Risks:** scope creep toward full OO — explicit non-goal: **no classes/objects in v1**
   (honest "not supported" error); display edge cases.
@@ -527,8 +531,27 @@ quote/transpose context rule (`x'` is transpose, `[65 'a']` is concat — advers
 suite); 460 tests green; corpus p2_21/p2_22 with the Octave 10.3 sandbox oracle.
 Deviations documented in COMPATIBILITY §1. Recorded in STATUS §3.10.
 
-**Next: step 2.9 — structs minimal (`Value::Struct`, §4).** No session may start any
-other step without the user explicitly reordering (§ Governance).
+**Next: step 2.10 — chained indexing (audit item 13, §4).** No session may
+start any other step without the user explicitly reordering (§ Governance).
+
+**Step 2.9 — structs minimal (`Value::Struct`) — executed per plan 2026-11-17
+(pending user push + CI).** Ordered-field-map `Value::Struct` (1×1 only; struct
+arrays need cells = expansion E4 — honest error, Octave builds them with `[]`:
+documented delta) with syntax `s.f`, `s.f = v` (root-variable display), nested
+auto-vivification `w.a.b = 5`, and dynamic fieldnames `s.(expr)` both read and
+assign; builtins `struct/fieldnames/isfield/getfield/setfield` (minimal set —
+`isstruct` stays v1.0-scope, not in this step); console display in MATLAB struct
+style (`  struct with fields:` + 4-space field previews; Octave's
+"scalar structure containing the fields" text = documented oracle delta;
+field-preview thresholds are pin-flagged); `odeset/ode45/ode23` accept a struct
+options argument (named pairs unchanged; struct+pairs mixed = honest error —
+merge via `odeset(old, ...)` which is the MATLAB precedence mechanism);
+`rng(seed)` now returns a MATLAB-style status struct {Type:'PCG64', Seed,
+State:16×1 exact u32-halves} with capture `s = rng` / restore `rng(s)` replay —
+closes the §4.5 deviation; rng statement form is echo-free and ans-free like
+MATLAB. Resource guard: struct nesting capped at 256 (clean error; Octave has
+no cap — documented deviation). Oracle: Octave 10.3 sandbox probe
+(scripts/probe_structs*.m). 501 tests green. Recorded in STATUS §3.11.
 
 ## 12. Change log
 
@@ -541,3 +564,4 @@ other step without the user explicitly reordering (§ Governance).
 | 1.0 | 2026-11-01 | Task 5 of 2.6 closed without real MATLAB (user chat: «من متلب واقعی ندارم خودت کارا رو درست کن. برو گام بعد.»): vdp1000 pinned from scipy 1.14.1 stiff-solver triangulation (Radau/BDF/LSODA, spread ≤ 2.3e-7; Octave measured impractical — probe [0,300] > 5 min); corpus test qualitative → point (engine tol y1 5e-3 / y2 2e-5 / ymax 1e-3) with JSON-sync + triangle-coherence guards; step 2.7 = code-complete, pending device (pendulum < 1 s + FB-1/FB-2 touch); §11 rewritten. First delivery lost to a sandbox reset — fully re-derived and re-verified (≤ 7.9e-11) before re-delivery | User (chat) |
 | 1.0 | 2026-11-05 | Phase 2 formally closed at step 2.7: user pushed annotated tag `p2-code-complete` at `e189195` (CI #18 + Android #18 green) and confirmed the full device checklist (pendulum ode45 demo < 1 s + progress bar, FB-1, FB-2); §2.7 DoD all ticked; §11 rewritten (Phase 2 CLOSED, next = P2-c step 2.8); STATUS §3.9 + phase map + FB rows updated; package v0.9 | User (chat: «خب الان دستور ها رو اجرا کردم و همچنین هرسه مورد درست کار میکردند») |
 | 1.0 | 2026-11-13 | Step 2.8 executed per plan (§4 tasks 1-4): char type & strings — mixed concat promotion (`[65 'a']`→`'Aa'`), numeric promotion (real+complex), char indexing + indexed assignment (class-of-target wins), honest E4 errors for 2-D char, builtins char/double/ischar/blanks/str2double, MATLAB no-space quote/transpose lexer rule; corpus p2_21/p2_22 (Octave 10.3 sandbox oracle; manifest 74→76); 460 tests green; COMPATIBILITY ledger rows 6/12 closed. User approval: «خب اوکیه. بریم ادامه.» | User (chat) |
+| 1.0 | 2026-11-17 | Step 2.9 executed per plan (§4 tasks 1-4): structs minimal — `Value::Struct` (ordered field map, 1×1; struct arrays = E4 honest error), syntax `s.f` / `s.f = v` / nested auto-viv / dynamic `s.(expr)`, builtins struct/fieldnames/isfield/getfield/setfield, MATLAB-style struct display, `odeset` + struct-form ode options (pair form unchanged; merge precedence via odeset(old,...)), `rng` status struct {Type:'PCG64',Seed,State} with capture/restore replay (closes §4.5 deviation), rng statement form echo-free; depth guard 256; corpus p2_23 (manifest 76→77) + p2_24 (engine-internal, outside Octave manifest); 501 tests green (was 460). User approval: «خب اوکی بریم ادامه» | User (chat) |
