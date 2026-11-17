@@ -112,7 +112,8 @@ fn single_output_from_builtin_multiassign() {
 fn multi_output_from_builtin_is_rejected() {
     let mut env = Environment::new();
     let e = expect_error(&mut env, "[a,b] = sin(0)");
-    assert_eq!(e.id, "MC:E3001_PARSE_ERROR");
+    // ROADMAP 2.11: مرز صادقانهٔ چندخروجیِ builtin = خانوادهٔ E9xxx (نه پارس)
+    assert_eq!(e.id, "MC:E9xxx_UNSUPPORTED");
 }
 
 #[test]
