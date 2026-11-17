@@ -342,6 +342,39 @@ impl Parser {
                     line,
                     col,
                 },
+                // `s.f(i) = v` — اندیس‌گذاری داخل فیلد (ROADMAP 2.10؛ وعدهٔ
+                // پیام خطای گام 2.9). زنجیرهٔ اندیس روی اندیسِ متغیر (x(1)(2))
+                // = اصطلاح سلول → خطای صادقانهٔ E4 (متلب هم چنین lvalue‌ای ندارد)
+                Expr::Index {
+                    base,
+                    subs,
+                    line,
+                    col,
+                } => match *base {
+                    Expr::Field {
+                        base: fbase, field, ..
+                    } => AssignTarget::IndexedField {
+                        base: fbase,
+                        field,
+                        subs,
+                        line,
+                        col,
+                    },
+                    Expr::Call { .. } => {
+                        return Err(self.err(
+                            &start,
+                            "Chained indexing like x(1)(2) reads cell content; cell arrays are expansion E4 (assign to an intermediate variable first).",
+                            "زنجیرهٔ اندیس مثل x(1)(2) محتوای سلول می‌خواند؛ آرایهٔ سلولی انبساط E4 است (اول به متغیر میانی منتسب کنید).",
+                        ));
+                    }
+                    _ => {
+                        return Err(self.err(
+                            &start,
+                            "Invalid assignment target (left of '=').",
+                            "سمت چپ «=» هدف انتساب معتبری نیست.",
+                        ));
+                    }
+                },
                 _ => {
                     return Err(self.err(
                         &start,
@@ -742,64 +775,66 @@ impl Parser {
                     expr = self.parse_dot_field(expr)?;
                 }
                 Tok::LParen => {
-                    // فراخوانی/اندیس — نام پایه باید Var باشد (سمانتیک متلب: نام‌محور)
-                    let name = match &expr {
-                        Expr::Var { name, .. } => name.clone(),
-                        // اندیس‌گذاری پس از فیلد (s.f(2)) = اندیس‌گذاری زنجیره‌ای —
-                        // ROADMAP 2.10؛ در v1 خطای صادقانه با اشاره به گام آینده
-                        Expr::Field { .. } => {
-                            let t = self.peek().clone();
-                            return Err(self.err(
-                                &t,
-                                "Indexing a struct field like s.f(2) is not supported yet; chained indexing arrives with ROADMAP 2.10.",
-                                "اندیس‌گذاری فیلد ساختار مثل s.f(2) هنوز پشتیبانی نمی‌شود؛ اندیس‌گذاری زنجیره‌ای در ROADMAP 2.10 می‌آید.",
-                            ));
-                        }
-                        _ => {
-                            let t = self.peek().clone();
-                            return Err(self.err(
-                                &t,
-                                "Only named calls like f(x) or A(i,j) are supported here.",
-                                "در اینجا فقط فراخوانی نام‌دار مثل f(x) یا A(i,j) پشتیبانی می‌شود.",
-                            ));
-                        }
-                    };
-                    let (line, col) = match &expr {
-                        Expr::Var { line, col, .. } => (*line, *col),
-                        _ => (0, 0),
-                    };
-                    self.bump(); // (
-                    let mut args = Vec::new();
-                    let mut nargout = 0usize;
-                    // آرگومان‌ها تا ) — جداکننده , یا فاصله؛ end مجاز
-                    if !self.at(&Tok::RParen) {
-                        loop {
-                            let arg = self.parse_expr()?;
-                            args.push(arg);
-                            if self.at(&Tok::Comma) {
-                                self.bump();
-                                // `[a,b] = f(...)` — [ بعد از , یعنی ادامه خروجی‌ها؛
-                                // اینجا پارسر ساده: چندخروجی فقط در انتساب [a,b]=f() هندل می‌شود
-                                continue;
-                            }
-                            break;
-                        }
-                    }
-                    self.expect_tok(&Tok::RParen, "')'", "«)»")?;
-                    let _ = nargout;
-                    nargout = 1;
-                    expr = Expr::Call {
-                        name,
-                        args,
-                        nargout,
-                        line,
-                        col,
-                    };
+                    // فراخوانی/اندیس پسوندی — ROADMAP 2.10 (بند ۱۳ ممیزی):
+                    // پایهٔ Var → فراخوانی/اندیس نام‌محور (مسیر سریع، دست‌نخورده)؛
+                    // هر پایهٔ دیگر (لفظ، فراخوانی، فیلد، پرانتز، …) → Expr::Index
+                    expr = self.parse_paren_postfix(expr)?;
                 }
                 _ => break,
             }
         }
         Ok(expr)
+    }
+
+    /// پرانتز پسوندی — بدنهٔ مشترک دو حلقهٔ پسوندی (گزاره + عنصر ماتریس) —
+    /// ROADMAP 2.10: پایهٔ Var → `Call` نام‌محور (مسیر سریع)؛ پایهٔ دیگر →
+    /// `Expr::Index` روی نتیجهٔ عبارت (لفظ/فراخوانی/فیلد/پرانتز).
+    fn parse_paren_postfix(&mut self, expr: Expr) -> Result<Expr, McError> {
+        let (line, col) = match &expr {
+            Expr::Var { line, col, .. } => (*line, *col),
+            _ => (0, 0),
+        };
+        let t = self.bump(); // (
+        let mut args = Vec::new();
+        // آرگومان‌ها/زیرنویس‌ها تا ) — جداکننده , یا فاصله؛ end مجاز
+        if !self.at(&Tok::RParen) {
+            loop {
+                let arg = self.parse_expr()?;
+                args.push(arg);
+                if self.at(&Tok::Comma) {
+                    self.bump();
+                    // `[a,b] = f(...)` — [ بعد از , یعنی ادامه خروجی‌ها؛
+                    // اینجا پارسر ساده: چندخروجی فقط در انتساب [a,b]=f() هندل می‌شود
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect_tok(&Tok::RParen, "')'", "«)»")?;
+        match expr {
+            Expr::Var { name, .. } => Ok(Expr::Call {
+                name,
+                args,
+                nargout: 1,
+                line,
+                col,
+            }),
+            base => {
+                if args.is_empty() {
+                    return Err(self.err(
+                        &t,
+                        "Indexing needs at least one subscript, like expr(2).",
+                        "اندیس‌گذاری دست‌کم یک زیرنویس می‌خواهد، مثل expr(2).",
+                    ));
+                }
+                Ok(Expr::Index {
+                    base: Box::new(base),
+                    subs: args,
+                    line: t.line,
+                    col: t.col,
+                })
+            }
+        }
     }
 
     /// بدنهٔ مشترک بازوی `.` پسوندی — `s.f` نامی یا `s.(expr)` پویا (ROADMAP 2.9).
@@ -1136,6 +1171,10 @@ impl Parser {
                 // دسترسی فیلد داخل ماتریس لفظی هم مثل متلب مجاز است: [s.f 2]
                 Tok::Dot => {
                     lhs = self.parse_dot_field(lhs)?;
+                }
+                // اندیس پسوندی داخل ماتریس لفظی: [[1 2](1) 5] (ROADMAP 2.10)
+                Tok::LParen => {
+                    lhs = self.parse_paren_postfix(lhs)?;
                 }
                 _ => break,
             }
