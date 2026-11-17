@@ -423,6 +423,29 @@ fn exec_stmt(
                         Ok((Flow::Normal, Vec::new()))
                     }
                 }
+                // `s.f(i) = v` — اندیس‌گذاری داخل فیلد (ROADMAP 2.10)؛ نمایش
+                // روی متغیر ریشه (رفتار متلب)
+                AssignTarget::IndexedField {
+                    base,
+                    field,
+                    subs,
+                    line,
+                    col,
+                } => {
+                    let root =
+                        indexed_field_assign(env, base, field, subs, value, *line, *col, depth)?;
+                    if !*suppress {
+                        let text = crate::format::format_assignment_spec(
+                            &root,
+                            env.get(&root)
+                                .unwrap_or(&Value::Double(Matrix::full(0, 0, 0.0))),
+                            &spec,
+                        );
+                        Ok((Flow::Normal, vec![text]))
+                    } else {
+                        Ok((Flow::Normal, Vec::new()))
+                    }
+                }
             }
         }
         // انتساب چندخروجی `[a,b] = f(...)` — سمانتیک متلب §9
@@ -651,17 +674,6 @@ fn char_row_from_matrix(m: &Matrix, line: u32, col: u32) -> Result<String, McErr
     Ok(s)
 }
 
-/// خطای هدف غیر عددی/کاراکتری در انتساب اندیس‌دار (ROADMAP 2.8).
-fn not_numeric_or_char_target(name: &str, line: u32, col: u32) -> McError {
-    McError::new(
-        ids::PARSE_ERROR,
-        line,
-        col,
-        format!("'{name}' is not a numeric or char array; indexed assignment needs double/char."),
-        format!("«{name}» عددی نیست؛ انتساب اندیس‌دار نیاز به آرایه عددی دارد."),
-    )
-}
-
 /// `A(subs...) = v` — با رشد خودکار ماتریس مثل متلب (پرکردن با صفر).
 fn indexed_assign(
     env: &mut Environment,
@@ -671,68 +683,29 @@ fn indexed_assign(
     line: u32,
     col: u32,
 ) -> Result<(), McError> {
-    let vmat = match &value {
-        Value::Double(m) => m.clone(),
-        Value::Char(s) => Value::char_codes_row(s),
-        _ => {
+    // پیام نام‌دارِ مسیر قدیمی حفظ می‌شود (رفتار 2.8 — رگرسیون‌ها به همین
+    // متن گره خورده‌اند)؛ خودِ نوشتن در indexed_write_value است (ROADMAP 2.10).
+    if let Some(v) = env.get(name) {
+        if !matches!(v, Value::Double(_) | Value::Char(_)) {
             return Err(McError::new(
                 ids::PARSE_ERROR,
                 line,
                 col,
-                "Only numeric or char row values can be assigned to indexed targets.",
-                "انتساب اندیس‌دار فقط با مقدار عددی یا رشتهٔ کاراکتری ممکن است.",
-            ))
-        }
-    };
-    // اندیس‌ها را ارزیابی کن (زمینهٔ end بر اساس شکل فعلی/هدف)
-    let current = env
-        .get(name)
-        .cloned()
-        .unwrap_or(Value::Double(Matrix::full(0, 0, 0.0)));
-    // هدف char (ROADMAP 2.8): مدل کد 1×N + بازگشت char در پایان؛ چندردیفه = E4
-    let char_target = matches!(current, Value::Char(_));
-    let cur = match current {
-        Value::Double(m) => m,
-        Value::Char(s) => Value::char_codes_row(&s),
-        _ => return Err(not_numeric_or_char_target(name, line, col)),
-    };
-    let resolved = resolve_subs(&cur, subs, env, depth_of(line))?;
-    // انتساب خالی `x(i)=[]` — سمانتیک حذف متلب: المان بردار (با حفظ جهت)،
-    // حذف «سطر» با اندیس خطی روی ماتریس، و حذف سطر/ستون با دونقطه A(i,:)/A(:,j).
-    if vmat.is_empty() {
-        let out = delete_subscripts(&cur, &resolved, line, col)?;
-        if char_target {
-            env.set(
-                name.to_string(),
-                Value::Char(char_row_from_matrix(&out, line, col)?),
-            );
-        } else {
-            env.set(name.to_string(), Value::Double(out));
-        }
-        return Ok(());
-    }
-    let mut out = cur.clone();
-    match resolved.len() {
-        1 => linear_assign(&mut out, &resolved[0], &vmat)?,
-        2 => matrix_assign(&mut out, &resolved[0], &resolved[1], &vmat, line, col)?,
-        n => {
-            return Err(McError::new(
-                ids::PARSE_ERROR,
-                line,
-                col,
-                format!("Indexed assignment with {n} subscripts is not supported (max 2)."),
-                format!("انتساب اندیس‌دار با {n} زیرنویس پشتیبانی نمی‌شود (حداکثر 2)."),
-            ))
+                format!("'{name}' is not a numeric or char array; indexed assignment needs double/char."),
+                format!("«{name}» عددی نیست؛ انتساب اندیس‌دار نیاز به آرایه عددی دارد."),
+            ));
         }
     }
-    if char_target {
-        env.set(
-            name.to_string(),
-            Value::Char(char_row_from_matrix(&out, line, col)?),
-        );
-    } else {
-        env.set(name.to_string(), Value::Double(out));
-    }
+    let out = indexed_write_value(
+        env.get(name).cloned(),
+        subs,
+        &value,
+        env,
+        depth_of(line),
+        line,
+        col,
+    )?;
+    env.set(name.to_string(), out);
     Ok(())
 }
 
@@ -1204,6 +1177,177 @@ fn idx_list(kind: &Idx, size: usize) -> Vec<usize> {
         Idx::Scalar(i) => vec![i.saturating_sub(1)],
         Idx::Vector { idx: v, .. } => v.iter().map(|i| i.saturating_sub(1)).collect(),
     }
+}
+
+/// اعمال زیرنویس روی یک «مقدار» — هستهٔ اندیس‌گذاری زنجیره‌ای (ROADMAP 2.10):
+/// مقدار موقتِ حاصل عبارت (لفظ، فراخوانی، فیلد، پرانتز) همان ماشین نام‌محور را
+/// می‌گیرد؛ `end` بر اساس شکل همان مقدال حل می‌شود.
+fn index_value(
+    v: &Value,
+    args: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    match v {
+        Value::Double(m) => {
+            let resolved = resolve_subs(m, args, env, depth)?;
+            index_double(m, &resolved, line, col)
+        }
+        // char: همان قرارداد 2.8 — ردیف کدها + بازگشت char تک‌ردیفی
+        Value::Char(s) => {
+            let target = Value::char_codes_row(s);
+            let resolved = resolve_subs(&target, args, env, depth)?;
+            let out = index_double(&target, &resolved, line, col)?;
+            if let Value::Double(m) = &out {
+                if m.rows() == 1 {
+                    let mut st = String::with_capacity(m.cols());
+                    for i in 0..m.cols() {
+                        st.push(Value::char_from_code(m.get(0, i), line, col)?);
+                    }
+                    return Ok(Value::Char(st));
+                }
+            }
+            Err(McError::new(
+                ids::UNSUPPORTED,
+                line,
+                col,
+                "Column-shaped indexing of a char row yields a 2-D char array; expansion E4.",
+                "اندیس‌گذاری ستونیِ رشتهٔ char آرایهٔ دوبعدی می‌سازد؛ انبساط E4 است.",
+            ))
+        }
+        // مختلط: پشتیبانی مستقیم نیست (همان مرز نام‌محور) — اول به متغیر/فیلد
+        Value::Complex(_) => Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "Indexing a complex value directly is not supported yet; assign it to a variable first.",
+            "اندیس‌گذاری مستقیم مقدار مختلط هنوز پشتیبانی نمی‌شود؛ اول به متغیر منتسب کنید.",
+        )),
+        Value::Anon(_) => Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            "A function handle is not indexable.",
+            "function_handle اندیس‌پذیر نیست.",
+        )),
+        // () روی ساختار = آرایهٔ ساختاری = انبساط E4
+        Value::Struct(_) => Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "Paren indexing on a struct is struct-array indexing; struct arrays are expansion E4.",
+            "اندیس‌گذاری پرانتزی روی ساختار = اندیس آرایهٔ ساختاری؛ آرایهٔ ساختاری انبساط E4 است.",
+        )),
+    }
+}
+
+/// هستهٔ مقدار-محورِ انتساب اندیس‌دار (ROADMAP 2.10): مقدار فعلی (None = از
+/// خالی auto-viv، رفتار متلب `s.a(3)=5` → `[0 0 5]`) + زیرنویس‌ها + مقدار
+/// تازه → مقدار نهایی. مسیر نام‌محور (`indexed_assign`) و مسیر فیلدی
+/// (`indexed_field_assign`) هر دو از همین هسته استفاده می‌کنند.
+fn indexed_write_value(
+    current: Option<Value>,
+    subs: &[Expr],
+    value: &Value,
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    let vmat = match value {
+        Value::Double(m) => m.clone(),
+        Value::Char(s) => Value::char_codes_row(s),
+        _ => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "Only numeric or char row values can be assigned to indexed targets.",
+                "انتساب اندیس‌دار فقط با مقدار عددی یا رشتهٔ کاراکتری ممکن است.",
+            ))
+        }
+    };
+    let char_target = matches!(current, Some(Value::Char(_)));
+    let cur = match current {
+        Some(Value::Double(m)) => m,
+        Some(Value::Char(s)) => Value::char_codes_row(&s),
+        None => Matrix::full(0, 0, 0.0),
+        Some(_) => {
+            return Err(McError::new(
+                ids::PARSE_ERROR,
+                line,
+                col,
+                "The indexing target is not a numeric array or char row.",
+                "هدف اندیس‌گذاری آرایهٔ عددی یا ردیف char نیست.",
+            ))
+        }
+    };
+    let resolved = resolve_subs(&cur, subs, env, depth)?;
+    // انتساب خالی `x(i)=[]` — سمانتیک حذف متلب (میراث مسیر نام‌محور)
+    let out = if vmat.is_empty() {
+        delete_subscripts(&cur, &resolved, line, col)?
+    } else {
+        let mut out = cur.clone();
+        match resolved.len() {
+            1 => linear_assign(&mut out, &resolved[0], &vmat)?,
+            2 => matrix_assign(&mut out, &resolved[0], &resolved[1], &vmat, line, col)?,
+            n => {
+                return Err(McError::new(
+                    ids::PARSE_ERROR,
+                    line,
+                    col,
+                    format!("Indexed assignment with {n} subscripts is not supported (max 2)."),
+                    format!("انتساب اندیس‌دار با {n} زیرنویس پشتیبانی نمی‌شود (حداکثر 2)."),
+                ))
+            }
+        }
+        out
+    };
+    if char_target {
+        Ok(Value::Char(char_row_from_matrix(&out, line, col)?))
+    } else {
+        Ok(Value::Double(out))
+    }
+}
+
+/// `s.f(i) = v` — مقدار فعلی فیلد (یا None برای auto-viv متلب‌گونه:
+/// `t.b(3)=5` → `[0 0 5]` — اوراکل Octave 10.3) گرفته می‌شود، هستهٔ انتساب
+/// اندیس‌دار رویش اجرا می‌شود و نتیجه در همان مسیر فیلد بازنوشته می‌شود.
+/// نام متغیر ریشه برای نمایش برگردانده می‌شود (ROADMAP 2.10).
+// ۸ آرگومان = الگوی این امضا (محیط + مسیر + زیرنویس + مقدار + مکان/عمق) —
+// همان استثنای ثبت‌شدهٔ solvers/ode.rs
+#[allow(clippy::too_many_arguments)]
+fn indexed_field_assign(
+    env: &mut Environment,
+    place: &Expr,
+    field: &FieldName,
+    subs: &[Expr],
+    value: Value,
+    line: u32,
+    col: u32,
+    depth: usize,
+) -> Result<String, McError> {
+    let fname = resolve_field_name(field, env, depth, line, col)?;
+    if !crate::registry_p2::valid_field_name(&fname) {
+        return Err(McError::new(
+            ids::PARSE_ERROR,
+            line,
+            col,
+            format!(
+                "'{fname}' is not a valid field name (a letter, then letters/digits/underscore; at most 63 chars)."
+            ),
+            format!(
+                "«{fname}» نام فیلد معتبری نیست (یک حرف، سپس حرف/رقم/زیرخط؛ حداکثر ۶۳ نویسه)."
+            ),
+        ));
+    }
+    // ساختارِ حامل فیلد در مسیر (None = کل مسیر غایب → auto-viv)
+    let container = struct_at_path(env, place, depth, line, col)?;
+    let cur = container.as_ref().and_then(|c| c.get(&fname)).cloned();
+    let out = indexed_write_value(cur, subs, &value, env, depth, line, col)?;
+    field_assign(env, place, field, out, line, col, depth)
 }
 
 fn linear_read(m: &Matrix, i: usize, line: u32, col: u32) -> Result<f64, McError> {
@@ -1880,6 +2024,34 @@ fn eval_expr_end(
                     ),
                 )),
             }
+        }
+        // اندیس‌گذاری پسوندی روی نتیجهٔ عبارت (ROADMAP 2.10 — بند ۱۳ ممیزی)
+        Expr::Index {
+            base,
+            subs,
+            line,
+            col,
+        } => {
+            // اصطلاح سلول x(1)(2): پایهٔ فراخوانیِ نام‌دار که «متغیرِ غیرهندل»
+            // است = اندیسِ متغیر → زنجیرهٔ بعدی = خواندن محتوای سلول = E4
+            // (تسک ۲ گام 2.10؛ متلب هم ()() را نمی‌پذیرد — اکتاو زنجیرهٔ آزاد
+            // می‌دهد = دلتای اوراکل مستند). هندلِ تابع فراخوانی است نه اندیس:
+            // f(x)(1) با f=@(...) باید کار کند.
+            if let Expr::Call { name, .. } = &**base {
+                if let Some(v) = env.get(name) {
+                    if !matches!(v, Value::Anon(_)) {
+                        return Err(McError::new(
+                            ids::UNSUPPORTED,
+                            *line,
+                            *col,
+                            "Chained indexing like x(1)(2) reads cell content; cell arrays are expansion E4 (assign to an intermediate variable first).",
+                            "زنجیرهٔ اندیس مثل x(1)(2) محتوای سلول می‌خواند؛ آرایهٔ سلولی انبساط E4 است (اول به متغیر میانی منتسب کنید).",
+                        ));
+                    }
+                }
+            }
+            let base_val = eval_expr_end(base, env, depth, target, sub_i)?;
+            index_value(&base_val, subs, env, depth, *line, *col)
         }
     }
 }
