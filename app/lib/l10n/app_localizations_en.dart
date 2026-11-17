@@ -68,6 +68,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String errorPosition(int line, int col) {
+    return 'Line $line, column $col';
+  }
+
+  @override
   String get emptyPlotsTitle => 'Plots ship in milestone P3';
 
   @override

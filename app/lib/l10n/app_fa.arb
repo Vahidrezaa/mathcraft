@@ -33,6 +33,17 @@
       }
     }
   },
+  "errorPosition": "سطر {line}، ستون {col}",
+  "@errorPosition": {
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "col": {
+        "type": "int"
+      }
+    }
+  },
   "emptyPlotsTitle": "نمودار با مایل‌استون P3 می‌آید",
   "emptyPlotsHint": "ایده اولین نمودار: fxplot(sin, [0 6])",
   "emptyVarsTitle": "بازرس متغیرها با مایل‌استون P5 می‌آید",

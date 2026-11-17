@@ -91,6 +91,18 @@ class ErrorCard extends StatelessWidget {
                         CopyButton(onCopy: onCopy, tooltip: l10n.copyTooltip),
                       ],
                     ),
+                    // موقعیت خطا (ROADMAP 2.11 — بند ۱۴ ممیزی): DTO از قبل
+                    // line/col می‌آورد؛ خطای داخلی (0,0) بدون موقعیت می‌ماند
+                    if (error.line != 0 || error.col != 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.errorPosition(error.line, error.col),
+                        style: CdsTheme.monoStyle(
+                          color: scheme.onSurfaceVariant,
+                          size: 11,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       message,

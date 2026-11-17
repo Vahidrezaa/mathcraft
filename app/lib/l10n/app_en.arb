@@ -39,6 +39,17 @@
       }
     }
   },
+  "errorPosition": "Line {line}, column {col}",
+  "@errorPosition": {
+    "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "col": {
+        "type": "int"
+      }
+    }
+  },
   "emptyPlotsTitle": "Plots ship in milestone P3",
   "emptyPlotsHint": "First plot idea: fxplot(sin, [0 6])",
   "emptyVarsTitle": "Variable inspector ships in milestone P5",

@@ -68,6 +68,11 @@ class AppLocalizationsFa extends AppLocalizations {
   }
 
   @override
+  String errorPosition(int line, int col) {
+    return 'سطر $line، ستون $col';
+  }
+
+  @override
   String get emptyPlotsTitle => 'نمودار با مایل‌استون P3 می‌آید';
 
   @override

@@ -209,6 +209,12 @@ abstract class AppLocalizations {
   /// **'Error {code}'**
   String errorTitle(String code);
 
+  /// No description provided for @errorPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}, column {col}'**
+  String errorPosition(int line, int col);
+
   /// No description provided for @emptyPlotsTitle.
   ///
   /// In en, this message translates to:
