@@ -339,9 +339,10 @@ fn honest_errors_on_struct_boundaries() {
     // فیلد غایب
     let e2 = run_err("s = struct('a', 1); s.zz");
     assert!(e2.message_en.contains("no field"), "{}", e2.message_en);
-    // اندیس‌گذاری پس از فیلد = 2.10
-    let e3 = run_err("s = struct('a', [1 2]); s.a(2)");
-    assert!(e3.message_en.contains("2.10"), "{}", e3.message_en);
+    // اندیس‌گذاری پس از فیلد — از گام 2.10 کار می‌کند (وعدهٔ پیام خطای 2.9
+    // محقق شد؛ پوشش کامل در chained_step210)؛ اینجا فقط مثبت را می‌سنجیم
+    let env_ok = run("s = struct('a', [1 2]); v = s.a(2);");
+    let _ = env_ok;
     // داخل ماتریس = آرایهٔ ساختاری = E4 (اوراکل با [] آرایهٔ ساختاری می‌سازد)
     let e4 = run_err("s = struct('a', 1); [s, 1]");
     assert!(e4.message_en.contains("E4"), "{}", e4.message_en);
@@ -568,13 +569,14 @@ fn lexer_dot_token_and_field_parse() {
 
 #[test]
 fn field_access_parses_after_call_and_parens() {
-    // f(x).a و (s).a — پسوند روی هر عملوند؛ s.a(2) → خطای 2.10
+    // f(x).a و (s).a — پسوند روی هر عملوند؛ s.a(2) از گام 2.10 کار می‌کند
+    // (وعدهٔ پیام خطای 2.9 محقق شد — پوشش کامل در chained_step210)
     let env = run("f = @(x) struct('v', x); r = f(3).v; \
-         s = struct('a', 5); t = (s).a;");
+         s = struct('a', 5); t = (s).a; \
+         s2 = struct('a', [1 2]); u = s2.a(2);");
     assert_eq!(scalar(&env, "r"), 3.0);
     assert_eq!(scalar(&env, "t"), 5.0);
-    let e = run_err("s = struct('a', [1 2]); s.a(2)");
-    assert!(e.message_en.contains("2.10"), "{}", e.message_en);
+    assert_eq!(scalar(&env, "u"), 2.0);
 }
 
 #[test]

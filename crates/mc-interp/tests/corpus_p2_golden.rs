@@ -460,3 +460,41 @@ fn p2_odeset_rng_struct_analytic() {
     assert_eq!(run_vec(s, "rep"), vec![1.0, 1.0], "rng restore replays");
     assert_eq!(run(s, "sd"), 42.0, "Seed field of the status struct");
 }
+
+// ---------- chained indexing (ROADMAP 2.10 — بند ۱۳ ممیزی) ----------
+
+#[test]
+fn p2_chained_indexing_oracle_octave() {
+    // p2_25 — اندیس پسوندی روی نتیجهٔ عبارت (اوراکل: Octave 10.3 —
+    // probe_chain210.m). اصطلاح سلولی x(1)(2) عمداً نیست: اکتاو زنجیرهٔ آزاد
+    // می‌دهد ولی ما از متلب پیروی می‌کنیم (خطای E4 — chained_step210).
+    let s = src!("p2_25_chained_indexing.m");
+    assert_eq!(run(s, "a1"), 2.0);
+    assert_eq!(run(s, "a2"), 3.0, "end inside chained subs");
+    assert_eq!(run_vec(s, "a3"), vec![2.0, 3.0]);
+    assert_eq!(run(s, "a4"), 20.0);
+    assert_eq!(run(s, "a5"), 3.0);
+    assert_eq!(run(s, "b1"), 1.0);
+    assert_eq!(run(s, "b2"), 1.0);
+    assert_eq!(run(s, "c1"), 7.0, "f(x)(1) anon result");
+    assert_eq!(run_vec(s, "c2"), vec![7.0, 7.0]);
+    assert_eq!(run(s, "c3"), 6.0);
+    assert_eq!(run(s, "d1"), 1.0, "transpose then index");
+    assert_eq!(run(s, "d2"), 2.0);
+    assert_eq!(run(s, "d3"), 4.0);
+    assert_eq!(run(s, "e1"), 98.0, "'abc'(2) = 'b' via codes");
+    assert_eq!(run(s, "e2"), 111.0);
+    assert_eq!(run_vec(s, "e3"), vec![98.0, 97.0]);
+    assert_eq!(run(s, "h1"), 2.0, "s.v(2) field then index");
+    assert_eq!(run_vec(s, "h2"), vec![1.0, 3.0]);
+    assert_eq!(run(s, "h3"), 3.0);
+    assert_eq!(run(s, "h4"), 2.0, "dynamic field then index");
+    assert_eq!(run(s, "h5"), 9.0, "s.v(2) = 9 indexed field write");
+    assert_eq!(run(s, "h6"), 5.0, "auto-viv from empty: t.b(3)=5");
+    assert_eq!(run(s, "h7"), 8.0, "nested indexed field write");
+    assert_eq!(
+        run_vec(s, "k"),
+        vec![1.0, 5.0],
+        "index inside matrix literal"
+    );
+}
