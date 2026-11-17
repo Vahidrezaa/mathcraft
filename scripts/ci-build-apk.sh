@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # MathCraft -- full Android APK pipeline for CI and desktop Linux (doc 09 s8).
 # Mirrors the developer bootstrap flow, in CI order:
-#   platform skeleton (flutter create) -> minSdk/ndkVersion patches -> pub get
-#   -> FRB codegen -> build_runner (.freezed.dart) -> cargo-ndk .so -> flutter build apk
+#   platform skeleton (flutter create) -> minSdk/ndkVersion patches -> launcher
+#   icon overlay (brand logo) -> pub get -> FRB codegen -> build_runner
+#   (.freezed.dart) -> cargo-ndk .so -> flutter build apk
 # Usage:  APK_MODE=debug|release bash scripts/ci-build-apk.sh    (default: debug)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -55,6 +56,14 @@ if [ -n "${ANDROID_NDK_HOME:-}" ]; then
     if [ -f android/app/build.gradle ]; then
         sed -i -E "s/ndkVersion \"[^\"]*\"/ndkVersion \"$NDKV\"/" android/app/build.gradle || true
     fi
+fi
+
+# آیکون لانچر برند (v0.13 — لوگوی کاربر): overlay روی قالب flutter create.
+# منبع ۵۱۲: app/android-icon-src/app_icon.png؛ تولید چگالی‌ها:
+# scripts/gen_launcher_icons_34.py (پایتون = ابزار دستیار؛ محصول Rust می‌ماند)
+if [ -d android-icon-res ]; then
+    echo "== 1/6b launcher icon overlay (brand logo over flutter template) =="
+    cp -r android-icon-res/. android/app/src/main/res/
 fi
 
 echo "== 2/6 pub get =="
