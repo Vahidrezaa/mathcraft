@@ -344,7 +344,21 @@ shipping a plotter on top of a half-language would force rework.
 - **Goal:** plotting regressions caught automatically.
 - **Tasks:** golden-image tests with a fixed software renderer (correctness only);
   performance budget test: 3 series × 100k points → first frame ≤ 50 ms (docs/07 §P3).
-- **DoD:** [ ] golden images in CI; [ ] LTTB perf test green.
+- **DoD:** [x] golden images in CI — 13 committed goldens of the viewer
+  (line/legend dark + light, scatter + marker-only, bar grouped, barh stacked,
+  histogram, area, fill, polar, errorbar, semilogx, custom ticks v2.1,
+  crosshair+data-tip) compared byte-exact by `flutter test` (runs in the
+  existing CI job; Ahem font = deterministic; regenerate only deliberately,
+  reason in the commit); [x] LTTB perf test green — Rust side:
+  `perf_budget_step36` (3 series × 100k pts → fold + LTTB-decimate ≤ 4000 +
+  snapshot in **0.03 s** against the 50 ms budget of docs/07 §P3; raw
+  re-decimation source intact) and Dart side: painter first-frame paint of
+  3 × 4000 pts ≤ 50 ms.
+- **Bug found & fixed by the goldens (first contact):** `PlotPainter.paint`
+  called `CellLayout.build` unconditionally — polar cells have no `axes` and
+  `cell.axes!` threw, so `polarplot` had been rendering as a paint crash on
+  device since 3.4 (no device recipe ever covered it). Fix: polar branch
+  returns before the rectangular layout; pinned by the `polar_rose` golden.
 
 ### Step 3.7 — Files & data I/O core (pulled forward from 5.5; bounded — user-essential)
 - **Goal:** the essential file/data workflows on existing types only — no new language types.
@@ -605,9 +619,19 @@ CI green + APK + the combined device checklist — the recipe
 info sheet closes without the editor keyboard). CI status on 8e15b68 was not verifiable
 from the sandbox (GitHub API rate limit) — check the Actions tab.
 
-**Next steps (re-ordered this session, see docs/14):** 3.6 (CI golden images + perf
-budget) → **3.7 Files & data I/O core (new — pulled forward from 5.5 per user request)** →
-3.8 / P3-b (3D). The contract-v3 shortlist (delivered with 3D) now also carries
+**Step 3.6 (2026-11-18) delivered code-complete on bd4c58a** — golden-image
+regression for the viewer (13 goldens in CI) + the docs/07 §P3 perf budget on
+both sides of the contract (Rust prep 0.03 s / Dart paint for the decimated
+frame), and one real device-visible bug found and fixed on first contact:
+`polarplot` had been crashing in paint since 3.4 (polar branch now returns
+before `CellLayout.build`; pinned by a golden). Flutter 73/73, analyze clean;
+Rust gates green (fmt/clippy/panic-audit + workspace suite incl. vdp1000).
+**User standing directive (chat):** proceed through the plan without
+interference; they only report bugs/quality regressions — device-gate
+verifications are no longer blocking each step unless they choose to check.
+
+**Next steps:** **3.7 Files & data I/O core (pulled forward from 5.5 per user
+request)** → 3.8 / P3-b (3D). The contract-v3 shortlist (delivered with 3D) now also carries
 **DisplayName + auto-legend under hold** (pinned per user reminder «یادت باشه», docs/13
 gap #4), alongside pie / text annotations / MarkerSize + filled markers / box / quiver
 rendering / marker table completion.
@@ -633,3 +657,4 @@ rendering / marker table completion.
 | 1.0 | 2026-11-18 | Step 3.5.1 hotfix: MATLAB command syntax (`hold on`/`grid on`/`axis equal`/`legend sin cos`) via general parser rule extending the format-short pattern; bare plot fns take MATLAB defaults (hold/grid toggle via new GridToggle op, figure, plot-empty); shadowing → MATLAB-like indexing error; user's 3-line recipe is a regression test | User (chat: recipe errored MC:E2002 — باید فیکس کنی) |
 | 1.0 | 2026-11-18 | Step 3.5.2 hotfix: fresh-axes on replacing data statements (stale legend bug — grid/hold persist, bi_semilog op order fixed) + editor-keyboard-on-info-close unfocus fixes; capability matrix doc 13 | User (chat: دو باگ گزارش‌شده + سؤال امکانات) |
 | 1.0 | 2026-11-18 | **Docs-only audit session (no code, per user instruction).** Governance change: new **Step 3.7 — Files & data I/O core** inserted before P3-b, pulled forward from 5.5 and bounded by explicit non-goals (.m save/open + run(); save/load MCWS v1; .mat v5 read subset; readmatrix/writematrix; who/whos/clear — no table type, no .mat writer, no Excel/HDF5, readtable deferred to E4 with an actionable pointer); old 3.6 (3D) renumbered **3.8**; DisplayName + auto-legend pinned explicitly into the contract-v3 shortlist. Deliverables: docs/14 (project audit — measured inventory, debts, path to v1.0), README rewritten (P0 claim fixed, badge/clone URLs corrected to Vahidrezaa), 00-INDEX gains the living-docs map, STATUS header/phase-map refreshed, doc 13 count fix (28 statement builtins) | User (chat: نوبت بدون کدنویسی + سه خواستهٔ .mat/.m · readtable · DisplayName + پیمان ضد-انحراف) |
+| 1.0 | 2026-11-18 | Step 3.6 executed per plan (§5): 13 committed golden images of the plot viewer compared in CI (byte-exact, Ahem-deterministic, regenerate-deliberately rule); docs/07 §P3 perf budget pinned on both sides — Rust `perf_budget_step36` (3×100k fold+LTTB+snapshot 0.03s ≤ 50ms, raw re-decimation intact) + Dart painter paint budget (3×4000 ≤ 50ms); **first-contact catch: polarplot device-render crash since 3.4** (polar branch now precedes CellLayout.build; pinned by polar_rose golden); 73/73 Flutter, analyze clean, full Rust gates green. Step closes per the new standing directive (user proceeds without device checks; they report bugs) | User (chat: طبق برنامه پیش برو، دخالت نمی‌کنم) |
