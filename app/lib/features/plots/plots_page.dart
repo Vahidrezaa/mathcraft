@@ -73,6 +73,9 @@ class _PlotsTabState extends ConsumerState<PlotsTab> {
 
   void _showInfo(api.PlotFigure fig) {
     final l10n = AppLocalizations.of(context)!;
+    // باگ 3.5.2: قبل از باز کردن شیت، فوکوسِ احتمالی پس‌زمینه را رها کن
+    // تا با بستن آن، کیبوردِ editor بالا نیاید.
+    FocusManager.instance.primaryFocus?.unfocus();
     final (kind, seriesCount, points, rawPoints) = _describe(fig.spec, l10n);
     showModalBottomSheet<void>(
       context: context,

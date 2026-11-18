@@ -83,6 +83,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
+          // باگ 3.5.2 (گزارش کاربر): IndexedStack تب‌ها را با فوکوسِ
+          // زنده نگه می‌دارد؛ بدون unfocus، بستن شیت/دیالوگ در تب دیگر
+          // (مثل info نمودار) فوکوس و کیبورد را به TextField تب پشتی —
+          // ادیتور — برمی‌گرداند.
+          FocusManager.instance.primaryFocus?.unfocus();
           setState(() => _index = i);
           ref.read(activeTabProvider.notifier).state = i;
         },

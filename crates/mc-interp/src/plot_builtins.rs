@@ -711,10 +711,12 @@ fn bi_semilog(
         "semilogy"
     };
     let groups = parse_plot_groups(args, name, line, col)?;
-    session::emit(PlotOp::SetLog { x: x_log, y: y_log });
+    // ترتیب مهم است: اول Line (محتوای تازه + ریست fresh-axes سلول)، بعد
+    // SetLog — وگرنه ریستِ Line پرچم لگاریتمی همین فراخوانی را می‌کُشد.
     session::emit(PlotOp::Line {
         series: series_of_groups(groups),
     });
+    session::emit(PlotOp::SetLog { x: x_log, y: y_log });
     Ok(())
 }
 

@@ -7,6 +7,9 @@
 //!   را جایگزین می‌کند و سیکل رنگ از صفر؛ روشن → سری اضافه می‌شود
 //!   (plot+scatter زیر hold در یک سری‌لست Line متحد می‌شوند — هر سری
 //!   استایل خودش را دارد؛ «فقط مارکر» = خط نامرئی).
+//! - **fresh-axes روی جایگزینی** (گام 3.5.2): گزارهٔ داده‌ای بدون hold،
+//!   حاشیه‌نویسی سلول (legend/title/label/حدود/تیک سفارشی/equal/tight/
+//!   log) را هم پاک می‌کند — پارتی متلب؛ grid/visible/hold می‌مانند.
 //! - **یک نوع نمودار در هر سلول**: mix نوع‌های غیرخطی زیر hold جایگزین
 //!   می‌شود (واگرایی مستند از متلب؛ مسیر افزودنی آینده: `Overlay`).
 //! - حدود خودکار از داده + ۵٪ حاشیه؛ `axis tight` حاشیه را حذف،
@@ -329,14 +332,14 @@ impl FigureState {
             }
             PlotOp::Line { series } => {
                 if !self.will_append(KindTag::Lines) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let built = self.build_all(series, DashSpec::Solid, None);
                 self.push_built(built, true);
             }
             PlotOp::Scatter { series } => {
                 if !self.will_append(KindTag::Lines) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let built = self.build_all(series, DashSpec::Invisible, Some(MarkerSpec::Circle));
                 self.push_built(built, false);
@@ -348,7 +351,7 @@ impl FigureState {
                 stacked,
             } => {
                 if !self.will_append(KindTag::Bars) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let built = self.build_all(series, DashSpec::Solid, None);
                 self.push_bar(built, width, horizontal, stacked);
@@ -360,7 +363,7 @@ impl FigureState {
                 style,
             } => {
                 // histogram همیشه جایگزین می‌کند (حتی زیر hold — پارتی متلب)
-                self.reset_active_cursor();
+                self.fresh_axes();
                 let resolved = self.default_style(&style, DashSpec::Invisible, None);
                 let cell = self.active_cell_mut();
                 cell.kind = CellKind::Hist {
@@ -372,14 +375,14 @@ impl FigureState {
             }
             PlotOp::Area { series, baseline } => {
                 if !self.will_append(KindTag::Area) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let built = self.build_all(series, DashSpec::Solid, None);
                 self.push_area(built, baseline);
             }
             PlotOp::Fill { polys } => {
                 if !self.will_append(KindTag::Fills) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let mut built = Vec::with_capacity(polys.len());
                 for p in polys {
@@ -392,14 +395,14 @@ impl FigureState {
             }
             PlotOp::Polar { series } => {
                 if !self.will_append(KindTag::Polar) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let built = self.build_all(series, DashSpec::Solid, None);
                 self.push_polar(built);
             }
             PlotOp::ErrorBar { series } => {
                 if !self.will_append(KindTag::Errors) {
-                    self.reset_active_cursor();
+                    self.fresh_axes();
                 }
                 let mut built = Vec::with_capacity(series.len());
                 for p in series {
@@ -618,10 +621,29 @@ impl FigureState {
             .unwrap_or(false)
     }
 
-    /// ریست سیکل رنگ سلول فعال (شروع تازهٔ ترتیب رنگ — پارتی متلب).
-    fn reset_active_cursor(&mut self) {
+    /// محورهای تازه برای گزارهٔ جایگزین‌کننده (گام 3.5.2 — باگ کاربر):
+    /// وقتی محتوای سلول بدون hold (یا با تغییر نوع زیر hold) جایگزین
+    /// می‌شود، حاشیه‌نویسی‌ها هم مثل متلب پاک می‌شوند — legend (فرزندِ
+    /// محورهای قبلی)، title/xlabel/ylabel، حدود دستی، تیک‌های سفارشی،
+    /// equal/tight و پرچم‌های لگاریتمی. grid و visible و hold می‌مانند
+    /// (خودِ متلب هم اینها را بعد از plot جدید حفظ می‌کند) + سیکل پالت
+    /// از صفر شروع می‌شود.
+    fn fresh_axes(&mut self) {
         let cell = self.active_cell_mut();
         cell.palette_cursor = 0;
+        cell.legend = None;
+        let axes = &mut cell.axes;
+        axes.title = None;
+        axes.xlabel = None;
+        axes.ylabel = None;
+        axes.limits_x = None;
+        axes.limits_y = None;
+        axes.x_ticks_custom = None;
+        axes.y_ticks_custom = None;
+        axes.equal = false;
+        axes.tight = false;
+        axes.log_x = false;
+        axes.log_y = false;
     }
 
     /// استایل حل‌شده: اجزای غایب از پیش‌فرض‌های موتور؛ رنگ خودکار از
@@ -1189,6 +1211,75 @@ mod tests {
         assert!(axes.y_ticks.is_empty());
     }
 
+    /// گام 3.5.2 — باگ کاربر: semilogx بعد از نشست قبلی با legend،
+    /// زیر نمودار تازه «sin/cos» مانده بود. جایگزینی بدون hold باید
+    /// حاشیه‌نویسی‌ها را پاک کند ولی grid را نگه دارد (پارتی متلب).
+    #[test]
+    fn replace_clears_stale_annotations_keeps_grid() {
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
+            PlotOp::Legend {
+                entries: Some(vec!["sin".into(), "cos".into()]),
+                position: LegendPos::SouthWest,
+            },
+            PlotOp::Title { text: "old".into() },
+            PlotOp::XLabel { text: "t".into() },
+            PlotOp::SetLog { x: true, y: false },
+            PlotOp::Grid { on: true },
+            PlotOp::XTicks {
+                ticks: vec![Tick {
+                    position: 1.0,
+                    label: Some("یک".into()),
+                }],
+            },
+            // جایگزینی بدون hold → fresh axes
+            PlotOp::Line {
+                series: vec![sop(data(5))],
+            },
+        ]);
+        let CellSnapshot::Line {
+            series,
+            axes,
+            legend,
+        } = &st.snapshots()[0].spec
+        else {
+            panic!("expected Line");
+        };
+        assert_eq!(series.len(), 1, "old series replaced");
+        assert_eq!(series[0].raw_len, 5);
+        assert!(legend.is_none(), "stale legend must be cleared");
+        assert!(axes.title.is_none());
+        assert!(axes.xlabel.is_none());
+        assert!(!axes.log_x, "stale log flag must be cleared");
+        assert!(axes.x_ticks.is_empty(), "custom ticks back to auto");
+        assert!(axes.grid, "grid persists across replace (MATLAB parity)");
+    }
+
+    /// زیر hold هیچ ریستی نیست: legend و سری‌ها می‌مانند.
+    #[test]
+    fn hold_appends_keep_legend() {
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
+            PlotOp::Legend {
+                entries: Some(vec!["a".into()]),
+                position: LegendPos::Best,
+            },
+            PlotOp::Hold { on: true },
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
+        ]);
+        let CellSnapshot::Line { series, legend, .. } = &st.snapshots()[0].spec else {
+            panic!("expected Line");
+        };
+        assert_eq!(series.len(), 2);
+        assert!(legend.is_some(), "legend under hold must stay");
+    }
+
     #[test]
     fn palette_cycles_and_hold_appends() {
         let st = apply_all(vec![
@@ -1319,7 +1410,13 @@ mod tests {
 
     #[test]
     fn axis_grid_labels_and_limits_flow_into_axes() {
+        // پس از گام 3.5.2: گزارهٔ داده‌ای جایگزین‌کننده حاشیه‌نویسیِ
+        // «قبل از خودش» را پاک می‌کند (fresh axes) — مثل متلب. پس ترتیب
+        // واقعی کاربر: اول Line، بعد حاشیه‌نویسی. grid می‌ماند.
         let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
             PlotOp::Grid { on: true },
             PlotOp::Title { text: "T".into() },
             PlotOp::XLabel { text: "t".into() },
@@ -1331,9 +1428,6 @@ mod tests {
                 max_y: 2.0,
             },
             PlotOp::AxisEqual { on: true },
-            PlotOp::Line {
-                series: vec![sop(data(3))],
-            },
         ]);
         let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
             panic!()
@@ -1668,13 +1762,14 @@ mod tests {
     fn set_log_flags_flow_and_clamp_positive() {
         // semilogx: y خطی می‌ماند؛ x لگاریتمی و حدود نامثبت کف می‌خورد
         let st = apply_all(vec![
-            PlotOp::SetLog { x: true, y: false },
             PlotOp::Line {
                 series: vec![sop(SeriesData {
                     x: vec![-5.0, 1.0, 50.0],
                     y: vec![1.0, 2.0, 3.0],
                 })],
             },
+            // پس از 3.5.2: SetLog بعد از Line می‌آید (fresh-axes در Line)
+            PlotOp::SetLog { x: true, y: false },
         ]);
         let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
             panic!()
@@ -1684,13 +1779,13 @@ mod tests {
         assert!(axes.x_limits[0] > 0.0, "log x must be positive: {:?}", axes);
         // loglog: هر دو
         let st = apply_all(vec![
-            PlotOp::SetLog { x: true, y: true },
             PlotOp::Line {
                 series: vec![sop(SeriesData {
                     x: vec![1.0, 10.0],
                     y: vec![1.0, 10.0],
                 })],
             },
+            PlotOp::SetLog { x: true, y: true },
         ]);
         let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
             panic!()

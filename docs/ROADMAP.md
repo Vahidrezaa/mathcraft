@@ -546,6 +546,24 @@ MATLAB default actions: `hold` toggles, `grid` toggles (new GridToggle op),
 numeric command form (`subplot 2 1 1`) is rejected — args are strings; use
 parentheses. The exact 3-line recipe is now a regression test.
 
+**Step 3.5.2 (2026-11-18) hotfix — stale legend + focus bug, plus the
+capability matrix (docs/13).** Two user-reported device bugs:
+(1) after a legend session, `semilogx(...)` still showed the old sin/cos
+legend under the fresh plot — `push_built` replaced cell content but
+`cell.legend`/title/labels persisted. Fix: `fresh_axes()` on every replacing
+data statement (legend/title/xlabel/ylabel/manual limits/custom ticks/
+equal/tight/log flags are cleared; grid, visible and hold persist — MATLAB
+parity), and `bi_semilog` now emits Line → SetLog so the fresh-axes reset
+cannot wipe the same call's log flag. The user's exact 2-submission flow is
+a regression test (user_repro_stale_legend_after_semilogx).
+(2) closing the plot info sheet popped the editor keyboard — IndexedStack
+keeps the editor TextField focused in background; route pop restores focus.
+Fix: unfocus on tab switch (app_shell) + before the sheet (plots_page);
+widget regression test with keyboard-visibility asserts.
+Also answered the strategic capability question in **docs/13-plot-capability-
+matrix.md** (what works today / ordered MATLAB gap / GeoGebra positioning /
+where we can exceed MATLAB).
+
 **Pending for 3.5 close:** user push → CI → APK → device check: the recipe
 `x=0:0.1:2*pi; hold on; plot(x,sin(x),'r--o',x,cos(x),'b:'); legend('sin','cos'
 ,'Location','SouthWest'); grid on` plus `semilogx(1:10, 10.^(0:9))`,
@@ -571,3 +589,4 @@ and P3-b (3D), with the contract-v3 shortlist above.
 | 1.0 | 2026-11-18 | Step 3.4 reopened by user verdict («بدترین چیزی که اجرا شده» — canvas-transform zoom, fixed ticks, hidden hold-gesture) and re-delivered as 3.4.1: data-space PlotViewport as single source of truth; Dart-side tick generation per viewport (faithful mc_plot::ticks port + exact-log10 fix + pixel-adaptive count) so scale always matches view; natural pan in data units; pinch-around-focal incremental zoom; span clamps home/10000..×4; instant-tap data tip with series name; hold-crosshair with axis value tags; always-on viewport status chip; raw double-tap in Listener (single tap no longer 300ms-delayed); 18 new tests (55 total green, analyze clean) | User (chat: بازخورد کیفیت نمودار) |
 | 1.0 | 2026-11-18 | Step 3.5: basic-2D coverage per user redirect — 12 new statement builtins (stem/stairs/semilogx/semilogy/loglog/barh/xlim/ylim/xticks/yticks + xticklabels/yticklabels actionable error), plot reworked to multi-group with per-group LineSpec + truly-global name-values (bug fix: nv first touched only later groups), hold() toggle, axis(auto), legend Location, per-poly fill palette cycle; v2.1 tick semantics (engine emits only user ticks; Dart honors custom ticks filtered-to-view); stem/stairs synthesized on existing shapes (NaN-gap risers, LTTB-safe); deferred to contract v3: pie/text/MarkerSize/box/quiver/markers; 230 Rust + 58 Flutter tests green, clippy/analyze clean | User (chat: امکانات اساسی متلب در نمودارهای ساده دوبعدی) |
 | 1.0 | 2026-11-18 | Step 3.5.1 hotfix: MATLAB command syntax (`hold on`/`grid on`/`axis equal`/`legend sin cos`) via general parser rule extending the format-short pattern; bare plot fns take MATLAB defaults (hold/grid toggle via new GridToggle op, figure, plot-empty); shadowing → MATLAB-like indexing error; user's 3-line recipe is a regression test | User (chat: recipe errored MC:E2002 — باید فیکس کنی) |
+| 1.0 | 2026-11-18 | Step 3.5.2 hotfix: fresh-axes on replacing data statements (stale legend bug — grid/hold persist, bi_semilog op order fixed) + editor-keyboard-on-info-close unfocus fixes; capability matrix doc 13 | User (chat: دو باگ گزارش‌شده + سؤال امکانات) |

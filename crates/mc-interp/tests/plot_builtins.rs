@@ -7,6 +7,7 @@
 
 use mc_interp::{eval_program, Environment};
 use mc_parser::parse;
+use mc_plot::figure::CellSnapshot;
 use mc_plot::spec::{
     DashSpec, FillPair, HistNorm, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair,
 };
@@ -627,10 +628,23 @@ fn plot_name_values_marker_and_linestyle() {
 
 #[test]
 fn semilog_family_sets_log_flags() {
+    // پس از گام 3.5.2 ترتیب Line→SetLog است؛ SetLog دومی است (fresh_axes
+    // در Line دیگر پرچم لگاریتمی همین فراخوانی را نمی‌کُشد).
+    fn setlog_of(src: &str) -> PlotOp {
+        let mut env = Environment::new();
+        let out = run(&mut env, src);
+        assert!(out.error.is_none(), "{:?}", out.error);
+        assert!(
+            matches!(out.plot_ops[0], PlotOp::Line { .. }),
+            "ops: {:?}",
+            out.plot_ops
+        );
+        out.plot_ops[1].clone()
+    }
     match (
-        first_op("semilogx([1 10 100], [1 2 3])"),
-        first_op("semilogy([1 2 3], [1 10 100])"),
-        first_op("loglog([1 10], [1 10])"),
+        setlog_of("semilogx([1 10 100], [1 2 3])"),
+        setlog_of("semilogy([1 2 3], [1 10 100])"),
+        setlog_of("loglog([1 10], [1 10])"),
     ) {
         (
             PlotOp::SetLog { x, y },
@@ -647,7 +661,8 @@ fn semilog_family_sets_log_flags() {
     let mut env = Environment::new();
     let out = run(&mut env, "semilogx([1 10], [1 2], 'r', [1 10], [2 1], 'b')");
     assert!(out.error.is_none());
-    assert!(matches!(out.plot_ops[1], PlotOp::Line { ref series } if series.len() == 2));
+    assert!(matches!(out.plot_ops[0], PlotOp::Line { ref series } if series.len() == 2));
+    assert!(matches!(out.plot_ops[1], PlotOp::SetLog { x: true, .. }));
 }
 
 #[test]
@@ -930,4 +945,53 @@ fn shadowed_names_keep_normal_semantics() {
     // فرمان ناشناخته → خطای صادقانه (نه کرش)
     let e2 = err_of("frobnicate yes");
     assert!(!e2.message_en.is_empty());
+}
+
+/// گام 3.5.2 — باگ کاربر: بعد از نشست legend('sin','cos')، اجرای
+/// `semilogx(x,y,'LineWidth',1.5)` در همان نشست زیر نمودار تازه همچنان
+/// sin/cos نشان می‌داد. دو سابمیشن واقعی روی یک Environment + fold در
+/// FigureState — legend باید پاک شده باشد و لگاریتمی/شبکه روشن بمانند.
+#[test]
+fn user_repro_stale_legend_after_semilogx() {
+    use mc_plot::figure::FigureState;
+    let mut env = Environment::new();
+    let out1 = run(
+        &mut env,
+        "x = 0:0.1:2*pi; plot(x, sin(x), 'r--o', x, cos(x), 'b:s'); \
+         legend('sin','cos','Location','SouthWest')",
+    );
+    assert!(out1.error.is_none(), "{:?}", out1.error);
+    let out2 = run(
+        &mut env,
+        "x = logspace(0,1,1000); y = 10.^(x-1); \
+         semilogx(x,y,'LineWidth',1.5); grid on",
+    );
+    assert!(out2.error.is_none(), "{:?}", out2.error);
+
+    // ترتیب op های semilogx: اول Line بعد SetLog (پس از گام 3.5.2)
+    let mut saw_line_then_setlog = false;
+    for w in out2.plot_ops.windows(2) {
+        if matches!(w[0], PlotOp::Line { .. }) && matches!(w[1], PlotOp::SetLog { x: true, .. }) {
+            saw_line_then_setlog = true;
+        }
+    }
+    assert!(saw_line_then_setlog, "ops: {:?}", out2.plot_ops);
+
+    let mut st = FigureState::new();
+    for op in out1.plot_ops.iter().chain(&out2.plot_ops) {
+        st.apply(op.clone());
+    }
+    let CellSnapshot::Line {
+        series,
+        axes,
+        legend,
+    } = &st.snapshots()[0].spec
+    else {
+        panic!("expected Line");
+    };
+    assert_eq!(series.len(), 1, "new submission replaces old series");
+    assert_eq!(series[0].raw_len, 1000);
+    assert!(legend.is_none(), "STALE sin/cos legend must be gone");
+    assert!(axes.log_x, "semilogx keeps its own log flag");
+    assert!(axes.grid, "grid on from the same submission");
 }
