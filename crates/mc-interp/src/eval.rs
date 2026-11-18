@@ -447,6 +447,18 @@ fn exec_stmt_inner(
                     return Ok((Flow::Normal, Vec::new()));
                 }
             }
+            // توابع رسم برهنه (گام 3.5.1 — پارتی متلب): `hold` = toggle،
+            // `figure` = شکل تازه، `grid` = toggle. فقط وقتی متغیر/تابع
+            // کاربر هم‌نام نباشد؛ وگرنه مسیر عادی (خطای «statement-only»).
+            if let Expr::Var { name, line, col } = expr {
+                if crate::plot_builtins::is_plot_statement_fn(name)
+                    && env.get(name).is_none()
+                    && env.lookup_item(name).is_none()
+                {
+                    crate::plot_builtins::apply(name, &[], *line, *col)?;
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
             let value = eval_expr(expr, env, depth)?;
             if !*suppress {
                 // بند ۳ گزارش ممیزی خارجی — متلب: ارجاع برهنهٔ متغیر با «نام =»

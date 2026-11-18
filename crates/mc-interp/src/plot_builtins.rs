@@ -683,6 +683,11 @@ fn series_of_groups(groups: Vec<PlotGroup>) -> Vec<SeriesPair> {
 }
 
 fn bi_plot(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    // plot برهنه — سلول خالی (پارتی متلب: نمودار تهی)
+    if args.is_empty() {
+        session::emit(PlotOp::Line { series: Vec::new() });
+        return Ok(());
+    }
     let groups = parse_plot_groups(args, "plot", line, col)?;
     session::emit(PlotOp::Line {
         series: series_of_groups(groups),
@@ -1396,6 +1401,11 @@ fn on_off(args: &[Value], name: &str, line: u32, col: u32) -> Result<bool, McErr
 }
 
 fn bi_grid(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    // بدون آرگومان = toggle (پارتی متلب: grid برهنه)
+    if args.is_empty() {
+        session::emit(PlotOp::GridToggle);
+        return Ok(());
+    }
     let on = on_off(args, "grid", line, col)?;
     session::emit(PlotOp::Grid { on });
     Ok(())

@@ -833,3 +833,101 @@ fn fill_pair_colors_per_polygon() {
         other => panic!("expected Fill, got {other:?}"),
     }
 }
+
+// ---------- گام 3.5.1: سینتکس فرمانی متلب (باگ گزارش کاربر) ----------
+
+/// دستور پخت دقیق کاربر (گزارش باگ ۲۰۲۶-۱۱-۱۸) — قبلاً روی `hold on`
+/// به خطای رجیستری «statement-only» می‌خورد.
+#[test]
+fn user_recipe_three_lines_runs() {
+    let src = concat!(
+        "x = 0:0.1:2*pi;\n",
+        "hold on; plot(x, sin(x), 'r--o', x, cos(x), 'b:s'); hold off\n",
+        "legend('sin','cos','Location','SouthWest'); grid on\n",
+    );
+    let mut env = Environment::new();
+    let out = run(&mut env, src);
+    assert!(out.error.is_none(), "recipe failed: {:?}", out.error);
+    let ops = &out.plot_ops;
+    assert_eq!(ops.len(), 5, "ops: {ops:?}");
+    assert!(matches!(ops[0], PlotOp::Hold { on: true }));
+    match &ops[1] {
+        PlotOp::Line { series } => {
+            assert_eq!(series.len(), 2);
+            // 'r--o': قرمز خط‌چین با دایره
+            assert_eq!(
+                series[0].style.color,
+                Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 })
+            );
+            assert_eq!(series[0].style.dash, Some(DashSpec::Dashed));
+            assert_eq!(series[0].style.marker, Some(MarkerSpec::Circle));
+            // 'b:s': آبی نقطه‌چین با مربع
+            assert_eq!(series[1].style.dash, Some(DashSpec::Dotted));
+            assert_eq!(series[1].style.marker, Some(MarkerSpec::Square));
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+    assert!(matches!(ops[2], PlotOp::Hold { on: false }));
+    match &ops[3] {
+        PlotOp::Legend { entries, position } => {
+            assert_eq!(
+                entries.as_deref(),
+                Some(&["sin".to_owned(), "cos".to_owned()][..])
+            );
+            assert_eq!(*position, LegendPos::SouthWest);
+        }
+        other => panic!("expected Legend, got {other:?}"),
+    }
+    assert!(matches!(ops[4], PlotOp::Grid { on: true }));
+}
+
+#[test]
+fn command_forms_for_plot_fns() {
+    // grid on / grid off / axis equal / legend sin cos
+    assert!(matches!(first_op("grid on"), PlotOp::Grid { on: true }));
+    assert!(matches!(first_op("grid off"), PlotOp::Grid { on: false }));
+    assert!(matches!(
+        first_op("axis equal"),
+        PlotOp::AxisEqual { on: true }
+    ));
+    assert!(matches!(first_op("axis tight"), PlotOp::AxisTight));
+    match first_op("legend sin cos") {
+        PlotOp::Legend { entries, .. } => {
+            assert_eq!(entries, Some(vec!["sin".to_owned(), "cos".to_owned()]))
+        }
+        other => panic!("expected Legend, got {other:?}"),
+    }
+    // فرمان با نقطه‌ویرگول و بدون آن، هر دو
+    let mut env = Environment::new();
+    let out = run(&mut env, "grid on; hold on");
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert!(matches!(out.plot_ops[0], PlotOp::Grid { on: true }));
+    assert!(matches!(out.plot_ops[1], PlotOp::Hold { on: true }));
+}
+
+#[test]
+fn bare_plot_fns_take_default_actions() {
+    // hold برهنه = toggle، grid برهنه = toggle، figure برهنه = شکل تازه
+    assert!(matches!(first_op("hold"), PlotOp::HoldToggle));
+    assert!(matches!(first_op("grid"), PlotOp::GridToggle));
+    match first_op("figure") {
+        PlotOp::ActivateFigure { id } => assert!(id.is_none()),
+        other => panic!("expected ActivateFigure, got {other:?}"),
+    }
+    // plot برهنه = سلول خالی (پارتی متلب)
+    match first_op("plot") {
+        PlotOp::Line { series } => assert!(series.is_empty()),
+        other => panic!("expected empty Line, got {other:?}"),
+    }
+}
+
+#[test]
+fn shadowed_names_keep_normal_semantics() {
+    // متغیر هم‌نام بر فرمان می‌چربد — مثل متلب `hold on` با hold عددی
+    // به اندیس‌گذاری می‌خورد (ارور صادقانه، نه فراخوانی رسم)
+    let e = err_of("hold = 5; hold on");
+    assert!(e.message_en.contains("subscript"), "{e}");
+    // فرمان ناشناخته → خطای صادقانه (نه کرش)
+    let e2 = err_of("frobnicate yes");
+    assert!(!e2.message_en.is_empty());
+}

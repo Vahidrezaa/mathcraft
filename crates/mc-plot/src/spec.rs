@@ -187,6 +187,8 @@ pub enum PlotOp {
     Grid {
         on: bool,
     },
+    /// `grid` برهنه — معکوس وضعیت شبکه (پارتی متلب).
+    GridToggle,
     /// `axis([a b c d])` — هر دو محور.
     AxisLimits {
         min_x: f64,

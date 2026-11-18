@@ -531,6 +531,21 @@ quiver rendering, marker table completion (`<`, `>`, `p`, `h`).
 up from 32) · flutter analyze clean · 58/58 app tests (+3 custom-tick) ·
 docs COMPATIBILITY rows + this roadmap updated.
 
+**Step 3.5.1 (2026-11-18) hotfix — MATLAB command syntax, user-reported bug.**
+The user's device check of the 3.5 recipe failed on line 2 with the registry's
+"statement-only" error: `hold on` (and `grid on`, `hold off`) never parsed as
+calls — bare identifiers fell into the Var-expression path and hit the
+function registry. Fix follows the repo's own `format short` pattern
+(ROADMAP 2.4): a general command-form rule in the parser (non-keyword
+identifier followed by bare non-keyword identifiers until end of statement →
+string-argument call), so `hold on`, `grid on`, `axis equal`, `legend sin cos`
+all parse like MATLAB; shadowing by a user variable still wins (command then
+indexes the variable — MATLAB-like honest error). Bare plot functions now take
+MATLAB default actions: `hold` toggles, `grid` toggles (new GridToggle op),
+`figure` makes a fresh figure, `plot` clears the cell. Documented divergence:
+numeric command form (`subplot 2 1 1`) is rejected — args are strings; use
+parentheses. The exact 3-line recipe is now a regression test.
+
 **Pending for 3.5 close:** user push → CI → APK → device check: the recipe
 `x=0:0.1:2*pi; hold on; plot(x,sin(x),'r--o',x,cos(x),'b:'); legend('sin','cos'
 ,'Location','SouthWest'); grid on` plus `semilogx(1:10, 10.^(0:9))`,
@@ -555,3 +570,4 @@ and P3-b (3D), with the contract-v3 shortlist above.
 | 1.0 | 2026-11-17 | Step 3.4 executed per plan (§7.3 tasks): Plots tab live — pull `get_plots()` on tab activation + push-merge of `EvalResult.plots`; CustomPainter for contract v2 (axes/grid/ticks incl. `10^{k}` superscripts/line-scatter-bar-histogram-area-fill-polar-errorbar/legend chips/subplot grid); gestures pinch-around-focal + pan + double-tap reset + hold-500ms crosshair (raw Listener+Timer — scale recognizer never wins the arena on a stationary press); PNG export + share (path_provider + share_plus 10.x, Craft-Icons floating bar); LTR island; honest 3D/Quiver state; format_g4 Dart mirror with manual round-half-even (Dart toStringAsFixed is half-away — divergence from Rust/C caught by the mirrored table test); 30 new tests (37 total, analyze clean). Device verification pending user push | User (chat: «بریم گام بعدی. Ci سبز شد.») |
 | 1.0 | 2026-11-18 | Step 3.4 reopened by user verdict («بدترین چیزی که اجرا شده» — canvas-transform zoom, fixed ticks, hidden hold-gesture) and re-delivered as 3.4.1: data-space PlotViewport as single source of truth; Dart-side tick generation per viewport (faithful mc_plot::ticks port + exact-log10 fix + pixel-adaptive count) so scale always matches view; natural pan in data units; pinch-around-focal incremental zoom; span clamps home/10000..×4; instant-tap data tip with series name; hold-crosshair with axis value tags; always-on viewport status chip; raw double-tap in Listener (single tap no longer 300ms-delayed); 18 new tests (55 total green, analyze clean) | User (chat: بازخورد کیفیت نمودار) |
 | 1.0 | 2026-11-18 | Step 3.5: basic-2D coverage per user redirect — 12 new statement builtins (stem/stairs/semilogx/semilogy/loglog/barh/xlim/ylim/xticks/yticks + xticklabels/yticklabels actionable error), plot reworked to multi-group with per-group LineSpec + truly-global name-values (bug fix: nv first touched only later groups), hold() toggle, axis(auto), legend Location, per-poly fill palette cycle; v2.1 tick semantics (engine emits only user ticks; Dart honors custom ticks filtered-to-view); stem/stairs synthesized on existing shapes (NaN-gap risers, LTTB-safe); deferred to contract v3: pie/text/MarkerSize/box/quiver/markers; 230 Rust + 58 Flutter tests green, clippy/analyze clean | User (chat: امکانات اساسی متلب در نمودارهای ساده دوبعدی) |
+| 1.0 | 2026-11-18 | Step 3.5.1 hotfix: MATLAB command syntax (`hold on`/`grid on`/`axis equal`/`legend sin cos`) via general parser rule extending the format-short pattern; bare plot fns take MATLAB defaults (hold/grid toggle via new GridToggle op, figure, plot-empty); shadowing → MATLAB-like indexing error; user's 3-line recipe is a regression test | User (chat: recipe errored MC:E2002 — باید فیکس کنی) |

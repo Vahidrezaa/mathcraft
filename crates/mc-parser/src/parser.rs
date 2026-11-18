@@ -163,8 +163,52 @@ impl Parser {
                     self.parse_expr_stmt()
                 }
             }
+            // سینتکس فرمانی متلب (گام 3.5.1): شناسهٔ غیرکلیدواژه + شناسه‌های
+            // برهنهٔ غیرکلیدواژه تا پایان گزاره = فراخوانی با آرگومان‌های
+            // رشته‌ای — `hold on`، `grid on`، `axis equal`، `legend sin cos`.
+            // تعمیم همان الگوی `format short` (ROADMAP 2.4). واگرایی مستند
+            // در COMPATIBILITY: فقط آرگومان رشته‌ای؛ فرم عددی مثل
+            // `subplot 2 1 1` پذیرفته نمی‌شود — از پرانتز استفاده کنید.
+            // سایه‌شدن با متغیر/تابع کاربر در ارزیاب بررسی می‌شود (اینجا
+            // فقط قواعد نحوی است). بازوی مقدم: if/for/while/break/
+            // continue/return/function/format.
+            Tok::Ident(_) if matches!(&self.peek_at(1).tok, Tok::Ident(n2) if !KEYWORDS.contains(&n2.as_str())) => {
+                self.parse_command_call()
+            }
             _ => self.parse_expr_stmt(),
         }
+    }
+
+    /// فرمان عمومی `name <word...>` — کلمات تا پایان گزاره آرگومان رشته‌ای
+    /// می‌شوند (`hold on` → hold("on"))؛ معنا را ارزیاب می‌دهد. درخواست
+    /// ROADMAP 3.5.1 — دستور پخت کاربر با `hold on; plot(...); hold off`
+    /// بدون این قانون به خطای رجیستری می‌خورد.
+    fn parse_command_call(&mut self) -> Result<Stmt, McError> {
+        let t = self.bump(); // نام فرمان
+        let name = match &t.tok {
+            Tok::Ident(n) => n.clone(),
+            _ => unreachable!("command arm only fires on Ident"),
+        };
+        let mut args = Vec::new();
+        while let Tok::Ident(n) = &self.peek().tok {
+            if KEYWORDS.contains(&n.as_str()) {
+                break;
+            }
+            let n = n.clone();
+            self.bump();
+            args.push(Expr::Str(n));
+        }
+        let suppress = self.eat(&Tok::Semicolon);
+        Ok(Stmt::Expr {
+            expr: Expr::Call {
+                name,
+                args,
+                nargout: 1,
+                line: t.line,
+                col: t.col,
+            },
+            suppress,
+        })
     }
 
     /// فرمان `format <mode...>` — کلمات حالت تا پایان گزاره آرگومان رشته‌ای

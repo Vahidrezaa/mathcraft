@@ -417,6 +417,10 @@ impl FigureState {
             PlotOp::XLabel { text } => self.active_cell_mut().axes.xlabel = Some(text),
             PlotOp::YLabel { text } => self.active_cell_mut().axes.ylabel = Some(text),
             PlotOp::Grid { on } => self.active_cell_mut().axes.grid = on,
+            PlotOp::GridToggle => {
+                let axes = &mut self.active_cell_mut().axes;
+                axes.grid = !axes.grid;
+            }
             PlotOp::HoldToggle => {
                 let cell = self.active_cell_mut();
                 cell.hold = !cell.hold;
