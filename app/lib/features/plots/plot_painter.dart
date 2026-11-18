@@ -7,8 +7,7 @@ import '../../src/rust/api.dart' as api;
 import 'plot_format.dart';
 import 'plot_geometry.dart';
 
-/// رنگ‌های نقاش برحسب روشنایی تم — همه از توکن‌های CDS (anti-pattern #2:
-/// رنگ هاردکد ممنوع — سند ۰۶ §12).
+/// رنگ‌های نقاش برحسب روشنایی تم — همه از توکن‌های CDS (anti-pattern #2).
 class PlotTheme {
   PlotTheme._({
     required this.bg,
@@ -47,70 +46,26 @@ class PlotTheme {
   final Color chipBg;
 }
 
-/// تبدیل دید — zoom/pan فقط روی «داده» اعمال می‌شود؛ فریم/تیک‌ها ثابت
-/// می‌مانند (سند ۰۲ §7: تعامل بدون FFI در حلقهٔ فریم، فقط transform).
-class PlotViewTransform {
-  const PlotViewTransform({this.scale = 1.0, this.offset = Offset.zero});
-
-  static const identity = PlotViewTransform();
-
-  static const _maxScale = 64.0;
-
-  final double scale;
-  final Offset offset;
-
-  bool get isIdentity => scale == 1.0 && offset == Offset.zero;
-
-  PlotViewTransform clamped() => PlotViewTransform(
-        scale: scale.clamp(1.0, _maxScale),
-        // pan سقف‌دار تا نمودار از دید خارج نشود
-        offset: Offset(
-          offset.dx.clamp(-200.0 * (scale - 1), 200.0 * (scale - 1)),
-          offset.dy.clamp(-200.0 * (scale - 1), 200.0 * (scale - 1)),
-        ),
-      );
-
-  /// نقطهٔ fit-space زیر focal بعد از scale جدید سر جایش می‌ماند:
-  /// S(P) = (P−c)·s + c + o ⇒ o′ = o − ((F−c−o)/s)·(s′−s)
-  /// (pinch حول مرکز pinch نه مرکز صفحه — سند ۰۶ §7.3).
-  PlotViewTransform pinchAround(Offset focal, double scaleFactor, Size size) {
-    final c = size.center(Offset.zero);
-    final newScale = (scale * scaleFactor).clamp(1.0, _maxScale);
-    final deltaS = newScale - scale;
-    if (deltaS.abs() < 1e-9) {
-      return clamped();
-    }
-    final anchor = (focal - c - offset) / scale;
-    final newOffset = offset - anchor * deltaS;
-    return PlotViewTransform(scale: newScale, offset: newOffset).clamped();
-  }
-
-  PlotViewTransform translate(Offset delta) =>
-      PlotViewTransform(scale: scale, offset: offset + delta).clamped();
-
-  @override
-  bool operator ==(Object other) =>
-      other is PlotViewTransform &&
-      other.scale == scale &&
-      other.offset == offset;
-
-  @override
-  int get hashCode => Object.hash(scale, offset);
-}
-
-/// نقاش یک سلول ۲بعدی — فریم/تیک‌ها ثابت، داده زیر transform و clip.
+/// نقاش یک سلول ۲بعدی — رندر مستقیم از viewport (بازطراحی 3.4.1):
+/// زوم/پن یعنی پنجرهٔ داده عوض می‌شود و تیک‌ها/برچسب‌ها/مقیاس در همین
+/// فریم بازسازی می‌شوند؛ دیگر transform بوم با تیک‌های ثابت نداریم.
+///
+/// لایه‌های اطلاعاتی: crosshair + تگ مقدار روی هر دو محور، data-tip
+/// پایدار (تپ)، و chip همیشه‌نمای «x∈[..] · y∈[..]».
 class PlotPainter extends CustomPainter {
   PlotPainter({
     required this.cell,
-    required this.transform,
+    required this.viewport,
     required this.brightness,
     this.crosshair,
+    this.dataTip,
   });
 
   final PlotCellData cell;
-  final PlotViewTransform transform;
+  final PlotViewport viewport;
   final Brightness brightness;
   final CrosshairSnap? crosshair;
+  final DataTip? dataTip;
 
   static const _mono11 = TextStyle(
     fontFamily: 'JetBrainsMono',
@@ -121,7 +76,7 @@ class PlotPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final theme = PlotTheme.of(brightness);
-    final layout = CellLayout.build(cell, size);
+    final layout = CellLayout.build(cell, size, viewport);
     final rect = layout.plotRect;
 
     // پس‌زمینهٔ بوم (immersion — کل صفحه)
@@ -133,23 +88,29 @@ class PlotPainter extends CustomPainter {
       return;
     }
 
-    // شبکهٔ نقطه‌چین روی تیک‌های برچسب‌دار — سند ۰۶ §3
+    // شبکهٔ نقطه‌چین روی همهٔ تیک‌ها (فرعی‌های لگاریتمی هم) — سند ۰۶ §3
     if (cell.axes!.grid && cell.axes!.visible) {
       final gridPaint = Paint()
         ..color = theme.grid
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1;
-      for (final (_, sx) in layout.xTickXs) {
-        _dashedLine(
-            canvas, Offset(sx, rect.top), Offset(sx, rect.bottom), gridPaint);
+      for (final gx in layout.xGridXs) {
+        final sx = layout.dataToScreen(gx, 0).dx;
+        if (sx >= rect.left && sx <= rect.right) {
+          _dashedLine(canvas, Offset(sx, rect.top), Offset(sx, rect.bottom),
+              gridPaint);
+        }
       }
-      for (final (_, sy) in layout.yTickYs) {
-        _dashedLine(canvas, Offset(rect.left, sy), Offset(rect.right, sy),
-            gridPaint);
+      for (final gy in layout.yGridYs) {
+        final sy = layout.dataToScreen(0, gy).dy;
+        if (sy >= rect.top && sy <= rect.bottom) {
+          _dashedLine(canvas, Offset(rect.left, sy), Offset(rect.right, sy),
+              gridPaint);
+        }
       }
     }
 
-    // فریم + برچسب‌ها (ثابت)
+    // فریم + برچسب‌ها (برای viewport جاری — با زوم عوض می‌شوند)
     if (cell.axes!.visible) {
       canvas.drawRect(
         rect,
@@ -162,17 +123,9 @@ class PlotPainter extends CustomPainter {
       _paintTitles(canvas, layout, cell.axes!, theme);
     }
 
-    // داده — transform حول مرکز بوم + clip به ناحیهٔ رسم
+    // داده — clip به ناحیهٔ رسم (خارج دید = بریده می‌شود)
     canvas.save();
     canvas.clipRect(rect);
-    final center = rect.center;
-    canvas.translate(
-      center.dx + transform.offset.dx,
-      center.dy + transform.offset.dy,
-    );
-    canvas.scale(transform.scale);
-    canvas.translate(-center.dx, -center.dy);
-
     switch (cell) {
       case LineCellData(:final series):
         for (final s in series) {
@@ -204,9 +157,15 @@ class PlotPainter extends CustomPainter {
     }
     canvas.restore();
 
-    // crosshair — بیرون از transform (خطوط صفحه‌ای)
-    if (crosshair != null && cell.axes!.visible) {
-      _paintCrosshair(canvas, layout, crosshair!, theme);
+    // لایه‌های اطلاعاتی — بیرون از clip
+    if (cell.axes!.visible) {
+      if (dataTip != null) {
+        _paintDataTip(canvas, layout, dataTip!, theme);
+      }
+      if (crosshair != null) {
+        _paintCrosshair(canvas, layout, crosshair!, theme);
+      }
+      _paintStatusChip(canvas, layout, theme);
     }
 
     _paintLegend(canvas, size, cell, theme);
@@ -227,11 +186,12 @@ class PlotPainter extends CustomPainter {
         Offset(sx, rect.bottom + 4),
         tickPaint,
       );
-      _drawText(
+      _drawTickLabel(
         canvas,
         t.label!,
         Offset(sx, rect.bottom + 6),
         labelStyle,
+        theme,
         TextAlign.center,
       );
     }
@@ -241,14 +201,41 @@ class PlotPainter extends CustomPainter {
         Offset(rect.left, sy),
         tickPaint,
       );
-      _drawText(
+      _drawTickLabel(
         canvas,
         t.label!,
         Offset(rect.left - 8, sy),
         labelStyle,
+        theme,
         TextAlign.right,
       );
     }
+  }
+
+  /// برچسب تیک — لگاریتمی «10^{k}» با توان بالا (superscript).
+  void _drawTickLabel(
+    Canvas canvas,
+    String label,
+    Offset anchor,
+    TextStyle style,
+    PlotTheme theme,
+    TextAlign align,
+  ) {
+    final (base, exponent) = parseLogLabel(label);
+    if (exponent == null) {
+      _drawText(canvas, label, anchor, style, align);
+      return;
+    }
+    final baseTp = _textPainter('10', style);
+    final expTp = _textPainter(
+      exponent,
+      style.copyWith(fontSize: 8),
+    );
+    final totalW = baseTp.width + expTp.width;
+    final dx =
+        align == TextAlign.right ? anchor.dx - totalW : anchor.dx - totalW / 2;
+    baseTp.paint(canvas, Offset(dx, anchor.dy));
+    expTp.paint(canvas, Offset(dx + baseTp.width, anchor.dy - 4));
   }
 
   void _drawText(
@@ -279,7 +266,8 @@ class PlotPainter extends CustomPainter {
     return tp;
   }
 
-  void _paintTitles(Canvas canvas, CellLayout layout, AxesData axes, PlotTheme theme) {
+  void _paintTitles(
+      Canvas canvas, CellLayout layout, AxesData axes, PlotTheme theme) {
     final rect = layout.plotRect;
     if (axes.title != null) {
       _drawText(
@@ -319,8 +307,9 @@ class PlotPainter extends CustomPainter {
           color: theme.textSecondary,
         ),
       );
-      // پس از rotate(-90°): محور x جدید به سمت بالا؛ نقطه شروع را تنظیم
-      tp.paint(canvas, Offset(-rect.left - 4 - tp.width, rect.center.dy - tp.width / 2));
+      // پس از rotate(-90°): محور x جدید رو به بالا
+      tp.paint(canvas,
+          Offset(-rect.left - 4 - tp.width, rect.center.dy - tp.width / 2));
       canvas.restore();
     }
   }
@@ -348,7 +337,7 @@ class PlotPainter extends CustomPainter {
     }
   }
 
-  /// مسیر سری در فضای صفحه (fit) — NaN/Inf = گپ در خط (رفتار متلب).
+  /// مسیر سری در فضای صفحه — NaN/Inf = گپ در خط (رفتار متلب).
   Path _seriesPath(CellLayout layout, SeriesGeom s) {
     final path = Path();
     var penDown = false;
@@ -419,8 +408,8 @@ class PlotPainter extends CustomPainter {
           final a = k * math.pi / 3;
           final dx = math.cos(a) * 3.5;
           final dy = math.sin(a) * 3.5;
-          canvas.drawLine(
-              Offset(p.dx - dx, p.dy - dy), Offset(p.dx + dx, p.dy + dy), stroke);
+          canvas.drawLine(Offset(p.dx - dx, p.dy - dy),
+              Offset(p.dx + dx, p.dy + dy), stroke);
         }
       case api.Marker.triangleUp:
         canvas.drawPath(_triangle(p, up: true), stroke);
@@ -480,7 +469,6 @@ class PlotPainter extends CustomPainter {
 
         final Rect rect;
         if (horizontal) {
-          // x نمودار = مقدار، y نمودار = جایگاه میله
           final a = layout.dataToScreen(vLo, bandStart);
           final b = layout.dataToScreen(vHi, bandStart + barWidth);
           rect = Rect.fromPoints(
@@ -594,7 +582,8 @@ class PlotPainter extends CustomPainter {
     }
     if (!first) {
       path.close();
-      canvas.drawPath(path, Paint()..color = poly.color.withOpacity(0.55));
+      canvas.drawPath(
+          path, Paint()..color = poly.color.withOpacity(0.55));
       canvas.drawPath(
         path,
         Paint()
@@ -625,15 +614,14 @@ class PlotPainter extends CustomPainter {
             Offset(bot.dx - cap, bot.dy), Offset(bot.dx + cap, bot.dy), paint);
       }
       if (s.xNeg != null && i < s.xNeg!.length) {
-        final xRight =
-            b.x[i] + (i < (s.xPos?.length ?? 0) ? s.xPos![i] : 0.0);
+        final xRight = b.x[i] + (i < (s.xPos?.length ?? 0) ? s.xPos![i] : 0.0);
         final left = layout.dataToScreen(b.x[i] - s.xNeg![i], b.y[i]);
         final right = layout.dataToScreen(xRight, b.y[i]);
         canvas.drawLine(left, right, paint);
-        canvas.drawLine(
-            Offset(left.dx, left.dy - cap), Offset(left.dx, left.dy + cap), paint);
-        canvas.drawLine(
-            Offset(right.dx, right.dy - cap), Offset(right.dx, right.dy + cap), paint);
+        canvas.drawLine(Offset(left.dx, left.dy - cap),
+            Offset(left.dx, left.dy + cap), paint);
+        canvas.drawLine(Offset(right.dx, right.dy - cap),
+            Offset(right.dx, right.dy + cap), paint);
       }
     }
   }
@@ -641,8 +629,8 @@ class PlotPainter extends CustomPainter {
   // ---------- پلار ----------
 
   /// پلار — شبکهٔ حلقوی + ۸ ستون؛ x = θ (رادیان)، y = شعاع نرمال به rmax.
-  /// (تیک‌های پلار در قرارداد نیستند — پیش‌فرض رندرر، مستند.)
-  void _paintPolar(Canvas canvas, Size size, PolarCellData cell, PlotTheme theme) {
+  void _paintPolar(
+      Canvas canvas, Size size, PolarCellData cell, PlotTheme theme) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2 - 34;
     final gridPaint = Paint()
@@ -718,13 +706,15 @@ class PlotPainter extends CustomPainter {
     );
   }
 
-  Offset _polarPoint(Offset center, double radius, double rMax, double theta, double r) {
+  Offset _polarPoint(
+      Offset center, double radius, double rMax, double theta, double r) {
     final rr = r / rMax * radius;
     return center + Offset(math.cos(theta), math.sin(theta)) * rr;
   }
 
-  // ---------- crosshair و legend ----------
+  // ---------- لایه‌های اطلاعاتی (بازطراحی 3.4.1) ----------
 
+  /// crosshair + chip عددی + تگ مقدار روی هر دو محور (خوانش مقیاس).
   void _paintCrosshair(
     Canvas canvas,
     CellLayout layout,
@@ -746,30 +736,145 @@ class PlotPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
-    // chip عددی (x, y) — mono روی bg/elevated (سند ۰۶ §7.3)
+    // chip (x, y) کنار نقطه
     final text = '(${formatG4(snap.x)}, ${formatG4(snap.y)})';
-    final tp = _textPainter(text, _mono11.copyWith(color: theme.textPrimary));
+    _paintChip(
+      canvas,
+      text: text,
+      anchor: p + const Offset(10, -10),
+      align: _ChipAlign.topLeft,
+      rect: rect,
+      style: _mono11.copyWith(color: theme.textPrimary),
+      bg: theme.chipBg.withOpacity(0.95),
+      theme: theme,
+    );
+    // تگ مقدار x زیر محور افقی (روی ردیف برچسب‌ها)
+    _paintChip(
+      canvas,
+      text: formatG4(snap.x),
+      anchor: Offset(p.dx, rect.bottom + 6),
+      align: _ChipAlign.abovePoint,
+      rect: rect,
+      style: _mono11.copyWith(color: theme.accent),
+      bg: theme.chipBg.withOpacity(0.95),
+      border: theme.accent,
+      theme: theme,
+    );
+    // تگ مقدار y کنار محور عمودی
+    _paintChip(
+      canvas,
+      text: formatG4(snap.y),
+      anchor: Offset(rect.left - 8, p.dy),
+      align: _ChipAlign.leftOfPoint,
+      rect: rect,
+      style: _mono11.copyWith(color: theme.accent),
+      bg: theme.chipBg.withOpacity(0.95),
+      border: theme.accent,
+      theme: theme,
+    );
+  }
+
+  /// data-tip پایدار — حلقهٔ سری‌رنگ + جعبهٔ مقدار با نام سری.
+  void _paintDataTip(
+    Canvas canvas,
+    CellLayout layout,
+    DataTip tip,
+    PlotTheme theme,
+  ) {
+    final p = layout.dataToScreen(tip.x, tip.y);
+    final rect = layout.plotRect;
+    canvas.drawCircle(
+      p,
+      6,
+      Paint()
+        ..color = tip.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    canvas.drawCircle(p, 2.5, Paint()..color = tip.color);
+    final seriesName = _seriesLabel(tip.seriesIndex);
+    final valueText = '(${formatG4(tip.x)}, ${formatG4(tip.y)})';
+    final valueTp = _textPainter(
+        valueText, _mono11.copyWith(color: theme.textPrimary));
+    final nameTp = seriesName == null
+        ? null
+        : _textPainter(seriesName, TextStyle(
+            fontFamily: 'Vazirmatn',
+            fontSize: 11,
+            color: theme.textSecondary,
+          ));
     const padH = 8.0;
     const padV = 5.0;
-    final chipW = tp.width + padH * 2;
-    final chipH = tp.height + padV * 2;
-    var topLeft = p + Offset(10, -10 - chipH);
+    final w = math.max(valueTp.width, nameTp?.width ?? 0) + padH * 2;
+    final h =
+        valueTp.height + (nameTp == null ? 0 : nameTp.height + 2) + padV * 2;
+    // خط راهنما از نقطه به جعبه (بالا-راست، fallback پایین-راست)
+    var topLeft = p + const Offset(14, -14) - Offset(0, h);
+    if (topLeft.dy < rect.top + 2) {
+      topLeft = p + const Offset(14, 14);
+    }
     topLeft = Offset(
-      topLeft.dx.clamp(rect.left + 2, rect.right - chipW - 2),
-      topLeft.dy.clamp(rect.top + 2, rect.bottom - chipH - 2),
+      topLeft.dx.clamp(rect.left + 2, rect.right - w - 2),
+      topLeft.dy.clamp(rect.top + 2, rect.bottom - h - 2),
     );
+    final leader = Paint()
+      ..color = tip.color.withOpacity(0.7)
+      ..strokeWidth = 1;
+    canvas.drawLine(p, topLeft + Offset(w / 2, h / 2), leader);
     final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(topLeft.dx, topLeft.dy, chipW, chipH),
+      Rect.fromLTWH(topLeft.dx, topLeft.dy, w, h),
       const Radius.circular(8),
+    );
+    canvas.drawRRect(rrect, Paint()..color = theme.chipBg.withOpacity(0.95));
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = tip.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    var cy = topLeft.dy + padV;
+    nameTp?.paint(canvas, Offset(topLeft.dx + padH, cy));
+    if (nameTp != null) cy += nameTp.height + 2;
+    valueTp.paint(canvas, Offset(topLeft.dx + padH, cy));
+  }
+
+  String? _seriesLabel(int seriesIndex) {
+    final legend = cell.legend;
+    if (legend == null || seriesIndex >= legend.entries.length) return null;
+    return legend.entries[seriesIndex];
+  }
+
+  /// chip همیشه‌نما: «x ∈ [a, b] · y ∈ [c, d]» — پاسخ مستقیم به
+  /// «مقیاس افتضاح»؛ همیشه می‌دانی چه بازه‌ای را می‌بینی.
+  void _paintStatusChip(Canvas canvas, CellLayout layout, PlotTheme theme) {
+    final vp = layout.viewport;
+    final rect = layout.plotRect;
+    final text =
+        'x: [${formatG4(vp.xMin)}, ${formatG4(vp.xMax)}]  y: [${formatG4(vp.yMin)}, ${formatG4(vp.yMax)}]';
+    final tp = _textPainter(
+      text,
+      _mono11.copyWith(fontSize: 10, color: theme.textSecondary),
+    );
+    const padH = 8.0;
+    const padV = 4.0;
+    final w = tp.width + padH * 2;
+    final h = tp.height + padV * 2;
+    final topLeft =
+        Offset(rect.right - w - 6, rect.bottom - h - 6);
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(topLeft.dx, topLeft.dy, w, h),
+      const Radius.circular(6),
     );
     canvas.drawRRect(
       rrect,
-      Paint()..color = theme.chipBg.withOpacity(0.95),
+      Paint()..color = theme.chipBg.withOpacity(0.75),
     );
     tp.paint(canvas, Offset(topLeft.dx + padH, topLeft.dy + padV));
   }
 
-  void _paintLegend(Canvas canvas, Size size, PlotCellData cell, PlotTheme theme) {
+  void _paintLegend(
+      Canvas canvas, Size size, PlotCellData cell, PlotTheme theme) {
     final legend = cell.legend;
     if (legend == null || legend.entries.isEmpty) return;
     final colors = switch (cell) {
@@ -844,6 +949,52 @@ class PlotPainter extends CustomPainter {
 
   // ---------- ابزار ----------
 
+  void _paintChip(
+    Canvas canvas, {
+    required String text,
+    required Offset anchor,
+    required _ChipAlign align,
+    required Rect rect,
+    required TextStyle style,
+    required Color bg,
+    PlotTheme? theme,
+    Color? border,
+  }) {
+    final tp = _textPainter(text, style);
+    const padH = 8.0;
+    const padV = 5.0;
+    final w = tp.width + padH * 2;
+    final h = tp.height + padV * 2;
+    Offset topLeft;
+    switch (align) {
+      case _ChipAlign.topLeft:
+        topLeft = anchor;
+      case _ChipAlign.abovePoint:
+        topLeft = Offset(anchor.dx - w / 2, anchor.dy);
+      case _ChipAlign.leftOfPoint:
+        topLeft = Offset(anchor.dx - w, anchor.dy - h / 2);
+    }
+    topLeft = Offset(
+      topLeft.dx.clamp(rect.left + 2, rect.right - w - 2),
+      topLeft.dy.clamp(rect.top + 2, rect.bottom - h - 2),
+    );
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(topLeft.dx, topLeft.dy, w, h),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rrect, Paint()..color = bg);
+    if (border != null) {
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
+    tp.paint(canvas, Offset(topLeft.dx + padH, topLeft.dy + padV));
+  }
+
   /// خط‌چین دستی با PathMetrics — Canvas dash بومی ندارد.
   static void drawDashedPath(
     Canvas canvas,
@@ -882,7 +1033,10 @@ class PlotPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant PlotPainter oldDelegate) =>
       oldDelegate.cell != cell ||
-      oldDelegate.transform != transform ||
+      oldDelegate.viewport != viewport ||
       oldDelegate.crosshair != crosshair ||
+      oldDelegate.dataTip != dataTip ||
       oldDelegate.brightness != brightness;
 }
+
+enum _ChipAlign { topLeft, abovePoint, leftOfPoint }

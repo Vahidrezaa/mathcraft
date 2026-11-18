@@ -151,7 +151,7 @@ class AppLocalizationsFa extends AppLocalizations {
   String get plotsInfoRawPoints => 'نقاط خام (نزد موتور)';
 
   @override
-  String get plotsCrosshairHint => 'برای دیدن مقادیر نگه دارید — با دو انگشت زوم و با دو تپ بازنشانی.';
+  String get plotsCrosshairHint => 'تپ روی نقطه = پایش مقدار · نگه‌داشتن = crosshair · کشیدن = جابه‌جایی · دو انگشت = زوم · دو تپ = بازنشانی.';
 
   @override
   String get plotsNot3dTitle => 'نمودارهای سه‌بعدی و برداری با به‌روزرسانی بعدی می‌آیند';

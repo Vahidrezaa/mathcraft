@@ -202,7 +202,7 @@ void main() {
     });
   });
 
-  group('CellLayout (pure geometry)', () {
+  group('CellLayout (viewport-based, re-ticking)', () {
     LineCellData line() => LineCellData(
           series: [
             SeriesGeom(
@@ -222,41 +222,54 @@ void main() {
             xLimits: (0, 10),
             yLimits: (-1, 1),
             equalAspect: false,
+            logX: false,
+            logY: false,
             visible: true,
-            xTicks: const [
-              api.Tick(position: 0, label: '0'),
-              api.Tick(position: 10, label: '10'),
-            ],
-            yTicks: const [
-              api.Tick(position: -1, label: '-1'),
-              api.Tick(position: 1, label: '1'),
-            ],
+            xTicks: const [],
+            yTicks: const [],
           ),
         );
 
-    test('plotRect inside size and margins from y labels', () {
-      final layout = CellLayout.build(line(), const Size(320, 240));
+    test('generates nice 1-2-5 ticks for the home viewport', () {
+      final cell = line();
+      final layout =
+          CellLayout.build(cell, const Size(320, 240), PlotViewport.home(cell.axes));
+      // y: بازهٔ [-1,1] و ۳ تیک هدف → گام ۱ → [-1, 0, 1]
+      expect(layout.yTickYs.map((t) => t.$1.label).toList(), ['-1', '0', '1']);
+      // x: بازهٔ [0,10] و ۴ تیک هدف → گام ۵ → [0, 5, 10]
+      expect(layout.xTickXs.map((t) => t.$1.label).toList(), ['0', '5', '10']);
       expect(layout.plotRect.left, greaterThan(8));
-      expect(layout.plotRect.right, lessThanOrEqualTo(320));
-      expect(layout.plotRect.bottom, lessThanOrEqualTo(240));
     });
 
-    test('mapping and inverse roundtrip', () {
-      final layout = CellLayout.build(line(), const Size(320, 240));
+    test('zoomed viewport re-ticks (regression: fixed ticks of 3.4)', () {
+      final cell = line();
+      final zoomed = const PlotViewport(
+          xMin: 0, xMax: 1, yMin: -1, yMax: 1);
+      final layout = CellLayout.build(cell, const Size(320, 240), zoomed);
+      // دید به [0,1] → گام ۰.۵ → برچسب‌های جدید، نه تیک‌های ثابت خانه
+      expect(
+        layout.xTickXs.map((t) => t.$1.label).toList(),
+        ['0', '0.5', '1'],
+      );
+    });
+
+    test('mapping and inverse roundtrip on current viewport', () {
+      final cell = line();
+      final vp = PlotViewport.home(cell.axes);
+      final layout = CellLayout.build(cell, const Size(320, 240), vp);
       final p = layout.dataToScreen(5, 0);
-      // وسط داده = وسط ناحیه رسم (محدوده‌های متقارن)
       expect(p.dx, closeTo(layout.plotRect.center.dx, 0.5));
       expect(p.dy, closeTo(layout.plotRect.center.dy, 0.5));
       final (bx, by) = layout.screenToData(p);
       expect(bx, closeTo(5, 1e-9));
       expect(by, closeTo(0, 1e-9));
-      // تیک‌ها سر جایشان
+      // تیک‌ها روی موقعیت صحیح
       final (t0, sx0) = layout.xTickXs.first;
       expect(t0.position, 0);
-      expect(sx0, closeTo(layout.plotRect.left, 1e-9));
+      expect(sx0, closeTo(layout.plotRect.left, 1e-6));
     });
 
-    test('axis off shrinks to minimal rect', () {
+    test('axis off shrinks to minimal rect without ticks', () {
       final off = LineCellData(
         series: line().series,
         axes: AxesData(
@@ -267,14 +280,176 @@ void main() {
           xLimits: (0, 10),
           yLimits: (-1, 1),
           equalAspect: false,
+          logX: false,
+          logY: false,
           visible: false,
           xTicks: const [],
           yTicks: const [],
         ),
       );
-      final layout = CellLayout.build(off, const Size(320, 240));
+      final layout = CellLayout.build(off, const Size(320, 240),
+          PlotViewport.home(off.axes));
       expect(layout.plotRect.left, 2);
       expect(layout.xTickXs, isEmpty);
+      expect(layout.yTickYs, isEmpty);
+    });
+  });
+
+  group('nice ticks (mirror of crates/mc-plot/src/ticks.rs)', () {
+    test('nice_step follows 1-2-5 ladder', () {
+      expect(niceStep(0.3), 0.5);
+      expect(niceStep(0.7), 1.0);
+      expect(niceStep(1.1), 2.0);
+      expect(niceStep(3.0), 5.0);
+      expect(niceStep(6.0), 10.0);
+      expect(niceStep(17.0), 20.0);
+      // ورودی غیرمثبت → ۱ (دفاعی)
+      expect(niceStep(0.0), 1.0);
+      expect(niceStep(-3.0), 1.0);
+    });
+
+    test('linear_ticks cover unit interval', () {
+      final t = linearTicks(0.0, 1.0, 8);
+      expect(t.first, 0.0);
+      expect(t.last, 1.0);
+      expect(t.length, inInclusiveRange(5, 9), reason: 'got $t');
+      for (var i = 1; i < t.length; i++) {
+        expect(t[i], greaterThan(t[i - 1]));
+      }
+    });
+
+    test('linear_ticks degenerate ranges return single', () {
+      expect(linearTicks(2.0, 2.0, 8), [2.0]);
+      expect(linearTicks(5.0, 1.0, 8), [5.0]);
+    });
+
+    test('log_ticks major decades with tex labels', () {
+      final t = logTicks(0.01, 100.0);
+      expect(
+        t.map((x) => x.label).toList(),
+        ['10^{-2}', '10^{-1}', '10^{0}', '10^{1}', '10^{2}'],
+      );
+      expect(t[0].position, 0.01);
+      expect(t[4].position, 100.0);
+    });
+
+    test('log_ticks narrow range falls back to minors', () {
+      final t = logTicks(2.0, 8.0);
+      expect(t.every((x) => x.label == null), isTrue, reason: 'all minor: $t');
+      expect(t.any((x) => x.position == 3.0), isTrue);
+      expect(t.any((x) => x.position == 5.0), isTrue);
+      expect(logTicks(-1.0, 10.0), isEmpty);
+    });
+
+    test('axis_ticks dispatches by log flag', () {
+      final lin = axisTicks(0.0, 10.0, false, 8);
+      expect(lin.every((t) => t.label != null), isTrue);
+      expect(lin[0].label, '0');
+      final lg = axisTicks(1.0, 1000.0, true, 8);
+      expect(lg, hasLength(4)); // 10^0..10^3
+    });
+
+    test('tick_count_for adapts to pixel span', () {
+      expect(tickCountFor(60), 1.clamp(3, 10)); // کمینهٔ ۳
+      expect(tickCountFor(60), 3);
+      expect(tickCountFor(280), 5);
+      expect(tickCountFor(1200), 10); // سقف
+    });
+  });
+
+  group('PlotViewport math', () {
+    const home = PlotViewport(xMin: 0, xMax: 10, yMin: -1, yMax: 1);
+
+    test('zoomAt keeps the focal data point under the finger', () {
+      final z = home.zoomAt(focalX: 3.0, focalY: 0.0, factor: 4.0);
+      // فاصله‌های focal یک‌چهارم
+      expect(z.xMin, closeTo(2.25, 1e-12));
+      expect(z.xMax, closeTo(4.75, 1e-12));
+      expect(z.yMin, closeTo(-0.25, 1e-12));
+      expect(z.yMax, closeTo(0.25, 1e-12));
+      // و وارون: دادهٔ زیر «انگشت» (پیکسل ثابت) در layout جدید همان
+      // focal است. با زوم y هم برچسب‌های y و حاشیهٔ چپ عوض می‌شود و
+      // نقطهٔ پیکسلی می‌لغزد (رفتار متلب هم همین است) — پس ناوردایی را
+      // با دیدی که فقط x آن زوم شده (حاشیهٔ پایدار) می‌سنجیم
+      final cell = _lineCell();
+      final xZoom = const PlotViewport(
+          xMin: 2.25, xMax: 4.75, yMin: -1, yMax: 1);
+      final before = CellLayout.build(cell, const Size(320, 240), home);
+      final after = CellLayout.build(cell, const Size(320, 240), xZoom);
+      final fingerPx = before.dataToScreen(3.0, 0.0);
+      final (fx, fy) = after.screenToData(fingerPx);
+      expect(fx, closeTo(3.0, 1e-6));
+      expect(fy, closeTo(0.0, 1e-6));
+    });
+
+    test('zoomAt guards invalid factor', () {
+      expect(identical(home.zoomAt(focalX: 1, focalY: 0, factor: 0), home),
+          isTrue);
+      expect(
+          identical(home.zoomAt(focalX: 1, focalY: 0, factor: double.nan),
+              home),
+          isTrue);
+    });
+
+    test('panPixels moves content with the finger', () {
+      final v = home.panPixels(const Offset(60, 0), const Size(300, 200));
+      // درگ راست → دید به چپ: xMin کم می‌شود؛ span ثابت
+      expect(v.xMin, closeTo(-2.0, 1e-12));
+      expect(v.xSpan, home.xSpan);
+      // درگ پایین → دید به بالا: yMax بیشتر می‌شود
+      final v2 = home.panPixels(const Offset(0, 40), const Size(300, 200));
+      expect(v2.yMax, closeTo(1.4, 1e-12));
+      expect(v2.ySpan, home.ySpan);
+    });
+
+    test('clamped bounds zoom span (home/10000 .. home*4), free center', () {
+      // زوم عمیق فراتر از حد → span روی کف
+      var deep = home;
+      for (var i = 0; i < 6; i++) {
+        deep = deep.zoomAt(focalX: 5, focalY: 0, factor: 10.0);
+      }
+      final c = deep.clamped(home);
+      expect(c.xSpan, closeTo(home.xSpan / 10000, 1e-9));
+      // زوم-اوت فراتر از حد → span روی سقف
+      var wide = home;
+      for (var i = 0; i < 8; i++) {
+        wide = wide.zoomAt(focalX: 5, focalY: 0, factor: 0.1);
+      }
+      final w = wide.clamped(home);
+      expect(w.xSpan, closeTo(home.xSpan * 4, 1e-9));
+      // مرکز آزاد: پن به فضای خالی (دید به [5,15])، زوم حول focal=10
+      // مرکز ۱۰ باقی می‌ماند — خارج از خانهٔ [0,10] و بدون نشت‌گیری
+      final panned = home
+          .panPixels(const Offset(-150, 0), const Size(300, 200))
+          .zoomAt(focalX: 10, focalY: 0, factor: 2)
+          .clamped(home);
+      expect(panned.xCenter, greaterThan(9.9));
+      expect(panned.xSpan, closeTo(5.0, 1e-9));
+    });
+  });
+
+  group('pickTip (tap on series)', () {
+    test('nearest vertex within pixel radius wins', () {
+      final cell = _lineCell();
+      final layout = CellLayout.build(
+          cell, const Size(300, 220), PlotViewport.home(cell.axes));
+      final target = layout.dataToScreen(1, 1);
+      final tip = pickTip(cell.series, layout,
+          positionPx: target + const Offset(10, 8));
+      expect(tip, isNotNull);
+      expect(tip!.x, 1);
+      expect(tip.y, 1);
+      expect(tip.seriesIndex, 0);
+    });
+
+    test('tap far from any vertex clears', () {
+      final cell = _lineCell();
+      final layout = CellLayout.build(
+          cell, const Size(300, 220), PlotViewport.home(cell.axes));
+      // گوشهٔ بالا-راستِ دور از هر سه رأس
+      final tip = pickTip(cell.series, layout,
+          positionPx: const Offset(285, 25));
+      expect(tip, isNull);
     });
   });
 
@@ -440,6 +615,85 @@ void main() {
       expect(last!.y.isFinite, isTrue);
     });
 
+    testWidgets('drag pans the viewport (content follows finger)',
+        (tester) async {
+      final cell = cellDataFromSpec(_lineFigure().spec)!;
+      await tester.pumpWidget(_plotViewHarness(cell));
+      await tester.pumpAndSettle();
+      final state = tester.state<PlotViewState>(find.byType(PlotView));
+      final homeCenter = state.viewport.xCenter;
+      final homeXMin = state.viewport.xMin;
+      // درگ به راست → دید به چپ
+      await tester.drag(find.byType(PlotView), const Offset(60, 0));
+      await tester.pumpAndSettle();
+      expect(state.viewport.xCenter, lessThan(homeCenter));
+      expect(state.viewport.xMin, lessThan(homeXMin));
+      // span دست‌نخورده — پن است نه زوم
+      expect(state.viewport.xSpan, closeTo(2.0, 1e-6));
+    });
+
+    testWidgets('pinch zooms the viewport around the focal point',
+        (tester) async {
+      final cell = cellDataFromSpec(_lineFigure().spec)!;
+      await tester.pumpWidget(_plotViewHarness(cell));
+      await tester.pumpAndSettle();
+      final state = tester.state<PlotViewState>(find.byType(PlotView));
+      final homeSpan = state.viewport.xSpan;
+      final center = tester.getCenter(find.byType(PlotView));
+      final g1 = await tester.startGesture(center - const Offset(30, 0));
+      final g2 = await tester.startGesture(center + const Offset(30, 0));
+      await g1.moveBy(const Offset(-60, 0));
+      await g2.moveBy(const Offset(60, 0));
+      await tester.pumpAndSettle();
+      await g1.up();
+      await g2.up();
+      await tester.pumpAndSettle();
+      // فاصلهٔ انگشت‌ها بیشتر → span کوچک‌تر (سیم‌کشی pinch→zoom)
+      expect(state.viewport.xSpan, lessThan(homeSpan * 0.95));
+      expect(state.viewport.xSpan, greaterThan(homeSpan * 0.1));
+    });
+
+    testWidgets('tap near a vertex plants a persistent data tip',
+        (tester) async {
+      final cell = cellDataFromSpec(_lineFigure().spec)!;
+      await tester.pumpWidget(_plotViewHarness(cell));
+      await tester.pumpAndSettle();
+      final state = tester.state<PlotViewState>(find.byType(PlotView));
+      // جای دقیق رأس (1,1) را از همان ریاضیات خالص می‌گیریم
+      final layout = CellLayout.build(
+          cell, const Size(300, 220), PlotViewport.home(cell.axes!));
+      final topLeft = tester.getTopLeft(find.byType(PlotView));
+      final vertexPx = layout.dataToScreen(1, 1);
+      // tapAt مختصات جهانی می‌گیرد — آفست ویجت را اضافه می‌کنیم
+      await tester.tapAt(topLeft + vertexPx);
+      await tester.pumpAndSettle();
+      expect(state.dataTip, isNotNull);
+      expect(state.dataTip!.x, 1);
+      expect(state.dataTip!.y, 1);
+      // تپ دور → پاک می‌شود
+      await tester.tapAt(topLeft + const Offset(285, 25));
+      await tester.pumpAndSettle();
+      expect(state.dataTip, isNull);
+    });
+
+    testWidgets('double-tap resets pan and zoom to home', (tester) async {
+      final cell = cellDataFromSpec(_lineFigure().spec)!;
+      await tester.pumpWidget(_plotViewHarness(cell));
+      await tester.pumpAndSettle();
+      final state = tester.state<PlotViewState>(find.byType(PlotView));
+      await tester.drag(find.byType(PlotView), const Offset(80, 0));
+      await tester.pumpAndSettle();
+      expect(state.viewport.xCenter, isNot(closeTo(1.0, 0.05)));
+      await tester.tap(find.byType(PlotView));
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(find.byType(PlotView));
+      await tester.pumpAndSettle();
+      expect(state.viewport.xMin, 0.0);
+      expect(state.viewport.xMax, 2.0);
+      expect(state.viewport.yMin, 0.0);
+      expect(state.viewport.yMax, 1.0);
+    });
+
     testWidgets('3d figure shows honest not-yet state', (tester) async {
       await tester.pumpWidget(_Harness([_surfaceFigure()]));
       await tester.pumpAndSettle();
@@ -450,6 +704,48 @@ void main() {
 }
 
 // ---------- سازنده‌های تست ----------
+
+LineCellData _lineCell() => LineCellData(
+      series: [
+        SeriesGeom(
+          id: 1,
+          x: const [0, 1, 2],
+          y: const [0, 1, 0],
+          color: CdsColors.plotPalette[0],
+          width: 2,
+          dash: null,
+        ),
+      ],
+      axes: AxesData(
+        title: null,
+        xlabel: null,
+        ylabel: null,
+        grid: false,
+        xLimits: (0, 2),
+        yLimits: (0, 1),
+        equalAspect: false,
+        logX: false,
+        logY: false,
+        visible: true,
+        xTicks: const [],
+        yTicks: const [],
+      ),
+    );
+
+Widget _plotViewHarness(PlotCellData cell) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 300,
+            height: 220,
+            child: PlotView(
+              cell: cell,
+              brightness: Brightness.dark,
+            ),
+          ),
+        ),
+      ),
+    );
 
 api.PlotFigure _lineFigure() => api.PlotFigure(
       figureId: BigInt.one,

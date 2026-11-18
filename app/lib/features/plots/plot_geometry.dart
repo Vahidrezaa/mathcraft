@@ -1,9 +1,9 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../src/rust/api.dart' as api;
+import 'plot_format.dart';
 import 'plot_palette.dart';
 
 /// مدل میانی خنثی از قرارداد (freezed generated) — نقاش فقط با این کار
@@ -35,7 +35,7 @@ class SeriesGeom {
   final api.Marker? marker;
 }
 
-/// محورهای حل‌شدهٔ یک سلول — حدود همیشه از موتور می‌آید (تیک‌ها هم).
+/// محورهای حل‌شدهٔ یک سلول — حدود «خانه» (نمای اولیه از موتور).
 class AxesData {
   AxesData({
     required this.title,
@@ -45,6 +45,8 @@ class AxesData {
     required this.xLimits,
     required this.yLimits,
     required this.equalAspect,
+    required this.logX,
+    required this.logY,
     required this.visible,
     required this.xTicks,
     required this.yTicks,
@@ -57,13 +59,17 @@ class AxesData {
   final (double, double) xLimits;
   final (double, double) yLimits;
   final bool equalAspect;
+  final bool logX;
+  final bool logY;
   final bool visible;
+
+  /// تیک‌های موتور — فقط مرجع قرارداد؛ رندر تعاملی تیک‌های خودش را
+  /// برای viewport جاری می‌سازد (بازطراحی 3.4.1).
   final List<api.Tick> xTicks;
   final List<api.Tick> yTicks;
 }
 
-/// ورودی legend — entries با رنگ سری‌ها به‌ترتیب zip می‌شود (کمتر از تعداد
-/// سری = فقط همان تعداد؛ رفتار متلب-lite مستند).
+/// ورودی legend — entries با رنگ سری‌ها به‌ترتیب zip می‌شود.
 class LegendData {
   LegendData(this.entries, this.position);
   final List<String> entries;
@@ -74,7 +80,7 @@ sealed class PlotCellData {
   AxesData? get axes => null;
   LegendData? get legend => null;
 
-  /// سری‌های خطی‌گونه (هدف crosshair) — پیش‌فرض خالی.
+  /// سری‌های خطی‌گونه (هدف crosshair/data-tip).
   List<SeriesGeom> get crosshairSeries => const [];
 }
 
@@ -223,13 +229,14 @@ PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
             ? (0, 1)
             : (a.yLimits!.min, a.yLimits!.max),
         equalAspect: a.equalAspect,
+        logX: a.logX,
+        logY: a.logY,
         visible: a.visible,
         xTicks: a.xTicks,
         yTicks: a.yTicks,
       );
   LegendData? legendOf(api.Legend? l) =>
       l == null ? null : LegendData(l.entries, l.position);
-
   List<SeriesGeom> seriesOf(Iterable<api.Series2D> ss) => ss
       .map((s) => SeriesGeom(
             id: s.id.toInt(),
@@ -317,73 +324,322 @@ PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
 }
 
 // ---------------------------------------------------------------------------
-// هندسهٔ خالص — layout و مپینگ و snap (بدون canvas؛ تست‌پذیر کامل)
+// تیک‌های زیبا — پورت وفادار crates/mc-plot/src/ticks.rs (آینهٔ 1-2-5)
 // ---------------------------------------------------------------------------
 
-/// layout یک سلول ۲بعدی روی مستطیل داده‌شده (کل صفحه یا سلول subplot).
+/// گام «زیبا» از خانوادهٔ 1-2-5: کوچک‌ترین 10^k×{1,2,5,10} که ≥ آرمان است.
+double niceStep(double ideal) {
+  if (ideal <= 0 || !ideal.isFinite) return 1.0;
+  final mag = _pow10(_floorLog10(ideal));
+  for (final mult in const [1.0, 2.0, 5.0, 10.0]) {
+    if (mult * mag >= ideal - mag * 1e-9) {
+      return mult * mag;
+    }
+  }
+  return 10.0 * mag;
+}
+
+/// تیک‌های خطی 1-2-5 در بازهٔ [min, max] — مرتب و بدون تکرار مجاور.
+List<double> linearTicks(double min, double max, int maxTicks) {
+  if (!min.isFinite || !max.isFinite || max <= min) return [min];
+  final step = niceStep((max - min) / math.max(maxTicks, 2));
+  final first = (min / step).ceilToDouble();
+  final last = (max / step).floorToDouble();
+  final out = <double>[];
+  for (var k = first; k <= last + 1e-9; k += 1.0) {
+    final v = k * step;
+    if (v.isFinite) out.add(v);
+  }
+  final dedup = <double>[];
+  for (final v in out) {
+    if (dedup.isEmpty || (v - dedup.last).abs() >= step * 1e-9) {
+      dedup.add(v);
+    }
+  }
+  return dedup;
+}
+
+/// تیک‌های لگاریتمی: اصلی = توان‌های ۱۰ با برچسب `10^{k}`؛ بازهٔ باریک‌تر
+/// از یک دهه = فرعی‌های بی‌برچسب ۲..۹×دهه (پورت log_ticks).
+List<api.Tick> logTicks(double min, double max) {
+  if (!min.isFinite || !max.isFinite || max <= min || min <= 0) {
+    return const [];
+  }
+  final k0 = _ceilLog10(min);
+  final k1 = _floorLog10(max);
+  final majors = <int>[for (var k = k0; k <= k1; k++) k];
+  if (majors.length < 2) {
+    majors.clear();
+  }
+  if (majors.isNotEmpty) {
+    return [
+      for (final k in majors)
+        api.Tick(position: _pow10(k), label: '10^{$k}'),
+    ];
+  }
+  final out = <api.Tick>[];
+  var dec = _floorLog10(min);
+  final decEnd = _ceilLog10(max);
+  while (dec <= decEnd) {
+    for (var m = 2; m < 10; m++) {
+      final v = m * _pow10(dec);
+      if (v >= min && v <= max) {
+        out.add(api.Tick(position: v, label: null));
+      }
+    }
+    dec += 1;
+  }
+  return out;
+}
+
+/// تیک‌های کامل یک محور (خطی/لگاریتمی) با برچسب g4 — هم‌ارز axis_ticks.
+List<api.Tick> axisTicks(double min, double max, bool log, int maxTicks) {
+  if (log) return logTicks(min, max);
+  return [
+    for (final p in linearTicks(min, max, maxTicks))
+      api.Tick(position: p, label: formatG4(p)),
+  ];
+}
+
+/// تعداد هدف تیک از عرض پیکسلی — رفتار متلب: ~۶ تیک روی ~۳۰۰px.
+int tickCountFor(double pixelSpan, [double targetSpacing = 56]) {
+  if (!pixelSpan.isFinite || pixelSpan <= 0) return 3;
+  return (pixelSpan / targetSpacing).floor().clamp(3, 10);
+}
+
+int _floorLog10(double v) => _log10(v).floor();
+int _ceilLog10(double v) => _log10(v).ceil();
+
+/// Dart تابع log10 بومی ندارد و ln/ln10 روی توان‌های دقیق ۱۰ خطای
+/// گرد کردن دارد (مثل 1000 → 2.999…6) — به توان دقیق snap می‌کنیم تا
+/// با Rust log10 (گردشده) هم‌ارز بمانیم.
+double _log10(double v) {
+  final r = math.log(v) / math.ln10;
+  final ri = r.round();
+  if ((r - ri).abs() < 1e-12 && v == _pow10(ri)) {
+    return ri.toDouble();
+  }
+  return r;
+}
+
+double _pow10(int exp) {
+  var result = 1.0;
+  for (var i = 0; i < exp.abs(); i++) {
+    result *= 10;
+  }
+  return exp < 0 ? 1 / result : result;
+}
+
+// ---------------------------------------------------------------------------
+// viewport در فضای داده — تنها منبع حقیقت زوم/پن (بازطراحی 3.4.1)
+// ---------------------------------------------------------------------------
+
+/// پنجرهٔ دید در مختصات داده. زوم/پن این را تغییر می‌دهد و تیک‌ها در
+/// هر فریم برای همین پنجره ساخته می‌شوند — دیگر «canvas transform با
+/// تیک‌های ثابت» نداریم (عیب 3.4).
+class PlotViewport {
+  const PlotViewport({
+    required this.xMin,
+    required this.xMax,
+    required this.yMin,
+    required this.yMax,
+  });
+
+  /// نمای خانه — حدود fit موتور.
+  factory PlotViewport.home(AxesData axes) => PlotViewport(
+        xMin: axes.xLimits.$1,
+        xMax: axes.xLimits.$2,
+        yMin: axes.yLimits.$1,
+        yMax: axes.yLimits.$2,
+      );
+
+  /// جایگزین بی‌معنا (پلار — viewport ندارد).
+  static const any = PlotViewport(xMin: 0, xMax: 1, yMin: 0, yMax: 1);
+
+  final double xMin, xMax, yMin, yMax;
+
+  double get xSpan => xMax - xMin;
+  double get ySpan => yMax - yMin;
+  double get xCenter => (xMin + xMax) / 2;
+  double get yCenter => (yMin + yMax) / 2;
+
+  bool get isValid => xSpan.isFinite && ySpan.isFinite && xSpan > 0 && ySpan > 0;
+
+  /// زوم حول یک نقطهٔ داده‌ای (focal) — همان نقطه زیر انگشت سر جایش
+  /// می‌ماند: فاصله‌های focal با ۱/factor کوچک/بزرگ می‌شوند.
+  PlotViewport zoomAt({
+    required double focalX,
+    required double focalY,
+    required double factor,
+  }) {
+    if (!factor.isFinite || factor <= 0) return this;
+    return PlotViewport(
+      xMin: focalX - (focalX - xMin) / factor,
+      xMax: focalX + (xMax - focalX) / factor,
+      yMin: focalY - (focalY - yMin) / factor,
+      yMax: focalY + (yMax - focalY) / factor,
+    );
+  }
+
+  /// پن به پیکسل — محتوا با انگشت حرکت می‌کند (درگ راست = دید به چپ).
+  PlotViewport panPixels(Offset deltaPx, Size viewSize) {
+    if (viewSize.width <= 0 || viewSize.height <= 0) return this;
+    return PlotViewport(
+      xMin: xMin - deltaPx.dx * xSpan / viewSize.width,
+      xMax: xMax - deltaPx.dx * xSpan / viewSize.width,
+      yMin: yMin + deltaPx.dy * ySpan / viewSize.height,
+      yMax: yMax + deltaPx.dy * ySpan / viewSize.height,
+    );
+  }
+
+  /// حد معقول دید: span هر محور در [خانه/۱۰۰۰۰، خانه×۴] — مرکز آزاد
+  /// (مثل متلب می‌شود به فضای خالی هم پن کرد).
+  PlotViewport clamped(PlotViewport home) {
+    if (!isValid) return home.isValid ? home : this;
+    final xS = xSpan.clamp(home.xSpan / 10000, home.xSpan * 4);
+    final yS = ySpan.clamp(home.ySpan / 10000, home.ySpan * 4);
+    return PlotViewport(
+      xMin: xCenter - xS / 2,
+      xMax: xCenter + xS / 2,
+      yMin: yCenter - yS / 2,
+      yMax: yCenter + yS / 2,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PlotViewport &&
+      other.xMin == xMin &&
+      other.xMax == xMax &&
+      other.yMin == yMin &&
+      other.yMax == yMax;
+
+  @override
+  int get hashCode => Object.hash(xMin, xMax, yMin, yMax);
+}
+
+// ---------------------------------------------------------------------------
+// layout خالص — mapping و snap و tip (بدون canvas؛ تست‌پذیر کامل)
+// ---------------------------------------------------------------------------
+
+/// layout یک سلول ۲بعدی — تیک‌ها برای viewport جاری در Dart ساخته
+/// می‌شوند (بازطراحی 3.4.1: مقیاس همیشه با دید هم‌خوان است).
 class CellLayout {
   CellLayout({
     required this.plotRect,
     required this.xTickXs,
     required this.yTickYs,
-    required this.xLimits,
-    required this.yLimits,
+    required this.xGridXs,
+    required this.yGridYs,
+    required this.viewport,
   });
 
   /// ناحیهٔ محورها (داخل حاشیه‌های برچسب‌ها).
   final Rect plotRect;
 
-  /// موقعیت صفحهٔ هر تیک (فقط تیک‌های برچسب‌دار برای متن؛ grid همه را می‌کشد).
+  /// تیک‌های برچسب‌دار + موقعیت صفحه.
   final List<(api.Tick, double)> xTickXs;
   final List<(api.Tick, double)> yTickYs;
-  final (double, double) xLimits;
-  final (double, double) yLimits;
 
-  double _xToScreen(double x) =>
-      linearMap(x, xLimits.$1, xLimits.$2, plotRect.left, plotRect.right);
+  /// همهٔ تیک‌ها (فرعی‌های لگاریتمی هم) — فقط برای grid.
+  final List<double> xGridXs;
+  final List<double> yGridYs;
 
-  double _yToScreen(double y) =>
-      linearMap(y, yLimits.$1, yLimits.$2, plotRect.bottom, plotRect.top);
+  final PlotViewport viewport;
+
+  double _xToScreen(double x) => linearMap(
+      x, viewport.xMin, viewport.xMax, plotRect.left, plotRect.right);
+
+  double _yToScreen(double y) => linearMap(
+      y, viewport.yMin, viewport.yMax, plotRect.bottom, plotRect.top);
 
   Offset dataToScreen(double x, double y) =>
       Offset(_xToScreen(x), _yToScreen(y));
 
-  /// وارون مپینگ — مختصات داده برای crosshair.
+  /// وارون مپینگ — مختصات داده برای crosshair/ژست‌ها.
   (double, double) screenToData(Offset p) => (
-        linearMap(p.dx, plotRect.left, plotRect.right, xLimits.$1, xLimits.$2),
-        linearMap(p.dy, plotRect.bottom, plotRect.top, yLimits.$1, yLimits.$2),
+        linearMap(p.dx, plotRect.left, plotRect.right,
+            viewport.xMin, viewport.xMax),
+        linearMap(p.dy, plotRect.bottom, plotRect.top,
+            viewport.yMin, viewport.yMax),
       );
 
-  /// layout کامل از مدل سلول — تیک‌ها فقط برچسب‌دار موقعیت می‌گیرند.
-  factory CellLayout.build(PlotCellData cell, Size size) {
+  /// layout کامل از مدل سلول + viewport جاری.
+  factory CellLayout.build(
+      PlotCellData cell, Size size, PlotViewport viewport) {
     final axes = cell.axes!;
-    final rect = plotAreaRect(
-      axes: axes,
-      size: size,
-      measureLabelWidth: (label) => _measureMono(label),
+    if (!axes.visible) {
+      // axis off — فقط داده، بدون تزئینات (حاشیهٔ حداقلی)
+      return CellLayout(
+        plotRect: Rect.fromLTWH(2, 2, size.width - 4, size.height - 4),
+        xTickXs: const [],
+        yTickYs: const [],
+        xGridXs: const [],
+        yGridYs: const [],
+        viewport: viewport,
+      );
+    }
+    // گذر ۱: تیک y از viewport (مستقل از rect) → حاشیهٔ چپ از برچسب‌ها
+    final yTicks = axisTicks(viewport.yMin, viewport.yMax, axes.logY,
+        tickCountFor(size.height - 44));
+    var left = 8.0;
+    for (final t in yTicks) {
+      final label = t.label;
+      if (label != null) {
+        left = math.max(left, _measureMono(label) + 14);
+      }
+    }
+    const top = 10.0;
+    const bottom = 30.0;
+    const right = 12.0;
+    final rect = Rect.fromLTWH(
+      left,
+      top,
+      math.max(10, size.width - left - right),
+      math.max(10, size.height - top - bottom),
     );
-    final layout = CellLayout(
+    // گذر ۲: تیک x با عرض واقعی rect
+    final xTicks = axisTicks(
+        viewport.xMin, viewport.xMax, axes.logX, tickCountFor(rect.width));
+
+    final probe = CellLayout(
       plotRect: rect,
-      xTickXs: [],
-      yTickYs: [],
-      xLimits: axes.xLimits,
-      yLimits: axes.yLimits,
+      xTickXs: const [],
+      yTickYs: const [],
+      xGridXs: const [],
+      yGridYs: const [],
+      viewport: viewport,
     );
-    for (final t in axes.xTicks) {
+    final xTickXs = <(api.Tick, double)>[];
+    for (final t in xTicks) {
       if (t.label != null) {
-        layout.xTickXs.add((t, layout._xToScreen(t.position)));
+        xTickXs.add((t, probe._xToScreen(t.position)));
       }
     }
-    for (final t in axes.yTicks) {
+    final yTickYs = <(api.Tick, double)>[];
+    for (final t in yTicks) {
       if (t.label != null) {
-        layout.yTickYs.add((t, layout._yToScreen(t.position)));
+        yTickYs.add((t, probe._yToScreen(t.position)));
       }
     }
-    return layout;
+    return CellLayout(
+      plotRect: rect,
+      xTickXs: List.unmodifiable(xTickXs),
+      yTickYs: List.unmodifiable(yTickYs),
+      xGridXs: List.unmodifiable([for (final t in xTicks) t.position]),
+      yGridYs: List.unmodifiable([for (final t in yTicks) t.position]),
+      viewport: viewport,
+    );
   }
 }
 
-/// اندازهٔ متن mono 11sp — خالص با TextPainter (سند ۰۶ §2.3: اعداد محور).
+/// مپینگ خطی داده→صفحه — مقدار مپ‌شدهٔ مستقیم.
+double linearMap(double d, double dMin, double dMax, double sMin, double sMax) {
+  final span = (dMax - dMin).abs() < 1e-12 ? 1.0 : (dMax - dMin);
+  return sMin + (d - dMin) / span * (sMax - sMin);
+}
+
+/// اندازهٔ متن mono 11sp — خالص با TextPainter (سند ۰۶ §2.3).
 double _measureMono(String text) {
   final tp = TextPainter(
     text: TextSpan(
@@ -399,41 +655,9 @@ double _measureMono(String text) {
   return tp.width;
 }
 
-/// ناحیهٔ رسم را با حاشیهٔ برچسب‌ها می‌سازد — خالص و تست‌پذیر.
-/// مقیاس متن = mono 11sp سند ۰۶ §2.3 (ارقام tabular).
-Rect plotAreaRect({
-  required AxesData axes,
-  required Size size,
-  required double Function(String) measureLabelWidth,
-}) {
-  if (!axes.visible) {
-    // axis off — فقط داده، بدون تزئینات (حاشیهٔ حداقلی)
-    return Rect.fromLTWH(2, 2, size.width - 4, size.height - 4);
-  }
-  var left = 8.0;
-  for (final t in axes.yTicks) {
-    final label = t.label;
-    if (label != null) {
-      left = math.max(left, measureLabelWidth(label) + 14);
-    }
-  }
-  const bottom = 30.0; // ردیف برچسب x + xlabel
-  const top = 10.0;
-  const right = 12.0;
-  return Rect.fromLTWH(
-    left,
-    top,
-    math.max(10, size.width - left - right),
-    math.max(10, size.height - top - bottom),
-  );
-}
-
-/// مپینگ خطی داده→صفحه برای یک محور — مقدار مپ‌شدهٔ مستقیم
-/// (به‌جای برگرداندن closure — lint سند ۰۸).
-double linearMap(double d, double dMin, double dMax, double sMin, double sMax) {
-  final span = (dMax - dMin).abs() < 1e-12 ? 1.0 : (dMax - dMin);
-  return sMin + (d - dMin) / span * (sMax - sMin);
-}
+// ---------------------------------------------------------------------------
+// snap و tip
+// ---------------------------------------------------------------------------
 
 /// snap crosshair به نزدیک‌ترین رأس سری — binary search روی سری‌های
 /// یکنوای x (سند ۰۶ §7.3)، scan کامل برای نامنظم‌ها.
@@ -444,13 +668,14 @@ CrosshairSnap? snapToNearest(
 ) {
   CrosshairSnap? best;
   var bestDist = double.infinity;
-  for (final s in series) {
+  for (var si = 0; si < series.length; si++) {
+    final s = series[si];
     if (s.x.isEmpty) continue;
     final monotone = _isMonotone(s.x);
     final candidateIdx = monotone
         ? _nearestByBinarySearch(s.x, dataX)
         : _nearestByScan(s.x, s.y, dataX, dataY);
-    final idxs = monotone ? _neighbors(s.x, candidateIdx, dataX) : [candidateIdx];
+    final idxs = monotone ? _neighbors(s.x, candidateIdx) : [candidateIdx];
     for (final i in idxs) {
       if (i < 0 || i >= s.x.length) continue;
       final dx = s.x[i] - dataX;
@@ -460,6 +685,7 @@ CrosshairSnap? snapToNearest(
         bestDist = d;
         best = CrosshairSnap(
           seriesId: s.id,
+          seriesIndex: si,
           color: s.color,
           x: s.x[i],
           y: s.y[i],
@@ -473,15 +699,69 @@ CrosshairSnap? snapToNearest(
 class CrosshairSnap {
   CrosshairSnap({
     required this.seriesId,
+    required this.seriesIndex,
     required this.color,
     required this.x,
     required this.y,
   });
 
   final int seriesId;
+  final int seriesIndex;
   final Color color;
   final double x;
   final double y;
+}
+
+/// data-tip پایدار — با TAP نزدیک یک رأس کاشته می‌شود (کشف‌پذیر، برخلاف
+/// نگه‌داشتنِ پنهان 3.4).
+class DataTip {
+  DataTip({
+    required this.seriesId,
+    required this.seriesIndex,
+    required this.color,
+    required this.x,
+    required this.y,
+  });
+
+  final int seriesId;
+  final int seriesIndex;
+  final Color color;
+  final double x;
+  final double y;
+}
+
+/// انتخاب tip با تپ: نزدیک‌ترین رأس در شعاع پیکسلی — برخورد در فضای
+/// صفحه (شعاع لمس، نه داده — روی محورهای با مقیاس متفاوت درست است).
+DataTip? pickTip(
+  List<SeriesGeom> series,
+  CellLayout layout, {
+  required Offset positionPx,
+  double radiusPx = 48,
+}) {
+  DataTip? best;
+  var bestDist = double.infinity;
+  final r2 = radiusPx * radiusPx;
+  for (var si = 0; si < series.length; si++) {
+    final s = series[si];
+    for (var i = 0; i < s.x.length; i++) {
+      final x = s.x[i];
+      final y = s.y[i];
+      if (!x.isFinite || !y.isFinite) continue;
+      final p = layout.dataToScreen(x, y);
+      final d2 = (p - positionPx).distanceSquared;
+      if (d2 <= r2 && d2 < bestDist) {
+        bestDist = d2;
+        best = DataTip(
+          seriesId: s.id,
+          seriesIndex: si,
+          color: s.color,
+          x: x,
+          y: y,
+        );
+      }
+    }
+  }
+  return best;
 }
 
 bool _isMonotone(List<double> x) {
@@ -525,30 +805,18 @@ int _nearestByScan(List<double> x, List<double> y, double tx, double ty) {
   return best;
 }
 
-/// ایندکس‌های همسایهٔ نتیجهٔ binary search — برای یکنوای x، نزدیک‌ترین در
-/// محور x کافی است اما رأس واقعی ممکن است در یکی از دو همسایه باشد.
-List<int> _neighbors(List<double> x, int i, double target) {
+List<int> _neighbors(List<double> x, int i) {
   final out = <int>[i];
   if (i - 1 >= 0) out.add(i - 1);
   if (i + 1 < x.length) out.add(i + 1);
   return out;
 }
 
-/// متن‌های برچسب y برای اندازه‌گیری حاشیه — خالص.
-double maxLabelWidth(List<api.Tick> ticks, double Function(String) measure) {
-  var w = 0.0;
-  for (final t in ticks) {
-    final label = t.label;
-    if (label != null) w = math.max(w, measure(label));
-  }
-  return w;
-}
-
-/// جمع نقاط خام یک سلول — برای شیت اطلاعات.
+/// جمع نقاط یک سلول — برای شیت اطلاعات.
 int rawPointCount(List<SeriesGeom> series) =>
     series.fold(0, (acc, s) => acc + s.x.length);
 
-/// فاصلهٔ min مثبت بین xهای یکنواخت — عرض slot میله‌ها (fallback: 1).
+/// فاصلهٔ min مثبت بین xهای مرتب — عرض slot میله‌ها (fallback: 1).
 double barSlot(List<double> x) {
   final sorted = [...x]..sort();
   var slot = double.infinity;
@@ -559,12 +827,6 @@ double barSlot(List<double> x) {
   return slot.isFinite ? slot : 1.0;
 }
 
-/// فیلتر NaN/Inf از Float64List — نقاش مسیر با مقدار غیرمتناهی نمی‌کشد.
+/// فیلتر NaN/Inf — نقاش مسیر با مقدار غیرمتناهی نمی‌کشد.
 List<double> finiteOf(List<double> v) =>
     v.where((e) => e.isFinite).toList(growable: false);
-
-/// تبدیل Float64List به List<double> (بدون کپی اضافی در مصرف داخلی).
-extension Float64Ext on Float64List {
-  List<double> toListFinite() =>
-      where((e) => e.isFinite).toList(growable: false);
-}

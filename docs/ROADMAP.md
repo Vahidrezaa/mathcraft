@@ -505,22 +505,29 @@ shipping a plotter on top of a half-language would force rework.
 
 ## 11. Current focus
 
-**Step 3.4 (Flutter plot viewer) is code-complete (2026-11-17):** the Plots tab
-shows engine figures pulled via `get_plots()` on tab activation + push-merge from
-`EvalResult.plots`; CustomPainter renders the frozen contract v2 (axes box,
-dotted grid at 30%, Rust-computed 1-2-5 tick labels incl. `10^{k}` superscripts,
-line/scatter/bar/histogram/area/fill/polar/errorbar, legend chips, subplot grid);
-gestures per doc 06 §7.3 — pinch around the focal point, pan, double-tap reset,
-hold-500ms crosshair snapped to the nearest vertex (chip in JetBrains Mono);
-PNG export (documents dir) + share via the floating Craft-Icons bar; LTR island
-for axes inside the RTL chrome; honest states for empty/3D/Quiver (P3-b).
-Palette tokens resolve in Dart (`PlotColor_Palette` → CDS 8-color plot palette)
-— theme changes restyle plots without engine rebuilds.
+**Step 3.4 reopened by user verdict and re-delivered as 3.4.1 (2026-11-18):**
+the 3.4 viewer shipped a canvas-transform zoom (data scaled under a clip while
+ticks/labels stayed fixed), arbitrary pan clamps, and a hidden hold-gesture —
+"زوم افتضاح، مقیاس افتضاح، اطلاعات تقریباً هیچ". The rework replaces the
+architecture, not the paint: a **data-space viewport** (`PlotViewport`) is the
+single source of truth for zoom/pan; ticks are generated **in Dart for the
+current viewport every frame** (faithful port of `mc_plot::ticks` — 1-2-5
+ladder, `%.4g` labels, log decades `10^{k}`; pixel-adaptive tick count), so the
+scale always matches what you see. Gestures: drag = pan in data units (content
+follows the finger, center free like MATLAB), pinch = incremental zoom around
+the data point under the focal, double-tap = home, span clamped to
+home/10000..home×4. Info layers: **tap plants a persistent data tip** with
+series name + (x, y); hold 500ms = live crosshair with value tags on both axes;
+and an always-visible status chip `x: [a, b]  y: [c, d]`. Porting found one real
+bug: Dart has no log10 and `ln/ln10` drifts on exact powers of ten (1000 →
+2.999…6) — snapped to exact powers, mirrored test table green. Also: single-tap
+is instant now (raw double-tap detection in the Listener instead of the
+double-tap recognizer, which delays every single tap 300 ms).
 
-**Pending for step 3.4 close:** user push → CI green → APK → device checklist
-(crosshair demo on `plot(sin(x))`, pinch around focal, double-tap reset, PNG
-save/share, dark+light themes, fa+en). Then 3.5 (CI golden images + perf
-budget), then P3-b (3D, `surf(peaks)` demo).
+**Pending for 3.4.1 close:** user push → CI → APK → device check: zoom feels
+MATLAB-like (labels re-tick), pan natural, tap-tip discoverable, status chip
+readable, crosshair tags accurate. Then 3.5 (CI golden images + perf budget),
+then P3-b (3D, `surf(peaks)` demo).
 
 ## 12. Change log
 
@@ -538,3 +545,4 @@ budget), then P3-b (3D, `surf(peaks)` demo).
 | 1.0 | 2026-11-17 | Step 2.10 CLOSED (user pushed 21a7b59 = tree ef961d00 ✓, CI green, in-app tests confirmed). Step 2.11 executed per plan (§4 tasks 1-3) — **P2-c code-complete; with it P2 (numeric + language) fully closed pending this delivery's push/CI/checklist**: E3001 → syntax-only; 90 semantic sites reclassified (E1002 undefined fn with did-you-mean, E2001 bounds, E2002 new type/usage family, E2003 dims, E9xxx boundaries); AST spans for Unary/Range/Logic; three position backstops → no user error keeps line 0:0; UI error card shows the position (Dart-only, l10n en/fa, gen-l10n-verified, flutter analyze clean — FFI DTO already carried id+span); doc 03 §14 rows E1002/E2001/E2002 (+E2004/E2005 pre-existing gaps); lexer recovery stays deferred; 11 diagnostics tests; 527 green (was 516). Same delivery: user's logo → Android launcher icon (overlay over flutter-create template, verified against the real 3.24.5 template). User approval: «بله بیلد کامل شد. تست های داخل برنامه موفق بود. بریم گام بعد.» | User (chat) |
 | 1.0 | 2026-11-17 | Steps 3.1 + 3.2 + 3.3 executed in one turn (user-approved batching): **PlotSpec contract v2 frozen** (PlotColor palette/exact-RGB, Rust-side 1-2-5 ticks + %.4g, Area/Fill/ErrorBar, Bar series-mode, HistNorm, series id+raw_len for zoom re-decimation, caxis/colorbar reserved, PlotFigure + get_plots pull; PLOT_CONTRACT_VERSION=2); mc-plot v2 (ops grammar + FigureState fold + LTTB ≤4000 with <1% area-error quality test + linespec parser + histogram binning, 52 tests); 17 statement plot builtins in mc-interp (disp/rng pattern — no echo/no ans; expression use = clear error), hold/figure/subplot/legend/axis/grid/labels/fplot(400 samples); **histogram data-form retired for MATLAB parity — Bin* options merged into histcounts (COMPATIBILITY §4.5 closed)**, corpus p2_20 migrated; FFI: Engine.figure_state + push/pull plots + 5 round-trip tests; FRB glue regenerated (6 files, byte-stable re-run) + flutter analyze clean; 617 tests green (was 527). Next per §11: 3.4 Flutter plot viewer | User (chat: «بریم سراغ فاز ۳… بدون افت کیفیت در یک نوبت») |
 | 1.0 | 2026-11-17 | Step 3.4 executed per plan (§7.3 tasks): Plots tab live — pull `get_plots()` on tab activation + push-merge of `EvalResult.plots`; CustomPainter for contract v2 (axes/grid/ticks incl. `10^{k}` superscripts/line-scatter-bar-histogram-area-fill-polar-errorbar/legend chips/subplot grid); gestures pinch-around-focal + pan + double-tap reset + hold-500ms crosshair (raw Listener+Timer — scale recognizer never wins the arena on a stationary press); PNG export + share (path_provider + share_plus 10.x, Craft-Icons floating bar); LTR island; honest 3D/Quiver state; format_g4 Dart mirror with manual round-half-even (Dart toStringAsFixed is half-away — divergence from Rust/C caught by the mirrored table test); 30 new tests (37 total, analyze clean). Device verification pending user push | User (chat: «بریم گام بعدی. Ci سبز شد.») |
+| 1.0 | 2026-11-18 | Step 3.4 reopened by user verdict («بدترین چیزی که اجرا شده» — canvas-transform zoom, fixed ticks, hidden hold-gesture) and re-delivered as 3.4.1: data-space PlotViewport as single source of truth; Dart-side tick generation per viewport (faithful mc_plot::ticks port + exact-log10 fix + pixel-adaptive count) so scale always matches view; natural pan in data units; pinch-around-focal incremental zoom; span clamps home/10000..×4; instant-tap data tip with series name; hold-crosshair with axis value tags; always-on viewport status chip; raw double-tap in Listener (single tap no longer 300ms-delayed); 18 new tests (55 total green, analyze clean) | User (chat: بازخورد کیفیت نمودار) |

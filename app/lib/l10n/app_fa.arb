@@ -71,7 +71,7 @@
   "plotsInfoSeries": "سری‌ها",
   "plotsInfoPoints": "نقاط رسم‌شده",
   "plotsInfoRawPoints": "نقاط خام (نزد موتور)",
-  "plotsCrosshairHint": "برای دیدن مقادیر نگه دارید — با دو انگشت زوم و با دو تپ بازنشانی.",
+  "plotsCrosshairHint": "تپ روی نقطه = پایش مقدار · نگه‌داشتن = crosshair · کشیدن = جابه‌جایی · دو انگشت = زوم · دو تپ = بازنشانی.",
   "plotsNot3dTitle": "نمودارهای سه‌بعدی و برداری با به‌روزرسانی بعدی می‌آیند",
   "plotsNot3dHint": "surf/mesh/contour/plot3/quiver از حالا در قرارداد آماده‌اند (P3-b).",
   "plotsSubplotNote": "Subplot — سلول‌ها در این نسخه فقط‌نمایش‌اند.",

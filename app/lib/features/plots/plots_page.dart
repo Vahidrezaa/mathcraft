@@ -511,7 +511,9 @@ class _SubplotCellView extends StatelessWidget {
     return CustomPaint(
       painter: PlotPainter(
         cell: cell,
-        transform: PlotViewTransform.identity,
+        viewport: cell is PolarCellData
+            ? PlotViewport.any
+            : PlotViewport.home(cell.axes!),
         brightness: brightness,
       ),
       child: const SizedBox.expand(),

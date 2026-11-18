@@ -77,7 +77,7 @@
   "plotsInfoSeries": "Series",
   "plotsInfoPoints": "Drawn points",
   "plotsInfoRawPoints": "Raw points (kept in engine)",
-  "plotsCrosshairHint": "Hold on the plot to inspect values — pinch to zoom, double-tap to reset.",
+  "plotsCrosshairHint": "Tap a point to pin its value · hold to inspect · drag to pan · pinch to zoom · double-tap to reset.",
   "plotsNot3dTitle": "3D and vector plots arrive in the next update",
   "plotsNot3dHint": "surf/mesh/contour/plot3/quiver are already contract-ready (P3-b).",
   "plotsSubplotNote": "Subplot — cells are read-only in this release.",

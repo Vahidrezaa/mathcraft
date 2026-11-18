@@ -151,7 +151,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get plotsInfoRawPoints => 'Raw points (kept in engine)';
 
   @override
-  String get plotsCrosshairHint => 'Hold on the plot to inspect values — pinch to zoom, double-tap to reset.';
+  String get plotsCrosshairHint => 'Tap a point to pin its value · hold to inspect · drag to pan · pinch to zoom · double-tap to reset.';
 
   @override
   String get plotsNot3dTitle => '3D and vector plots arrive in the next update';

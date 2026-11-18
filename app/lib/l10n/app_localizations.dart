@@ -362,7 +362,7 @@ abstract class AppLocalizations {
   /// No description provided for @plotsCrosshairHint.
   ///
   /// In en, this message translates to:
-  /// **'Hold on the plot to inspect values — pinch to zoom, double-tap to reset.'**
+  /// **'Tap a point to pin its value · hold to inspect · drag to pan · pinch to zoom · double-tap to reset.'**
   String get plotsCrosshairHint;
 
   /// No description provided for @plotsNot3dTitle.
