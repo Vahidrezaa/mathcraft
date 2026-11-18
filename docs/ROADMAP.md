@@ -337,13 +337,45 @@ shipping a plotter on top of a half-language would force rework.
   crosshair on `plot(sin(x))`) — pending this push + APK build.
 - **Risks:** rendering perf on low-end → decimation + draw lists (already designed).
 
-### Step 3.5 — CI for plots
+### Step 3.6 — CI for plots
+> شماره‌گذاری: گام «3.5» در گزارش‌های جلسه (§11 + چنگ‌لاگ + STATUS §3.17) به همان
+> پوشش دوبعدی متلبِ کاربر-جهت‌یافته‌ای اشاره دارد که خارج از برنامهٔ اولیه تحویل شد؛
+> این گامِ CI طبق شماره‌گذاری جلسات، 3.6 است (پیش‌تر در این سند 3.5 نوشته می‌شد).
 - **Goal:** plotting regressions caught automatically.
 - **Tasks:** golden-image tests with a fixed software renderer (correctness only);
   performance budget test: 3 series × 100k points → first frame ≤ 50 ms (docs/07 §P3).
 - **DoD:** [ ] golden images in CI; [ ] LTTB perf test green.
 
-### Step 3.6 — P3-b: 3D (plot3/surf/mesh/contour/contourf/colorbar/view)
+### Step 3.7 — Files & data I/O core (pulled forward from 5.5; bounded — user-essential)
+- **Goal:** the essential file/data workflows on existing types only — no new language types.
+  Pulled forward from step 5.5 by user request (chat 2026-11-18: «سیستم ذخیره و لود فایل‌های
+  .mat و .m … این قابلیت ضروریه»); 5.5 keeps the rest (autosave, script folder browsing,
+  .mat writer, interop polish).
+- **Tasks:**
+  1. `.m` script files: editor Save/Open (.m via the existing export/SAF infrastructure) +
+     `run('path.m')` builtin evaluating file content through the existing `runScript` path.
+  2. Workspace persistence: `save`/`load` — MCWS format v1 (own, versioned, documented;
+     bit-exact round-trip of every current Value kind: numeric/complex/char/struct).
+  3. `.mat` v5 **read** subset (numeric/char/struct arrays) — CI oracle = files written by
+     Octave. v7.3/HDF5, sparse, function handles → honest errors (E6, as 5.5 already said).
+  4. CSV numeric: `readmatrix`/`writematrix`.
+  5. Workspace companions: `who`/`whos`/`clear` (all currently absent — natural pair with
+     save/load).
+- **Explicit non-goals (anti-drift pact, docs/14 §6):** no table/timetable/cell types (E4);
+  no Excel/HDF5 (E6); no .mat writing (stays in 5.5); no file-manager UI beyond open/save
+  (5.5); no uimportui GUI; `readtable` is OUT of 3.7 (needs the table type = E4) and errors
+  with an actionable pointer to `readmatrix`.
+- **DoD:** [ ] save→load round-trip bit-exact incl. complex/char/struct; [ ] .mat subset
+  parity vs Octave-written fixtures; [ ] run('f.m') from editor end-to-end on device;
+  [ ] readmatrix CSV golden; [ ] ≥ 25 new tests; usual gates green.
+- **Tests:** round-trip property tests; .mat fixture corpus (Octave-generated, committed);
+  device checklist (save on device → reopen after app restart).
+- **Risks:** Android storage permission flows (already exercised by PNG export); .mat v5
+  compressed blocks → flate2 (dependency decision documented, deny-gated).
+- **Deliverable:** commit series + package. **Stop/rollback:** additive builtins + one
+  format module; per-commit revert.
+
+### Step 3.8 — P3-b: 3D (plot3/surf/mesh/contour/contourf/colorbar/view)
 - **Goal:** 3D surfaces with smooth touch rotation; PDF export.
 - **Tasks:** 3D series/mesh draw-lists; touch rotate (60 fps budget on reference device);
   PDF export; raster fallback if GPU budget fails on low-end devices (decision point,
@@ -564,11 +596,21 @@ Also answered the strategic capability question in **docs/13-plot-capability-
 matrix.md** (what works today / ordered MATLAB gap / GeoGebra positioning /
 where we can exceed MATLAB).
 
-**Pending for 3.5 close:** user push → CI → APK → device check: the recipe
+**3.5.2 pushed by the user (2026-11-18): origin/main = 8e15b68, tree f92cc1f verified —
+the 3.5 hotfix series (3.5 / 3.5.1 / 3.5.2) is now on GitHub.** Remaining for 3.5 close:
+CI green + APK + the combined device checklist — the recipe
 `x=0:0.1:2*pi; hold on; plot(x,sin(x),'r--o',x,cos(x),'b:'); legend('sin','cos'
 ,'Location','SouthWest'); grid on` plus `semilogx(1:10, 10.^(0:9))`,
-`stem`, `stairs`, `xticks(0:1:6)`. Then 3.6 (CI golden images + perf budget)
-and P3-b (3D), with the contract-v3 shortlist above.
+`stem`, `stairs`, `xticks(0:1:6)` and the two 3.5.2 bug scenarios (stale legend gone;
+info sheet closes without the editor keyboard). CI status on 8e15b68 was not verifiable
+from the sandbox (GitHub API rate limit) — check the Actions tab.
+
+**Next steps (re-ordered this session, see docs/14):** 3.6 (CI golden images + perf
+budget) → **3.7 Files & data I/O core (new — pulled forward from 5.5 per user request)** →
+3.8 / P3-b (3D). The contract-v3 shortlist (delivered with 3D) now also carries
+**DisplayName + auto-legend under hold** (pinned per user reminder «یادت باشه», docs/13
+gap #4), alongside pie / text annotations / MarkerSize + filled markers / box / quiver
+rendering / marker table completion.
 
 ## 12. Change log
 
@@ -590,3 +632,4 @@ and P3-b (3D), with the contract-v3 shortlist above.
 | 1.0 | 2026-11-18 | Step 3.5: basic-2D coverage per user redirect — 12 new statement builtins (stem/stairs/semilogx/semilogy/loglog/barh/xlim/ylim/xticks/yticks + xticklabels/yticklabels actionable error), plot reworked to multi-group with per-group LineSpec + truly-global name-values (bug fix: nv first touched only later groups), hold() toggle, axis(auto), legend Location, per-poly fill palette cycle; v2.1 tick semantics (engine emits only user ticks; Dart honors custom ticks filtered-to-view); stem/stairs synthesized on existing shapes (NaN-gap risers, LTTB-safe); deferred to contract v3: pie/text/MarkerSize/box/quiver/markers; 230 Rust + 58 Flutter tests green, clippy/analyze clean | User (chat: امکانات اساسی متلب در نمودارهای ساده دوبعدی) |
 | 1.0 | 2026-11-18 | Step 3.5.1 hotfix: MATLAB command syntax (`hold on`/`grid on`/`axis equal`/`legend sin cos`) via general parser rule extending the format-short pattern; bare plot fns take MATLAB defaults (hold/grid toggle via new GridToggle op, figure, plot-empty); shadowing → MATLAB-like indexing error; user's 3-line recipe is a regression test | User (chat: recipe errored MC:E2002 — باید فیکس کنی) |
 | 1.0 | 2026-11-18 | Step 3.5.2 hotfix: fresh-axes on replacing data statements (stale legend bug — grid/hold persist, bi_semilog op order fixed) + editor-keyboard-on-info-close unfocus fixes; capability matrix doc 13 | User (chat: دو باگ گزارش‌شده + سؤال امکانات) |
+| 1.0 | 2026-11-18 | **Docs-only audit session (no code, per user instruction).** Governance change: new **Step 3.7 — Files & data I/O core** inserted before P3-b, pulled forward from 5.5 and bounded by explicit non-goals (.m save/open + run(); save/load MCWS v1; .mat v5 read subset; readmatrix/writematrix; who/whos/clear — no table type, no .mat writer, no Excel/HDF5, readtable deferred to E4 with an actionable pointer); old 3.6 (3D) renumbered **3.8**; DisplayName + auto-legend pinned explicitly into the contract-v3 shortlist. Deliverables: docs/14 (project audit — measured inventory, debts, path to v1.0), README rewritten (P0 claim fixed, badge/clone URLs corrected to Vahidrezaa), 00-INDEX gains the living-docs map, STATUS header/phase-map refreshed, doc 13 count fix (28 statement builtins) | User (chat: نوبت بدون کدنویسی + سه خواستهٔ .mat/.m · readtable · DisplayName + پیمان ضد-انحراف) |
