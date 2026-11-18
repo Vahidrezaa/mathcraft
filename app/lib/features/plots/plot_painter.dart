@@ -76,17 +76,22 @@ class PlotPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final theme = PlotTheme.of(brightness);
-    final layout = CellLayout.build(cell, size, viewport);
-    final rect = layout.plotRect;
 
     // پس‌زمینهٔ بوم (immersion — کل صفحه)
     canvas.drawRect(Offset.zero & size, Paint()..color = theme.bg);
 
+    // پلار باید قبل از CellLayout.build برگردد — سلول پلار axes ندارد و
+    // cell.axes! در build می‌ترکد (باگ رندر polarplot از 3.4 که هیچ رسپی
+    // دستگاهی آن را نپوشیده بود؛ golden polar_rose گام 3.6 این ترتیب را
+    // پین می‌کند).
     if (cell is PolarCellData) {
       _paintPolar(canvas, size, cell as PolarCellData, theme);
       _paintLegend(canvas, size, cell, theme);
       return;
     }
+
+    final layout = CellLayout.build(cell, size, viewport);
+    final rect = layout.plotRect;
 
     // شبکهٔ نقطه‌چین روی همهٔ تیک‌ها (فرعی‌های لگاریتمی هم) — سند ۰۶ §3
     if (cell.axes!.grid && cell.axes!.visible) {
