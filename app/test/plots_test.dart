@@ -295,6 +295,86 @@ void main() {
     });
   });
 
+  group('custom ticks (v2.1 — engine sends only user ticks)', () {
+    LineCellData cellWith(List<api.Tick> xt, List<api.Tick> yt) => LineCellData(
+          series: [
+            SeriesGeom(
+              id: 1,
+              x: const [0, 2, 4],
+              y: const [-1, 0, 1],
+              color: CdsColors.plotPalette[0],
+              width: 2,
+              dash: null,
+            ),
+          ],
+          axes: AxesData(
+            title: null,
+            xlabel: null,
+            ylabel: null,
+            grid: false,
+            xLimits: (0, 10),
+            yLimits: (-1, 1),
+            equalAspect: false,
+            logX: false,
+            logY: false,
+            visible: true,
+            xTicks: xt,
+            yTicks: yt,
+          ),
+        );
+
+    test('user ticks replace auto-generation, labels as given', () {
+      final cell = cellWith(
+        const [
+          api.Tick(position: 0, label: 'a'),
+          api.Tick(position: 2, label: 'b'),
+          api.Tick(position: 4, label: 'c'),
+        ],
+        const [],
+      );
+      final layout = CellLayout.build(
+          cell, const Size(320, 240), PlotViewport.home(cell.axes));
+      expect(
+        layout.xTickXs.map((t) => t.$1.label).toList(),
+        ['a', 'b', 'c'],
+      );
+      // y خودکار مانده (سفارشی خالی)
+      expect(layout.yTickYs, isNotEmpty);
+      expect(layout.yTickYs.first.$1.label, isNot('a'));
+    });
+
+    test('custom ticks filter to the viewport on zoom (no regeneration)', () {
+      final cell = cellWith(
+        const [
+          api.Tick(position: 0, label: 'a'),
+          api.Tick(position: 2, label: 'b'),
+          api.Tick(position: 4, label: 'c'),
+        ],
+        const [],
+      );
+      final zoomed = const PlotViewport(xMin: 0, xMax: 1, yMin: -1, yMax: 1);
+      final layout = CellLayout.build(cell, const Size(320, 240), zoomed);
+      // فقط تیک داخل دید — بازتولید نمی‌شود (پارتی متلب)
+      expect(layout.xTickXs.map((t) => t.$1.label).toList(), ['a']);
+    });
+
+    test('custom y ticks win and feed the left margin', () {
+      final cell = cellWith(
+        const [],
+        const [
+          api.Tick(position: 0, label: 'baseline'),
+          api.Tick(position: 1, label: 'top'),
+        ],
+      );
+      final layout = CellLayout.build(
+          cell, const Size(320, 240), PlotViewport.home(cell.axes));
+      expect(layout.yTickYs.map((t) => t.$1.label).toList(),
+          ['baseline', 'top']);
+      // حاشیهٔ چپ از «baseline» پهن‌تر از حالت خودکار است
+      expect(layout.plotRect.left, greaterThan(30));
+    });
+  });
+
   group('nice ticks (mirror of crates/mc-plot/src/ticks.rs)', () {
     test('nice_step follows 1-2-5 ladder', () {
       expect(niceStep(0.3), 0.5);

@@ -17,8 +17,10 @@
 use crate::histogram::HistNorm;
 use crate::lttb;
 use crate::palette;
-use crate::spec::{DashSpec, ErrBand, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair, StyleSpec};
-use crate::ticks::{self, Tick};
+use crate::spec::{
+    DashSpec, ErrBand, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair, StyleSpec,
+};
+use crate::ticks::Tick;
 use std::collections::BTreeMap;
 
 /// عرض خط پیش‌فرض (سند ۰۶ §3 — ۲dp).
@@ -43,12 +45,12 @@ pub enum CellSnapshot {
     Line {
         series: Vec<SeriesSnapshot>,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Scatter {
         series: Vec<SeriesSnapshot>,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Bar {
         series: Vec<SeriesSnapshot>,
@@ -56,7 +58,7 @@ pub enum CellSnapshot {
         horizontal: bool,
         stacked: bool,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Histogram {
         edges: Vec<f64>,
@@ -64,13 +66,13 @@ pub enum CellSnapshot {
         norm: HistNorm,
         style: StyleSnapshot,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Area {
         series: Vec<SeriesSnapshot>,
         baseline: f64,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Fill {
         series: Vec<SeriesSnapshot>,
@@ -78,12 +80,12 @@ pub enum CellSnapshot {
     },
     Polar {
         series: Vec<SeriesSnapshot>,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     ErrorBar {
         series: Vec<ErrSeriesSnapshot>,
         axes: AxesSnapshot,
-        legend: Option<Vec<String>>,
+        legend: Option<LegendSnapshot>,
     },
     Subplot {
         rows: u32,
@@ -120,6 +122,13 @@ pub struct ErrSeriesSnapshot {
     pub x_err: Option<ErrBand>,
     pub y_err: Option<ErrBand>,
     pub style: StyleSnapshot,
+}
+
+/// legend حل‌شدهٔ یک سلول — ورودی‌ها + موقعیت (نگاشت به `Legend` قرارداد).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegendSnapshot {
+    pub entries: Vec<String>,
+    pub position: LegendPos,
 }
 
 /// استایل حل‌شده — رنگ معنایی یا دقیق؛dash/marکر معین.
@@ -181,9 +190,16 @@ struct Figure {
 struct Cell {
     kind: CellKind,
     axes: AxesCfg,
-    legend: Option<Vec<String>>,
+    legend: Option<LegendCfg>,
     hold: bool,
     palette_cursor: u64,
+}
+
+/// legend سلول — ورودی‌ها + موقعیت (حالت داخلی).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegendCfg {
+    entries: Vec<String>,
+    position: LegendPos,
 }
 
 impl Default for Cell {
@@ -204,12 +220,17 @@ struct AxesCfg {
     xlabel: Option<String>,
     ylabel: Option<String>,
     grid: bool,
-    limits: Option<[f64; 4]>,
+    limits_x: Option<[f64; 2]>,
+    limits_y: Option<[f64; 2]>,
     equal: bool,
     visible: bool,
     tight: bool,
     log_x: bool,
     log_y: bool,
+    /// تیک‌های سفارشی x (xticks) — None = خودکار (در رندرر تولید می‌شود).
+    x_ticks_custom: Option<Vec<Tick>>,
+    /// تیک‌های سفارشی y (yticks).
+    y_ticks_custom: Option<Vec<Tick>>,
 }
 
 impl AxesCfg {
@@ -356,14 +377,16 @@ impl FigureState {
                 let built = self.build_all(series, DashSpec::Solid, None);
                 self.push_area(built, baseline);
             }
-            PlotOp::Fill { polys, style } => {
+            PlotOp::Fill { polys } => {
                 if !self.will_append(KindTag::Fills) {
                     self.reset_active_cursor();
                 }
-                let resolved = self.default_style(&style, DashSpec::Solid, None);
                 let mut built = Vec::with_capacity(polys.len());
-                for d in polys {
-                    built.push(self.built_series(d, resolved));
+                for p in polys {
+                    // هر چندضلعی استایل خودش را resolve می‌کند (رنگ غایب =
+                    // سیکل پالت — پارتی fill متلب)
+                    let resolved = self.default_style(&p.style, DashSpec::Solid, None);
+                    built.push(self.built_series(p.data, resolved));
                 }
                 self.push_fill(built);
             }
@@ -386,19 +409,43 @@ impl FigureState {
                 }
                 self.push_errors(built);
             }
-            PlotOp::Legend { entries } => self.active_cell_mut().legend = entries,
+            PlotOp::Legend { entries, position } => {
+                self.active_cell_mut().legend =
+                    entries.map(|entries| LegendCfg { entries, position });
+            }
             PlotOp::Title { text } => self.active_cell_mut().axes.title = Some(text),
             PlotOp::XLabel { text } => self.active_cell_mut().axes.xlabel = Some(text),
             PlotOp::YLabel { text } => self.active_cell_mut().axes.ylabel = Some(text),
             PlotOp::Grid { on } => self.active_cell_mut().axes.grid = on,
+            PlotOp::HoldToggle => {
+                let cell = self.active_cell_mut();
+                cell.hold = !cell.hold;
+            }
+            PlotOp::SetLog { x, y } => {
+                let axes = &mut self.active_cell_mut().axes;
+                axes.log_x = x;
+                axes.log_y = y;
+            }
+            PlotOp::XLim { limits } => self.active_cell_mut().axes.limits_x = limits,
+            PlotOp::YLim { limits } => self.active_cell_mut().axes.limits_y = limits,
+            PlotOp::XTicks { ticks } => {
+                // تیک خالی = بازگشت به خودکار (پارتی xticks([]) متلب)
+                let axes = &mut self.active_cell_mut().axes;
+                axes.x_ticks_custom = if ticks.is_empty() { None } else { Some(ticks) };
+            }
+            PlotOp::YTicks { ticks } => {
+                let axes = &mut self.active_cell_mut().axes;
+                axes.y_ticks_custom = if ticks.is_empty() { None } else { Some(ticks) };
+            }
             PlotOp::AxisLimits {
                 min_x,
                 max_x,
                 min_y,
                 max_y,
             } => {
-                self.active_cell_mut().axes.limits =
-                    Some([min_x, max_x.max(min_x), min_y, max_y.max(min_y)]);
+                let axes = &mut self.active_cell_mut().axes;
+                axes.limits_x = Some([min_x, max_x.max(min_x)]);
+                axes.limits_y = Some([min_y, max_y.max(min_y)]);
             }
             PlotOp::AxisEqual { on } => self.active_cell_mut().axes.equal = on,
             PlotOp::AxisVisible { on } => self.active_cell_mut().axes.visible = on,
@@ -552,6 +599,19 @@ impl FigureState {
                 | (CellKind::Polar { .. }, KindTag::Polar)
                 | (CellKind::Errors { .. }, KindTag::Errors)
         )
+    }
+
+    /// پرچم hold سلول فعال (برای تست‌ها).
+    pub fn active_cell_hold(&self) -> bool {
+        let Some(id) = self.active_id else {
+            return false;
+        };
+        self.figures
+            .iter()
+            .find(|f| f.id == id)
+            .and_then(|f| f.cells.get(&f.active_cell))
+            .map(|c| c.hold)
+            .unwrap_or(false)
     }
 
     /// ریست سیکل رنگ سلول فعال (شروع تازهٔ ترتیب رنگ — پارتی متلب).
@@ -784,7 +844,10 @@ impl FigureState {
     fn cell_snapshot(&self, f: &Figure, idx: u32) -> CellSnapshot {
         let empty = Cell::default();
         let cell = f.cells.get(&idx).unwrap_or(&empty);
-        let legend = cell.legend.clone();
+        let legend = cell.legend.clone().map(|l| LegendSnapshot {
+            entries: l.entries,
+            position: l.position,
+        });
         let axes = self.axes_snapshot(cell);
         match &cell.kind {
             CellKind::Empty => CellSnapshot::Line {
@@ -858,17 +921,19 @@ impl FigureState {
         }
     }
 
-    /// محورهای حل‌شده: حدود مؤثر (دستی > داده + حاشیه؛ tight حاشیه ندارد)
-    /// + تیک‌های 1-2-5 (لگاریتمی برای محور log).
+    /// محورهای حل‌شده: حدود مؤثر (دستی > داده + حاشیه؛ tight بدون حاشیه)
+    /// + تیک‌ها فقط وقتی سفارشی‌اند (v2.1: تولید خودکار در رندرر Dart است).
     fn axes_snapshot(&self, cell: &Cell) -> AxesSnapshot {
         let (mut mn_x, mut mx_x, mut mn_y, mut mx_y) = self.data_bounds(cell);
         if self.has_data(cell) {
             pad_bounds(&mut mn_x, &mut mx_x, cell.axes.tight);
             pad_bounds(&mut mn_y, &mut mx_y, cell.axes.tight);
         }
-        if let Some([a, b, c, d]) = cell.axes.limits {
+        if let Some([a, b]) = cell.axes.limits_x {
             mn_x = a;
             mx_x = b;
+        }
+        if let Some([c, d]) = cell.axes.limits_y {
             mn_y = c;
             mx_y = d;
         }
@@ -881,23 +946,17 @@ impl FigureState {
             mn_y = 1e-3;
             mx_y = mx_y.max(mn_y * 10.0);
         }
-        let (x_limits, x_ticks) = if cell.axes.log_x {
-            ([mn_x, mx_x], ticks::log_ticks(mn_x, mx_x))
-        } else {
-            ([mn_x, mx_x], ticks::axis_ticks(mn_x, mx_x, false))
-        };
-        let (y_limits, y_ticks) = if cell.axes.log_y {
-            ([mn_y, mx_y], ticks::log_ticks(mn_y, mx_y))
-        } else {
-            ([mn_y, mx_y], ticks::axis_ticks(mn_y, mx_y, false))
-        };
+        // v2.1: تیک خودکار ساطع نمی‌شود (Dart برای viewport جاری می‌سازد)؛
+        // فقط سفارشی‌های کاربر منتقل می‌شوند.
+        let x_ticks = cell.axes.x_ticks_custom.clone().unwrap_or_default();
+        let y_ticks = cell.axes.y_ticks_custom.clone().unwrap_or_default();
         AxesSnapshot {
             title: cell.axes.title.clone(),
             xlabel: cell.axes.xlabel.clone(),
             ylabel: cell.axes.ylabel.clone(),
             grid: cell.axes.grid,
-            x_limits,
-            y_limits,
+            x_limits: [mn_x, mx_x],
+            y_limits: [mn_y, mx_y],
             equal_aspect: cell.axes.equal,
             log_x: cell.axes.log_x,
             log_y: cell.axes.log_y,
@@ -1081,7 +1140,7 @@ fn pad_bounds(mn: &mut f64, mx: &mut f64, tight: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spec::{ErrorPair, PlotOp, SeriesData, SeriesPair, StyleSpec};
+    use crate::spec::{ErrorPair, FillPair, LegendPos, PlotOp, SeriesData, SeriesPair, StyleSpec};
 
     /// سری پیش‌فرض برای تست‌ها.
     fn sop(d: SeriesData) -> SeriesPair {
@@ -1121,8 +1180,9 @@ mod tests {
         assert_eq!(series[0].raw_len, 10);
         assert_eq!(series[0].style.color, ColorSnapshot::Palette(0));
         assert_eq!(series[0].style.dash, DashSpec::Solid);
-        assert!(axes.x_ticks.len() >= 2);
-        assert!(axes.y_ticks.iter().all(|t| t.label.is_some()));
+        // v2.1: تیک خودکار ساطع نمی‌شود — تولید در رندرر Dart است
+        assert!(axes.x_ticks.is_empty());
+        assert!(axes.y_ticks.is_empty());
     }
 
     #[test]
@@ -1281,26 +1341,34 @@ mod tests {
         assert_eq!(axes.x_limits, [-1.0, 1.0]);
         assert_eq!(axes.y_limits, [0.0, 2.0]);
         assert!(axes.equal_aspect);
-        assert_eq!(axes.x_ticks.first().map(|t| t.position), Some(-1.0));
     }
 
     #[test]
-    fn legend_op_sets_entries_on_active_cell() {
+    fn legend_op_sets_entries_and_position_on_active_cell() {
         let st = apply_all(vec![
             PlotOp::Line {
                 series: vec![sop(data(3))],
             },
             PlotOp::Legend {
                 entries: Some(vec!["sin".into(), "cos".into()]),
+                position: LegendPos::SouthWest,
             },
         ]);
         let CellSnapshot::Line { legend, .. } = &st.snapshots()[0].spec else {
             panic!()
         };
-        assert_eq!(
-            legend.as_deref(),
-            Some(&["sin".to_owned(), "cos".to_owned()][..])
-        );
+        let l = legend.as_ref().expect("legend set");
+        assert_eq!(l.entries, vec!["sin".to_owned(), "cos".to_owned()]);
+        assert_eq!(l.position, LegendPos::SouthWest);
+        // پیش‌فرض موقعیت = Best
+        let st = apply_all(vec![PlotOp::Legend {
+            entries: Some(vec!["a".into()]),
+            position: LegendPos::Best,
+        }]);
+        let CellSnapshot::Line { legend, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(legend.as_ref().unwrap().position, LegendPos::Best);
     }
 
     #[test]
@@ -1438,10 +1506,24 @@ mod tests {
     #[test]
     fn fill_and_polar_and_area_shapes() {
         let st = apply_all(vec![PlotOp::Fill {
-            polys: vec![data(4)],
-            style: StyleSpec::default(),
+            polys: vec![
+                FillPair {
+                    data: data(4),
+                    style: StyleSpec::default(),
+                },
+                FillPair {
+                    data: data(4),
+                    style: StyleSpec::default(),
+                },
+            ],
         }]);
-        assert!(matches!(st.snapshots()[0].spec, CellSnapshot::Fill { .. }));
+        // هر چندضلعی رنگ خودش را از سیکل می‌گیرد (پارتی fill متلب)
+        let CellSnapshot::Fill { series, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(series.len(), 2);
+        assert_eq!(series[0].style.color, ColorSnapshot::Palette(0));
+        assert_eq!(series[1].style.color, ColorSnapshot::Palette(1));
         let st = apply_all(vec![PlotOp::Polar {
             series: vec![sop(data(4))],
         }]);
@@ -1569,7 +1651,6 @@ mod tests {
             },
             PlotOp::AxisTight,
         ]);
-        // log بدون op مستقیم وجود ندارد (semilog بعداً) — نرمال: تیک خطی
         let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
             panic!()
         };
@@ -1577,5 +1658,131 @@ mod tests {
         // tight: بدون حاشیه
         assert!((axes.x_limits[0] - 1.0).abs() < 1e-9);
         assert!((axes.x_limits[1] - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn set_log_flags_flow_and_clamp_positive() {
+        // semilogx: y خطی می‌ماند؛ x لگاریتمی و حدود نامثبت کف می‌خورد
+        let st = apply_all(vec![
+            PlotOp::SetLog { x: true, y: false },
+            PlotOp::Line {
+                series: vec![sop(SeriesData {
+                    x: vec![-5.0, 1.0, 50.0],
+                    y: vec![1.0, 2.0, 3.0],
+                })],
+            },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert!(axes.log_x);
+        assert!(!axes.log_y);
+        assert!(axes.x_limits[0] > 0.0, "log x must be positive: {:?}", axes);
+        // loglog: هر دو
+        let st = apply_all(vec![
+            PlotOp::SetLog { x: true, y: true },
+            PlotOp::Line {
+                series: vec![sop(SeriesData {
+                    x: vec![1.0, 10.0],
+                    y: vec![1.0, 10.0],
+                })],
+            },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert!(axes.log_x && axes.log_y);
+    }
+
+    #[test]
+    fn xlim_sets_only_x_and_auto_clears() {
+        // xlim دستی: y خودکار می‌ماند (داده + حاشیه)
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(10))],
+            },
+            PlotOp::XLim {
+                limits: Some([0.0, 1.0]),
+            },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(axes.x_limits, [0.0, 1.0]);
+        // y خودکار: دادهٔ sin (بیشینه ≈0.783) + حاشیه ۵٪
+        assert!(axes.y_limits[1] > 0.79, "y خودکار: {:?}", axes.y_limits);
+        // xlim('auto'): بازگشت به خودکار
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(10))],
+            },
+            PlotOp::XLim {
+                limits: Some([0.0, 1.0]),
+            },
+            PlotOp::XLim { limits: None },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert!(axes.x_limits[0] < 0.0, "auto باید حاشیه بدهد: {:?}", axes);
+    }
+
+    #[test]
+    fn hold_toggle_flips_the_flag() {
+        let mut st = FigureState::new();
+        st.apply(PlotOp::HoldToggle);
+        assert!(st.active_cell_hold());
+        st.apply(PlotOp::HoldToggle);
+        assert!(!st.active_cell_hold());
+        // toggle بعد از جایگزینی: سری دوم باید الحاق شود
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
+            PlotOp::HoldToggle,
+            PlotOp::Line {
+                series: vec![sop(data(3))],
+            },
+        ]);
+        let CellSnapshot::Line { series, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(series.len(), 2);
+    }
+
+    #[test]
+    fn custom_ticks_flow_and_empty_clears_to_auto() {
+        let ticks = vec![
+            Tick {
+                position: 0.0,
+                label: Some("a".into()),
+            },
+            Tick {
+                position: 2.0,
+                label: Some("b".into()),
+            },
+        ];
+        let st = apply_all(vec![
+            PlotOp::Line {
+                series: vec![sop(data(4))],
+            },
+            PlotOp::XTicks {
+                ticks: ticks.clone(),
+            },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(axes.x_ticks, ticks);
+        assert!(axes.y_ticks.is_empty());
+        // xticks([]) = پاک‌کردن به خودکار
+        let st = apply_all(vec![
+            PlotOp::XTicks { ticks },
+            PlotOp::XTicks { ticks: Vec::new() },
+        ]);
+        let CellSnapshot::Line { axes, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert!(axes.x_ticks.is_empty());
     }
 }

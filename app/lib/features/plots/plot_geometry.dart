@@ -579,9 +579,20 @@ class CellLayout {
         viewport: viewport,
       );
     }
-    // گذر ۱: تیک y از viewport (مستقل از rect) → حاشیهٔ چپ از برچسب‌ها
-    final yTicks = axisTicks(viewport.yMin, viewport.yMax, axes.logY,
-        tickCountFor(size.height - 44));
+    // گذر ۱: تیک y از viewport (مستقل از rect) → حاشیهٔ چپ از برچسب‌ها.
+    // تیک سفارشی کاربر (v2.1: موتور فقط سفارشی‌ها را می‌فرستد) بر خودکار
+    // می‌چربد و به دید جاری فیلتر می‌شود (پارتی متلب: زوم تیک دستی را
+    // بازتولید نمی‌کند).
+    List<api.Tick> pickY() {
+      final custom = axes.yTicks
+          .where((t) => t.position >= viewport.yMin && t.position <= viewport.yMax)
+          .toList(growable: false);
+      if (custom.isNotEmpty) return custom;
+      return axisTicks(viewport.yMin, viewport.yMax, axes.logY,
+          tickCountFor(size.height - 44));
+    }
+
+    final yTicks = pickY();
     var left = 8.0;
     for (final t in yTicks) {
       final label = t.label;
@@ -599,8 +610,16 @@ class CellLayout {
       math.max(10, size.height - top - bottom),
     );
     // گذر ۲: تیک x با عرض واقعی rect
-    final xTicks = axisTicks(
-        viewport.xMin, viewport.xMax, axes.logX, tickCountFor(rect.width));
+    List<api.Tick> pickX() {
+      final custom = axes.xTicks
+          .where((t) => t.position >= viewport.xMin && t.position <= viewport.xMax)
+          .toList(growable: false);
+      if (custom.isNotEmpty) return custom;
+      return axisTicks(
+          viewport.xMin, viewport.xMax, axes.logX, tickCountFor(rect.width));
+    }
+
+    final xTicks = pickX();
 
     final probe = CellLayout(
       plotRect: rect,

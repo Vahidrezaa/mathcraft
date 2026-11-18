@@ -7,7 +7,9 @@
 
 use mc_interp::{eval_program, Environment};
 use mc_parser::parse;
-use mc_plot::spec::{DashSpec, HistNorm, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair};
+use mc_plot::spec::{
+    DashSpec, FillPair, HistNorm, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair,
+};
 
 fn run(env: &mut Environment, src: &str) -> mc_interp::EvalOutcome {
     match parse(src) {
@@ -264,20 +266,30 @@ fn area_carries_zero_baseline() {
 }
 
 #[test]
-fn fill_pairs_share_one_style() {
+fn fill_pairs_with_trailing_color() {
     let mut env = Environment::new();
     let out = run(&mut env, "fill([0 1 1], [0 0 1], [2 3 2], [1 1 0], 'r')");
     assert!(out.error.is_none(), "{:?}", out.error);
     assert_eq!(out.plot_ops.len(), 1);
     match &out.plot_ops[0] {
-        PlotOp::Fill { polys, style } => {
+        PlotOp::Fill { polys } => {
             assert_eq!(polys.len(), 2);
-            assert_eq!(style.color, Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 }));
+            // رنگ فقط چندضلعی دوم را می‌گیرد؛ اولی پیش‌فرض (سیکل پالت)
+            assert!(polys[0].style.color.is_none());
+            assert_eq!(
+                polys[1].style.color,
+                Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 })
+            );
         }
         other => panic!("expected Fill, got {other:?}"),
     }
-    // تعداد فرد = خطا
+    // رنگ سه‌تایی نامعتبر (طول ۲) = خطا
     assert!(err_of("fill([0 1], [0 1], [5 6])")
+        .message_en
+        .contains("color"));
+    // یک عدد تنها / سه‌تایی عددی = خطای روشن
+    assert!(err_of("fill([0 1 2])").message_en.contains("pairs"));
+    assert!(err_of("fill([0 1], [0 1], [1 0 0])")
         .message_en
         .contains("pairs"));
     // زوج ناهم‌طول = خطا
@@ -380,13 +392,14 @@ fn subplot_validates_grid_and_index() {
 #[test]
 fn legend_entries_and_off() {
     match first_op("legend('sin', 'cos')") {
-        PlotOp::Legend { entries } => {
+        PlotOp::Legend { entries, position } => {
             assert_eq!(entries, Some(vec!["sin".to_owned(), "cos".to_owned()]));
+            assert_eq!(position, LegendPos::Best);
         }
         other => panic!("expected Legend, got {other:?}"),
     }
     match first_op("legend('off')") {
-        PlotOp::Legend { entries } => assert!(entries.is_none()),
+        PlotOp::Legend { entries, .. } => assert!(entries.is_none()),
         other => panic!("expected Legend, got {other:?}"),
     }
     assert!(err_of("legend()").message_en.contains("labels"));
@@ -413,7 +426,14 @@ fn axis_modes_and_limits() {
         first_op("axis('off')"),
         PlotOp::AxisVisible { on: false }
     ));
-    assert!(err_of("axis('auto')").message_en.contains("auto"));
+    // axis('auto') از 3.5: پاک‌شدن حدود دستی هر دو محور
+    {
+        let mut env = Environment::new();
+        let out = run(&mut env, "axis('auto')");
+        assert!(out.error.is_none(), "{:?}", out.error);
+        assert!(matches!(out.plot_ops[0], PlotOp::XLim { limits: None }));
+        assert!(matches!(out.plot_ops[1], PlotOp::YLim { limits: None }));
+    }
     assert!(err_of("axis([1 0 0 1])").message_en.contains("xmin<xmax"));
     assert!(err_of("axis([0 1 2])").message_en.contains("ymin"));
 }
@@ -428,7 +448,8 @@ fn grid_and_hold_on_off() {
     assert!(err_of("grid('maybe')").message_en.contains("'on' or 'off'"));
     assert!(matches!(first_op("hold('on')"), PlotOp::Hold { on: true }));
     // toggle بدون آرگومان پشتیبانی نمی‌شود (MATLAB-lite)
-    assert!(err_of("hold()").message_en.contains("one argument"));
+    // hold بدون آرگومان = toggle (از 3.5 — پارتی متلب)
+    assert!(matches!(first_op("hold()"), PlotOp::HoldToggle));
 }
 
 #[test]
@@ -540,4 +561,275 @@ fn plot_ops_field_exists_and_defaults_empty() {
     let out = run(&mut env, "42");
     assert!(out.plot_ops.is_empty());
     let _pairs: Vec<SeriesPair> = Vec::new(); // نوع عمومی است
+}
+
+// ---------- گسترش 3.5: پوشش امکانات پایه‌ای ۲بعدی متلب ----------
+
+#[test]
+fn plot_multi_group_with_per_group_linespec() {
+    let mut env = Environment::new();
+    let out = run(&mut env, "plot([1 2], [1 4], 'r--', [3 4], [9 6], 'b:o')");
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert_eq!(out.plot_ops.len(), 1);
+    match &out.plot_ops[0] {
+        PlotOp::Line { series } => {
+            assert_eq!(series.len(), 2);
+            // گروه ۱: قرمز خط‌چین
+            assert_eq!(
+                series[0].style.color,
+                Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 })
+            );
+            assert_eq!(series[0].style.dash, Some(DashSpec::Dashed));
+            // گروه ۲: آبی نقطه‌چین با مارکر دایره (فقط مارکر → خط نامرئی)
+            assert_eq!(
+                series[1].style.color,
+                Some(PlotColorSpec::Rgb { r: 0, g: 0, b: 255 })
+            );
+            assert_eq!(series[1].style.dash, Some(DashSpec::Dotted));
+            assert_eq!(series[1].style.marker, Some(MarkerSpec::Circle));
+            assert_eq!(series[1].data.x, vec![3.0, 4.0]);
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+}
+
+#[test]
+fn plot_global_name_values_apply_to_all_groups() {
+    let mut env = Environment::new();
+    let out = run(
+        &mut env,
+        "plot([1 2], [1 4], 'r', [3 4], [9 6], 'LineWidth', 3)",
+    );
+    assert!(out.error.is_none(), "{:?}", out.error);
+    match &out.plot_ops[0] {
+        PlotOp::Line { series } => {
+            assert_eq!(series.len(), 2);
+            assert_eq!(series[0].style.width, Some(3.0));
+            assert_eq!(series[1].style.width, Some(3.0));
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+}
+
+#[test]
+fn plot_name_values_marker_and_linestyle() {
+    match first_op("plot([1 2 3], [1 2 1], 'LineStyle', '--', 'Marker', 's')") {
+        PlotOp::Line { series } => {
+            assert_eq!(series[0].style.dash, Some(DashSpec::Dashed));
+            assert_eq!(series[0].style.marker, Some(MarkerSpec::Square));
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+    // MarkerSize صادقانه خطا می‌دهد (قرارداد v3)
+    let msg = err_of("plot([1 2], [1 2], 'MarkerSize', 8)").message_en;
+    assert!(msg.contains("MarkerSize"), "{msg}");
+}
+
+#[test]
+fn semilog_family_sets_log_flags() {
+    match (
+        first_op("semilogx([1 10 100], [1 2 3])"),
+        first_op("semilogy([1 2 3], [1 10 100])"),
+        first_op("loglog([1 10], [1 10])"),
+    ) {
+        (
+            PlotOp::SetLog { x, y },
+            PlotOp::SetLog { x: x2, y: y2 },
+            PlotOp::SetLog { x: x3, y: y3 },
+        ) => {
+            assert!((x, y) == (true, false));
+            assert!((x2, y2) == (false, true));
+            assert!((x3, y3) == (true, true));
+        }
+        _ => panic!("expected SetLog ops"),
+    }
+    // semilogx با چند گروه هم کار می‌کند
+    let mut env = Environment::new();
+    let out = run(&mut env, "semilogx([1 10], [1 2], 'r', [1 10], [2 1], 'b')");
+    assert!(out.error.is_none());
+    assert!(matches!(out.plot_ops[1], PlotOp::Line { ref series } if series.len() == 2));
+}
+
+#[test]
+fn stem_synthesizes_risers_and_heads() {
+    match first_op("stem([1 2 3], [2 -1 4], 'r')") {
+        PlotOp::Line { series } => {
+            assert_eq!(series.len(), 2);
+            // رایزرها: زوج [x,0]→[x,y] با گپ NaN (مقایسهٔ NaN-aware)
+            let nan_eq = |a: &Vec<f64>, b: &Vec<f64>| {
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b)
+                        .all(|(p, q)| p == q || (p.is_nan() && q.is_nan()))
+            };
+            assert!(nan_eq(
+                &series[0].data.x,
+                &vec![1.0, 1.0, f64::NAN, 2.0, 2.0, f64::NAN, 3.0, 3.0, f64::NAN]
+            ));
+            assert!(nan_eq(
+                &series[0].data.y,
+                &vec![0.0, 2.0, f64::NAN, 0.0, -1.0, f64::NAN, 0.0, 4.0, f64::NAN]
+            ));
+            assert_eq!(series[0].style.marker, None);
+            assert_eq!(
+                series[0].style.color,
+                Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 })
+            );
+            // سرها: فقط مارکر (خط نامرئی) با دایرهٔ پیش‌فرض
+            assert_eq!(series[1].style.dash, Some(DashSpec::Invisible));
+            assert_eq!(series[1].style.marker, Some(MarkerSpec::Circle));
+            assert_eq!(series[1].data.y, vec![2.0, -1.0, 4.0]);
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+    // 'filled' پذیرفته می‌شود (no-op — مارکر پر در قرارداد v3)
+    {
+        let mut env = Environment::new();
+        let out = run(&mut env, "stem([1], [2], 'filled')");
+        assert!(out.error.is_none(), "{:?}", out.error);
+    }
+}
+
+#[test]
+fn stairs_synthesizes_step_polyline() {
+    match first_op("stairs([1 2 3], [5 6 7])") {
+        PlotOp::Line { series } => {
+            assert_eq!(series.len(), 1);
+            assert_eq!(series[0].data.x, vec![1.0, 2.0, 2.0, 3.0, 3.0]);
+            assert_eq!(series[0].data.y, vec![5.0, 5.0, 6.0, 6.0, 7.0]);
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
+    // فقط y هم مجاز (x = 1..n)
+    match first_op("stairs([7 8 9])") {
+        PlotOp::Line { series } => assert_eq!(series[0].data.x, vec![1.0, 2.0, 2.0, 3.0, 3.0]),
+        other => panic!("expected Line, got {other:?}"),
+    }
+}
+
+#[test]
+fn barh_is_horizontal_bar() {
+    match first_op("barh([3 1 2])") {
+        PlotOp::Bar {
+            horizontal, series, ..
+        } => {
+            assert!(horizontal);
+            assert_eq!(series[0].data.y, vec![3.0, 1.0, 2.0]);
+        }
+        other => panic!("expected Bar, got {other:?}"),
+    }
+}
+
+#[test]
+fn xlim_ylim_vector_and_auto() {
+    match first_op("xlim([0 5])") {
+        PlotOp::XLim { limits } => assert_eq!(limits, Some([0.0, 5.0])),
+        other => panic!("expected XLim, got {other:?}"),
+    }
+    match first_op("ylim('auto')") {
+        PlotOp::YLim { limits } => assert!(limits.is_none()),
+        other => panic!("expected YLim, got {other:?}"),
+    }
+    // جفت نامعتبر رد می‌شود
+    assert!(err_of("xlim([5 0])").message_en.contains("increasing"));
+    assert!(err_of("xlim([0])").message_en.contains("increasing"));
+}
+
+#[test]
+fn axis_auto_clears_both() {
+    let mut env = Environment::new();
+    let out = run(&mut env, "axis('auto')");
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert!(matches!(out.plot_ops[0], PlotOp::XLim { limits: None }));
+    assert!(matches!(out.plot_ops[1], PlotOp::YLim { limits: None }));
+}
+
+#[test]
+fn xticks_positions_and_labels() {
+    match first_op("xticks([0 2 4])") {
+        PlotOp::XTicks { ticks } => {
+            assert_eq!(ticks.len(), 3);
+            assert_eq!(ticks[0].position, 0.0);
+            assert_eq!(ticks[0].label.as_deref(), Some("0"));
+            assert_eq!(ticks[2].label.as_deref(), Some("4"));
+        }
+        other => panic!("expected XTicks, got {other:?}"),
+    }
+    // برچسب‌های سفارشی
+    match first_op("yticks([1 2], 'lo', 'hi')") {
+        PlotOp::YTicks { ticks } => {
+            assert_eq!(ticks[0].label.as_deref(), Some("lo"));
+            assert_eq!(ticks[1].label.as_deref(), Some("hi"));
+        }
+        other => panic!("expected YTicks, got {other:?}"),
+    }
+    // ناهم‌خوانی تعداد = خطا
+    assert!(err_of("xticks([0 1], 'only-one')")
+        .message_en
+        .contains("counts must match"));
+    // خالی = خودکار
+    match first_op("xticks([])") {
+        PlotOp::XTicks { ticks } => assert!(ticks.is_empty()),
+        other => panic!("expected XTicks, got {other:?}"),
+    }
+}
+
+#[test]
+fn xticklabels_standalone_gives_actionable_error() {
+    let msg = err_of("xticklabels('a')").message_en;
+    assert!(msg.contains("xticks"), "{msg}");
+}
+
+#[test]
+fn legend_location_name_value() {
+    match first_op("legend('a', 'b', 'Location', 'SouthWest')") {
+        PlotOp::Legend { entries, position } => {
+            assert_eq!(entries, Some(vec!["a".to_owned(), "b".to_owned()]));
+            assert_eq!(position, LegendPos::SouthWest);
+        }
+        other => panic!("expected Legend, got {other:?}"),
+    }
+    // case-insensitive
+    match first_op("legend('a', 'Location', 'northeast')") {
+        PlotOp::Legend { position, .. } => assert_eq!(position, LegendPos::NorthEast),
+        other => panic!("expected Legend, got {other:?}"),
+    }
+    assert!(err_of("legend('a', 'Location', 'middle')")
+        .message_en
+        .contains("location"));
+}
+
+#[test]
+fn hold_without_argument_toggles() {
+    match first_op("hold()") {
+        PlotOp::HoldToggle => {}
+        other => panic!("expected HoldToggle, got {other:?}"),
+    }
+    // on/off صریح همان قبلی (فرم فراخوانی — سینتکس فرمانِ بدون پرانتز نیست)
+    match first_op("hold('on')") {
+        PlotOp::Hold { on } => assert!(on),
+        other => panic!("expected Hold, got {other:?}"),
+    }
+}
+
+#[test]
+fn fill_pair_colors_per_polygon() {
+    let mut env = Environment::new();
+    let out = run(&mut env, "fill([0 1], [0 1], 'r', [2 3], [0 1], 'green')");
+    assert!(out.error.is_none(), "{:?}", out.error);
+    match &out.plot_ops[0] {
+        PlotOp::Fill { polys } => {
+            assert_eq!(polys.len(), 2);
+            assert_eq!(
+                polys[0].style.color,
+                Some(PlotColorSpec::Rgb { r: 255, g: 0, b: 0 })
+            );
+            assert_eq!(
+                polys[1].style.color,
+                Some(PlotColorSpec::Rgb { r: 0, g: 255, b: 0 })
+            );
+            let _: Vec<&FillPair> = polys.iter().collect();
+        }
+        other => panic!("expected Fill, got {other:?}"),
+    }
 }

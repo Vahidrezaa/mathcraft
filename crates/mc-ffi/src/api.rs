@@ -1050,10 +1050,20 @@ fn map_hist_norm(n: CoreHistNorm) -> HistNorm {
     }
 }
 
-fn map_legend(entries: Vec<String>) -> Legend {
+fn map_legend(l: mc_plot::figure::LegendSnapshot) -> Legend {
     Legend {
-        entries,
-        position: LegendPosition::Best,
+        entries: l.entries,
+        position: match l.position {
+            mc_plot::spec::LegendPos::Best => LegendPosition::Best,
+            mc_plot::spec::LegendPos::North => LegendPosition::North,
+            mc_plot::spec::LegendPos::South => LegendPosition::South,
+            mc_plot::spec::LegendPos::East => LegendPosition::East,
+            mc_plot::spec::LegendPos::West => LegendPosition::West,
+            mc_plot::spec::LegendPos::NorthEast => LegendPosition::NorthEast,
+            mc_plot::spec::LegendPos::NorthWest => LegendPosition::NorthWest,
+            mc_plot::spec::LegendPos::SouthEast => LegendPosition::SouthEast,
+            mc_plot::spec::LegendPos::SouthWest => LegendPosition::SouthWest,
+        },
     }
 }
 
@@ -1576,8 +1586,10 @@ mod tests {
                 assert_eq!(series[0].x.len(), 63); // زیر آستانهٔ LTTB — دست‌نخورده
                 assert_eq!(series[0].style.color, PlotColor::Palette(0));
                 assert_eq!(series[0].style.dash, DashStyle::Solid);
-                assert!(!axes.x_ticks.is_empty());
-                assert!(axes.x_ticks.iter().all(|t| t.label.is_some()));
+                // v2.1: تیک خودکار ساطع نمی‌شود (تولید در رندرر Dart)؛
+                // فقط سفارشیِ کاربر منتقل می‌شود
+                assert!(axes.x_ticks.is_empty());
+                assert!(axes.y_ticks.is_empty());
                 assert!(axes.visible); // پیش‌فرض
             }
             other => panic!("expected Line2D, got {other:?}"),

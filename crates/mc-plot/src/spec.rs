@@ -7,6 +7,7 @@
 //! نسخهٔ قرارداد فقط روی DTO انتقالی (mc-ffi) است.
 
 pub use crate::histogram::HistNorm;
+use crate::ticks::Tick;
 
 /// یک سری داده: دامنه (x) و مقدار (y) — معنا بسته به نوع عملیات
 /// (پلار: x = θ رادیان، y = شعاع؛ bar: x = مراکز میله).
@@ -83,6 +84,28 @@ pub struct ErrorPair {
     pub style: StyleSpec,
 }
 
+/// یک چندضلعی fill با استایل خودش — پارتی متلب: `fill(x1,y1,c1,x2,y2,c2)`
+/// هر چندضلعی رنگ خودش را می‌گیرد (سیکل پالت وقتی رنگ غایب است).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FillPair {
+    pub data: SeriesData,
+    pub style: StyleSpec,
+}
+
+/// موقعیت legend (نگاشت مکانیکی به `LegendPosition` قرارداد در mc-ffi).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegendPos {
+    Best,
+    North,
+    South,
+    East,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
+}
+
 /// یک عملیات رسم — کاهش‌پذیر روی [`crate::figure::FigureState`].
 /// هر عملیات داده‌ای، **همهٔ سری‌های همان فراخوانی** را یکجا حمل می‌کند
 /// (مثلاً `plot(X, Y_matrix)` = یک Line با چند سری) تا تصمیم جایگزینی/الحاق
@@ -131,10 +154,10 @@ pub enum PlotOp {
         series: Vec<SeriesPair>,
         baseline: f64,
     },
-    /// `fill` — چندضلعی‌های بستهٔ یک فراخوانی (استایل مشترک؛ وجه از رنگ).
+    /// `fill` — چندضلعی‌های بستهٔ یک فراخوانی، هر یک با استایل خودش
+    /// (رنگ وجه؛ رنگ غایب = سیکل پالت).
     Fill {
-        polys: Vec<SeriesData>,
-        style: StyleSpec,
+        polys: Vec<FillPair>,
     },
     /// `polarplot` — x = θ (رادیان)، y = شعاع.
     Polar {
@@ -144,9 +167,11 @@ pub enum PlotOp {
     ErrorBar {
         series: Vec<ErrorPair>,
     },
-    /// `legend('a','b')` / `legend off` — None = خاموش.
+    /// `legend('a','b',...)` / `legend off` — None = خاموش.
     Legend {
         entries: Option<Vec<String>>,
+        /// `legend(..., 'Location', 'SouthWest')` — پیش‌فرض Best.
+        position: LegendPos,
     },
     /// `title` / `xlabel` / `ylabel`.
     Title {
@@ -162,12 +187,36 @@ pub enum PlotOp {
     Grid {
         on: bool,
     },
-    /// `axis([a b c d])`.
+    /// `axis([a b c d])` — هر دو محور.
     AxisLimits {
         min_x: f64,
         max_x: f64,
         min_y: f64,
         max_y: f64,
+    },
+    /// `xlim([a b])` / `xlim('auto')` — None = بازگشت به خودکار.
+    XLim {
+        limits: Option<[f64; 2]>,
+    },
+    /// `ylim([a b])` / `ylim('auto')`.
+    YLim {
+        limits: Option<[f64; 2]>,
+    },
+    /// `semilogx/semilogy/loglog` — پرچم محور لگاریتمی.
+    SetLog {
+        x: bool,
+        y: bool,
+    },
+    /// `hold` بدون آرگومان — معکوس پرچم سلول فعال (پارتی متلب).
+    HoldToggle,
+    /// `xticks(v)` / `xticks(v, 'a', 'b', ...)` — تیک‌های سفارشی x؛
+    /// خالی = پاک‌شدن به خودکار.
+    XTicks {
+        ticks: Vec<Tick>,
+    },
+    /// `yticks(...)` — مشابه XTicks.
+    YTicks {
+        ticks: Vec<Tick>,
     },
     /// `axis equal`.
     AxisEqual {
