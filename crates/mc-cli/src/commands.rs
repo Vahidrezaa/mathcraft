@@ -369,7 +369,9 @@ mod tests {
     fn banner_contains_version_and_contract() {
         let b = banner(Lang::En);
         assert!(b.contains(crate::VERSION));
-        assert!(b.contains("contract v2"));
+        // از خودِ ثابت قرارداد بخوان — با بامپ‌های بعدی (v3 در گام 3.7)
+        // همین تست سبز می‌ماند (خطای CI#33 همان literal قدیمی بود)
+        assert!(b.contains(&format!("contract v{}", mc_ffi::api::API_CONTRACT_VERSION)));
     }
 
     #[test]

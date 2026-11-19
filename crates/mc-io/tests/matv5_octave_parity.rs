@@ -6,6 +6,10 @@
 //! محلی بدون Octave، تست با پیام skip می‌گذرد — فیکسچرهای کامیت‌شدهٔ scipy
 //! پوشش محلی را می‌دهند (پروونانس: `tests/fixtures/README.md`).
 //!
+//! **اجرای محلی بدون اکتاو (CI#33 درس):** `scripts/gen_octave_sim.py`
+//! نویسندهٔ اکتاو را از روی سورس واقعی‌اش (ls-mat5.cc) بازسازی می‌کند —
+//! `python3 scripts/gen_octave_sim.py /tmp/oct-sim && MC_OCTAVE_FIXTURES=/tmp/oct-sim cargo test -p mc-io --test matv5_octave_parity`
+//!
 //! برابری **ارزشی** است نه بایتی (هدر متنی نویسنده‌ها فرق دارد؛ اسپک نه).
 
 use std::env;
@@ -64,13 +68,15 @@ fn octave_written_files_parse_identically() {
     assert_eq!(dbl(st.get("a").expect("a")), vec![1.25]);
     assert_eq!(st.get("b"), Some(&Value::Char("txt".to_owned())));
 
-    // الگوهای ویژه — بیت‌ها زنده
+    // الگوهای ویژه — z = [NaN, Inf; -Inf, -0] → ستونی: [NaN, -Inf, Inf, -0].
+    // علامتِ صفر وابسته به نویسنده است (پارسر اکتاو ممکن است +0 بنویسد) —
+    // برابری مقدار؛ بیت‌دقیقیِ علامت صفر پیمان قالب خودمان MCWS است.
     let vars = load("nan_inf.mat");
     let m = dbl(&vars[0].1);
     assert!(m[0].is_nan());
-    assert_eq!(m[1], f64::INFINITY);
-    assert_eq!(m[2], f64::NEG_INFINITY);
-    assert_eq!(m[3].to_bits(), (-0.0f64).to_bits());
+    assert_eq!(m[1], f64::NEG_INFINITY);
+    assert_eq!(m[2], f64::INFINITY);
+    assert_eq!(m[3], 0.0);
 
     // کلاس‌های عددی → cast به double؛ logical → دلتای مستند
     let vars = load("int32_col.mat");
