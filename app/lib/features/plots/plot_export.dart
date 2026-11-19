@@ -5,6 +5,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../../core/io/mathcraft_dir.dart';
+import '../../src/rust/api.dart' as api;
 import 'package:share_plus/share_plus.dart';
 
 /// خروجی PNG و اشتراک — سند ۰۶ §7.3 (نوار شناور: ذخیره PNG، اشتراک).
@@ -49,4 +52,16 @@ Future<void> sharePng(Uint8List png, String fileName) async {
       name: fileName,
     ),
   ]);
+}
+
+
+/// خروجی PDF برداری (گام 3.8 — سند ۰۴ §8): رندر همان شکل در **موتور**
+/// (mc-plot::pdf) — نه اسکرین‌شات؛ ذخیره در سندباکس MathCraft (مثل
+/// exportgraphics). شکل نبود = خطای صریح.
+Future<String> exportFigurePdf(BigInt figureId, String fileName) async {
+  final bytes = await api.exportFigurePdf(figureId: figureId);
+  if (bytes.isEmpty) {
+    throw StateError('figure $figureId not found for PDF export');
+  }
+  return MathCraftDir.writeOutput(fileName, bytes);
 }

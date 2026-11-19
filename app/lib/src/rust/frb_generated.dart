@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -68843805;
+  int get rustContentHash => -354250382;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -104,6 +104,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<EvalResult> crateApiEvaluateLine({required String code});
 
+  Future<Uint8List> crateApiExportFigurePdf({required BigInt figureId});
+
   Future<List<PlotFigure>> crateApiGetPlots();
 
   Future<HistNorm> crateApiHistNormDefault();
@@ -111,6 +113,8 @@ abstract class RustLibApi extends BaseApi {
   Future<JobStatus> crateApiJobStatusDefault();
 
   Future<LegendPosition> crateApiLegendPositionDefault();
+
+  Future<Limits> crateApiLimitsDefault();
 
   Future<List<MFunctionSummary>> crateApiMFunctions();
 
@@ -131,6 +135,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<bool> crateApiVfsRegister(
       {required String name, required List<int> data});
+
+  Future<View3D> crateApiView3DDefault();
 
   Future<String?> crateApiWhichName({required String name});
 
@@ -426,12 +432,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiExportFigurePdf({required BigInt figureId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_u_64(figureId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 13, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_prim_u_8_strict,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiExportFigurePdfConstMeta,
+      argValues: [figureId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiExportFigurePdfConstMeta => const TaskConstMeta(
+        debugName: "export_figure_pdf",
+        argNames: ["figureId"],
+      );
+
+  @override
   Future<List<PlotFigure>> crateApiGetPlots() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 13, port: port_);
+            funcId: 14, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_plot_figure,
@@ -454,7 +484,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 14, port: port_);
+            funcId: 15, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_hist_norm,
@@ -477,7 +507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 15, port: port_);
+            funcId: 16, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_job_status,
@@ -500,7 +530,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 16, port: port_);
+            funcId: 17, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_legend_position,
@@ -519,12 +549,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Limits> crateApiLimitsDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 18, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_limits,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiLimitsDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiLimitsDefaultConstMeta => const TaskConstMeta(
+        debugName: "limits_default",
+        argNames: [],
+      );
+
+  @override
   Future<List<MFunctionSummary>> crateApiMFunctions() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 17, port: port_);
+            funcId: 19, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_m_function_summary,
@@ -547,7 +600,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 18, port: port_);
+            funcId: 20, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_marker,
@@ -570,7 +623,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 19, port: port_);
+            funcId: 21, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_mc_error,
@@ -593,7 +646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 20, port: port_);
+            funcId: 22, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -620,7 +673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(name, serializer);
         sse_encode_String(source, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 21, port: port_);
+            funcId: 23, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_register_result,
@@ -643,7 +696,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 22, port: port_);
+            funcId: 24, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_register_result,
@@ -670,7 +723,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(code, serializer);
         sse_encode_StreamSink_script_event_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 23, port: port_);
+            funcId: 25, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_eval_result,
@@ -694,7 +747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 24, port: port_);
+            funcId: 26, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_shading,
@@ -720,7 +773,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(name, serializer);
         sse_encode_list_prim_u_8_loose(data, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 25, port: port_);
+            funcId: 27, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -738,13 +791,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<View3D> crateApiView3DDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 28, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_view_3_d,
+        decodeErrorData: null,
+      ),
+      constMeta: kCrateApiView3DDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiView3DDefaultConstMeta => const TaskConstMeta(
+        debugName: "view_3_d_default",
+        argNames: [],
+      );
+
+  @override
   Future<String?> crateApiWhichName({required String name}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 26, port: port_);
+            funcId: 29, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -767,7 +843,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 27, port: port_);
+            funcId: 30, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_workspace_delta,
@@ -791,7 +867,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 28, port: port_);
+            funcId: 31, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_var_summary,
@@ -853,14 +929,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Axes3D dco_decode_axes_3_d(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return Axes3D(
       title: dco_decode_opt_String(arr[0]),
       xlabel: dco_decode_opt_String(arr[1]),
       ylabel: dco_decode_opt_String(arr[2]),
       zlabel: dco_decode_opt_String(arr[3]),
       grid: dco_decode_bool(arr[4]),
+      boxOn: dco_decode_bool(arr[5]),
+      view: dco_decode_view_3_d(arr[6]),
+      xLimits: dco_decode_limits(arr[7]),
+      yLimits: dco_decode_limits(arr[8]),
+      zLimits: dco_decode_limits(arr[9]),
     );
   }
 
@@ -1086,13 +1167,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LineStyle dco_decode_line_style(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return LineStyle(
       color: dco_decode_plot_color(arr[0]),
       width: dco_decode_f_32(arr[1]),
       dash: dco_decode_dash_style(arr[2]),
       marker: dco_decode_marker(arr[3]),
+      markerSize: dco_decode_opt_box_autoadd_f_32(arr[4]),
     );
   }
 
@@ -1138,6 +1220,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<PlotFigure> dco_decode_list_plot_figure(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_plot_figure).toList();
+  }
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float32List;
   }
 
   @protected
@@ -1378,6 +1466,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           colormap: dco_decode_colormap(raw[5]),
           caxis: dco_decode_opt_box_autoadd_limits(raw[6]),
           colorbar: dco_decode_bool(raw[7]),
+          vertexNormals: dco_decode_list_prim_f_32_strict(raw[8]),
+          axes: dco_decode_box_autoadd_axes_3_d(raw[9]),
         );
       case 10:
         return PlotSpec_Mesh(
@@ -1387,6 +1477,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           colormap: dco_decode_colormap(raw[4]),
           caxis: dco_decode_opt_box_autoadd_limits(raw[5]),
           colorbar: dco_decode_bool(raw[6]),
+          axes: dco_decode_box_autoadd_axes_3_d(raw[7]),
         );
       case 11:
         return PlotSpec_Contour(
@@ -1394,14 +1485,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           y: dco_decode_list_prim_f_64_strict(raw[2]),
           z: dco_decode_list_list_prim_f_64_strict(raw[3]),
           levels: dco_decode_list_prim_f_64_strict(raw[4]),
-          colormap: dco_decode_colormap(raw[5]),
-          caxis: dco_decode_opt_box_autoadd_limits(raw[6]),
-          colorbar: dco_decode_bool(raw[7]),
+          filled: dco_decode_bool(raw[5]),
+          colormap: dco_decode_colormap(raw[6]),
+          caxis: dco_decode_opt_box_autoadd_limits(raw[7]),
+          colorbar: dco_decode_bool(raw[8]),
+          axes: dco_decode_box_autoadd_axes_2_d(raw[9]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[10]),
         );
       case 12:
         return PlotSpec_Plot3(
           series: dco_decode_list_series_3_d(raw[1]),
           axes: dco_decode_box_autoadd_axes_3_d(raw[2]),
+          legend: dco_decode_opt_box_autoadd_legend(raw[3]),
         );
       case 13:
         return PlotSpec_Subplot(
@@ -1454,14 +1549,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Series2D dco_decode_series_2_d(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return Series2D(
       id: dco_decode_u_64(arr[0]),
       rawLen: dco_decode_u_64(arr[1]),
       x: dco_decode_list_prim_f_64_strict(arr[2]),
       y: dco_decode_list_prim_f_64_strict(arr[3]),
       style: dco_decode_line_style(arr[4]),
+      displayName: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -1469,13 +1565,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Series3D dco_decode_series_3_d(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return Series3D(
       x: dco_decode_list_prim_f_64_strict(arr[0]),
       y: dco_decode_list_prim_f_64_strict(arr[1]),
       z: dco_decode_list_prim_f_64_strict(arr[2]),
       style: dco_decode_line_style(arr[3]),
+      displayName: dco_decode_opt_String(arr[4]),
     );
   }
 
@@ -1555,6 +1652,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  View3D dco_decode_view_3_d(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return View3D(
+      az: dco_decode_f_64(arr[0]),
+      el: dco_decode_f_64(arr[1]),
+    );
+  }
+
+  @protected
   WorkspaceDelta dco_decode_workspace_delta(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1624,12 +1733,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_ylabel = sse_decode_opt_String(deserializer);
     var var_zlabel = sse_decode_opt_String(deserializer);
     var var_grid = sse_decode_bool(deserializer);
+    var var_boxOn = sse_decode_bool(deserializer);
+    var var_view = sse_decode_view_3_d(deserializer);
+    var var_xLimits = sse_decode_limits(deserializer);
+    var var_yLimits = sse_decode_limits(deserializer);
+    var var_zLimits = sse_decode_limits(deserializer);
     return Axes3D(
         title: var_title,
         xlabel: var_xlabel,
         ylabel: var_ylabel,
         zlabel: var_zlabel,
-        grid: var_grid);
+        grid: var_grid,
+        boxOn: var_boxOn,
+        view: var_view,
+        xLimits: var_xLimits,
+        yLimits: var_yLimits,
+        zLimits: var_zLimits);
   }
 
   @protected
@@ -1851,8 +1970,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_width = sse_decode_f_32(deserializer);
     var var_dash = sse_decode_dash_style(deserializer);
     var var_marker = sse_decode_marker(deserializer);
+    var var_markerSize = sse_decode_opt_box_autoadd_f_32(deserializer);
     return LineStyle(
-        color: var_color, width: var_width, dash: var_dash, marker: var_marker);
+        color: var_color,
+        width: var_width,
+        dash: var_dash,
+        marker: var_marker,
+        markerSize: var_markerSize);
   }
 
   @protected
@@ -1941,6 +2065,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_plot_figure(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat32List(len_);
   }
 
   @protected
@@ -2262,6 +2393,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_colormap = sse_decode_colormap(deserializer);
         var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
         var var_colorbar = sse_decode_bool(deserializer);
+        var var_vertexNormals = sse_decode_list_prim_f_32_strict(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_3_d(deserializer);
         return PlotSpec_Surface(
             x: var_x,
             y: var_y,
@@ -2269,7 +2402,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             shading: var_shading,
             colormap: var_colormap,
             caxis: var_caxis,
-            colorbar: var_colorbar);
+            colorbar: var_colorbar,
+            vertexNormals: var_vertexNormals,
+            axes: var_axes);
       case 10:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
@@ -2277,33 +2412,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_colormap = sse_decode_colormap(deserializer);
         var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
         var var_colorbar = sse_decode_bool(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_3_d(deserializer);
         return PlotSpec_Mesh(
             x: var_x,
             y: var_y,
             z: var_z,
             colormap: var_colormap,
             caxis: var_caxis,
-            colorbar: var_colorbar);
+            colorbar: var_colorbar,
+            axes: var_axes);
       case 11:
         var var_x = sse_decode_list_prim_f_64_strict(deserializer);
         var var_y = sse_decode_list_prim_f_64_strict(deserializer);
         var var_z = sse_decode_list_list_prim_f_64_strict(deserializer);
         var var_levels = sse_decode_list_prim_f_64_strict(deserializer);
+        var var_filled = sse_decode_bool(deserializer);
         var var_colormap = sse_decode_colormap(deserializer);
         var var_caxis = sse_decode_opt_box_autoadd_limits(deserializer);
         var var_colorbar = sse_decode_bool(deserializer);
+        var var_axes = sse_decode_box_autoadd_axes_2_d(deserializer);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
         return PlotSpec_Contour(
             x: var_x,
             y: var_y,
             z: var_z,
             levels: var_levels,
+            filled: var_filled,
             colormap: var_colormap,
             caxis: var_caxis,
-            colorbar: var_colorbar);
+            colorbar: var_colorbar,
+            axes: var_axes,
+            legend: var_legend);
       case 12:
         var var_series = sse_decode_list_series_3_d(deserializer);
         var var_axes = sse_decode_box_autoadd_axes_3_d(deserializer);
-        return PlotSpec_Plot3(series: var_series, axes: var_axes);
+        var var_legend = sse_decode_opt_box_autoadd_legend(deserializer);
+        return PlotSpec_Plot3(
+            series: var_series, axes: var_axes, legend: var_legend);
       case 13:
         var var_rows = sse_decode_u_32(deserializer);
         var var_cols = sse_decode_u_32(deserializer);
@@ -2356,8 +2501,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_x = sse_decode_list_prim_f_64_strict(deserializer);
     var var_y = sse_decode_list_prim_f_64_strict(deserializer);
     var var_style = sse_decode_line_style(deserializer);
+    var var_displayName = sse_decode_opt_String(deserializer);
     return Series2D(
-        id: var_id, rawLen: var_rawLen, x: var_x, y: var_y, style: var_style);
+        id: var_id,
+        rawLen: var_rawLen,
+        x: var_x,
+        y: var_y,
+        style: var_style,
+        displayName: var_displayName);
   }
 
   @protected
@@ -2367,7 +2518,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_y = sse_decode_list_prim_f_64_strict(deserializer);
     var var_z = sse_decode_list_prim_f_64_strict(deserializer);
     var var_style = sse_decode_line_style(deserializer);
-    return Series3D(x: var_x, y: var_y, z: var_z, style: var_style);
+    var var_displayName = sse_decode_opt_String(deserializer);
+    return Series3D(
+        x: var_x,
+        y: var_y,
+        z: var_z,
+        style: var_style,
+        displayName: var_displayName);
   }
 
   @protected
@@ -2438,6 +2595,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  View3D sse_decode_view_3_d(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_az = sse_decode_f_64(deserializer);
+    var var_el = sse_decode_f_64(deserializer);
+    return View3D(az: var_az, el: var_el);
+  }
+
+  @protected
   WorkspaceDelta sse_decode_workspace_delta(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_changed = sse_decode_list_var_summary(deserializer);
@@ -2495,6 +2660,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.ylabel, serializer);
     sse_encode_opt_String(self.zlabel, serializer);
     sse_encode_bool(self.grid, serializer);
+    sse_encode_bool(self.boxOn, serializer);
+    sse_encode_view_3_d(self.view, serializer);
+    sse_encode_limits(self.xLimits, serializer);
+    sse_encode_limits(self.yLimits, serializer);
+    sse_encode_limits(self.zLimits, serializer);
   }
 
   @protected
@@ -2692,6 +2862,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.width, serializer);
     sse_encode_dash_style(self.dash, serializer);
     sse_encode_marker(self.marker, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.markerSize, serializer);
   }
 
   @protected
@@ -2761,6 +2932,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_plot_figure(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+      Float32List self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat32List(self);
   }
 
   @protected
@@ -3069,7 +3248,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           shading: final shading,
           colormap: final colormap,
           caxis: final caxis,
-          colorbar: final colorbar
+          colorbar: final colorbar,
+          vertexNormals: final vertexNormals,
+          axes: final axes
         ):
         sse_encode_i_32(9, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
@@ -3079,13 +3260,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_colormap(colormap, serializer);
         sse_encode_opt_box_autoadd_limits(caxis, serializer);
         sse_encode_bool(colorbar, serializer);
+        sse_encode_list_prim_f_32_strict(vertexNormals, serializer);
+        sse_encode_box_autoadd_axes_3_d(axes, serializer);
       case PlotSpec_Mesh(
           x: final x,
           y: final y,
           z: final z,
           colormap: final colormap,
           caxis: final caxis,
-          colorbar: final colorbar
+          colorbar: final colorbar,
+          axes: final axes
         ):
         sse_encode_i_32(10, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
@@ -3094,27 +3278,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_colormap(colormap, serializer);
         sse_encode_opt_box_autoadd_limits(caxis, serializer);
         sse_encode_bool(colorbar, serializer);
+        sse_encode_box_autoadd_axes_3_d(axes, serializer);
       case PlotSpec_Contour(
           x: final x,
           y: final y,
           z: final z,
           levels: final levels,
+          filled: final filled,
           colormap: final colormap,
           caxis: final caxis,
-          colorbar: final colorbar
+          colorbar: final colorbar,
+          axes: final axes,
+          legend: final legend
         ):
         sse_encode_i_32(11, serializer);
         sse_encode_list_prim_f_64_strict(x, serializer);
         sse_encode_list_prim_f_64_strict(y, serializer);
         sse_encode_list_list_prim_f_64_strict(z, serializer);
         sse_encode_list_prim_f_64_strict(levels, serializer);
+        sse_encode_bool(filled, serializer);
         sse_encode_colormap(colormap, serializer);
         sse_encode_opt_box_autoadd_limits(caxis, serializer);
         sse_encode_bool(colorbar, serializer);
-      case PlotSpec_Plot3(series: final series, axes: final axes):
+        sse_encode_box_autoadd_axes_2_d(axes, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
+      case PlotSpec_Plot3(
+          series: final series,
+          axes: final axes,
+          legend: final legend
+        ):
         sse_encode_i_32(12, serializer);
         sse_encode_list_series_3_d(series, serializer);
         sse_encode_box_autoadd_axes_3_d(axes, serializer);
+        sse_encode_opt_box_autoadd_legend(legend, serializer);
       case PlotSpec_Subplot(
           rows: final rows,
           cols: final cols,
@@ -3166,6 +3362,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_prim_f_64_strict(self.x, serializer);
     sse_encode_list_prim_f_64_strict(self.y, serializer);
     sse_encode_line_style(self.style, serializer);
+    sse_encode_opt_String(self.displayName, serializer);
   }
 
   @protected
@@ -3175,6 +3372,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_prim_f_64_strict(self.y, serializer);
     sse_encode_list_prim_f_64_strict(self.z, serializer);
     sse_encode_line_style(self.style, serializer);
+    sse_encode_opt_String(self.displayName, serializer);
   }
 
   @protected
@@ -3234,6 +3432,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.class_, serializer);
     sse_encode_list_prim_u_32_strict(self.shape, serializer);
     sse_encode_list_prim_f_64_strict(self.preview, serializer);
+  }
+
+  @protected
+  void sse_encode_view_3_d(View3D self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.az, serializer);
+    sse_encode_f_64(self.el, serializer);
   }
 
   @protected

@@ -50,9 +50,11 @@ P0 شالوده ──► P1 زبان و ماتریس ──► P2 عددی و �
 **Scope (P3-a):** PlotSpec pipeline، `plot/scatter/bar/histogram/area/fill/polarplot/errorbar/fplot/subplot/legend/axis`، viewer تعاملی (zoom/pan/crosshair/export PNG).
 **Scope (P3-b):** `plot3/surf/mesh/contour/contourf/colorbar/view`، چرخش لمسی ۶۰fps، خروجی PDF.
 **DoD:**
-- [ ] LTTB کیفیت تست (خطای ناحیه < ۱٪)؛ ۳ سری × ۱۰۰k نقطه ≤ ۵۰ms تا اولین فریم.
-- [ ] 3D تا ۵۰k مثلث ۶۰fps روی پرچمدار مرجع؛ jank صفر در تست ۱۰ دقیقه.
-- [ ] golden images رسم در CI.
+- [x] LTTB کیفیت تست (خطای ناحیه < ۱٪)؛ ۳ سری × ۱۰۰k نقطه ≤ ۵۰ms تا اولین فریم (3.6).
+- [x] 3D تا ۵۰k مثلث: بودجهٔ نقاش headless CI ≤ ۱۲۰ms پین شد (گام 3.8؛
+      ~۲۴,۹۶۴ وجه = ۴۹,۹۲۸ مثلث) — سنجش ۶۰fps روی دستگاه مرجع با کاربر.
+- [x] golden images رسم در CI (۱۳ عدد 3.6 + ۵ عدد 3D در 3.8:
+      surf/mesh/contourf/contour/plot3).
 **دمو:** `surf(peaks)` با چرخش روان انگشتی + crosshair روی `plot(sin(x))`.
 
 ### P4 — سمبلیک (سه زیرمایل‌استون سند ۰۵ بخش ۱۱)

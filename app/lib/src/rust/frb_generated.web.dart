@@ -139,6 +139,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlotFigure> dco_decode_list_plot_figure(dynamic raw);
 
   @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
@@ -242,6 +245,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VarSummary dco_decode_var_summary(dynamic raw);
+
+  @protected
+  View3D dco_decode_view_3_d(dynamic raw);
 
   @protected
   WorkspaceDelta dco_decode_workspace_delta(dynamic raw);
@@ -369,6 +375,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlotFigure> sse_decode_list_plot_figure(SseDeserializer deserializer);
 
   @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -473,6 +482,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VarSummary sse_decode_var_summary(SseDeserializer deserializer);
+
+  @protected
+  View3D sse_decode_view_3_d(SseDeserializer deserializer);
 
   @protected
   WorkspaceDelta sse_decode_workspace_delta(SseDeserializer deserializer);
@@ -608,6 +620,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<PlotFigure> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_prim_f_32_strict(
+      Float32List self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_f_64_strict(
       Float64List self, SseSerializer serializer);
 
@@ -724,6 +740,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_var_summary(VarSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_view_3_d(View3D self, SseSerializer serializer);
 
   @protected
   void sse_encode_workspace_delta(

@@ -59,6 +59,8 @@ pub struct StyleSpec {
     pub dash: Option<DashSpec>,
     pub marker: Option<MarkerSpec>,
     pub label: Option<String>,
+    /// اندازهٔ مارکر (pt مفهومی؛ پیش‌فرض موتور در رندرر) — v3.
+    pub marker_size: Option<f32>,
 }
 
 /// نوار خطا — قرینه یا ناقرینه (مقادیر ≥ 0؛ خالی = بدون خطای آن محور).
@@ -104,6 +106,40 @@ pub enum LegendPos {
     NorthWest,
     SouthEast,
     SouthWest,
+}
+
+/// یک سری سه‌بعدی `plot3(x, y, z)` — هم‌طول، ترتیب نقاط معتبر منحنی است.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Series3Pair {
+    pub data: SeriesData,
+    pub z: Vec<f64>,
+    pub style: StyleSpec,
+}
+
+/// نوع سطح — surf (وجه‌های رنگی) یا mesh (سیم‌باف رنگ از z، بی‌وجه).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SurfKind {
+    #[default]
+    Surf,
+    Mesh,
+}
+
+/// وضعیت دوربین سه‌بعدی — view(az, el) بر حسب درجه (متلب: پیش‌فرض
+/// az=-37.5، el=30؛ view(2) → (0, 90)).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct View3 {
+    pub az: f64,
+    pub el: f64,
+}
+
+impl View3 {
+    /// پیش‌فرض متلب.
+    pub const DEFAULT: View3 = View3 {
+        az: -37.5,
+        el: 30.0,
+    };
+    /// نمای دو‌بعدی `view(2)`.
+    pub const TOP: View3 = View3 { az: 0.0, el: 90.0 };
 }
 
 /// یک عملیات رسم — کاهش‌پذیر روی [`crate::figure::FigureState`].
@@ -230,6 +266,88 @@ pub enum PlotOp {
     },
     /// `axis tight` — چسبیدن حدود به داده.
     AxisTight,
+    // ---- P3-b (گام 3.8): سه‌بعدی ----
+    /// `plot3(x, y, z)` — منحنی فضایی.
+    Plot3 {
+        series: Vec<Series3Pair>,
+    },
+    /// `surf(Z)` / `surf(X, Y, Z)` / `mesh(...)` — شبکهٔ منظم z ردیف×ستون
+    /// (سطر i = y ثابت، ستون j = x ثابت — قرارداد meshgrid متلب).
+    Surface {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        kind: SurfKind,
+        shading: Shading3,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+    },
+    /// `contour(Z, n)` / `contourf(...)` — سطح‌های هم‌ارزش روی شبکه؛
+    /// levels = None → ده سطح خودکار (marching squares در رندرر).
+    Contour {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        levels: Option<Vec<f64>>,
+        filled: bool,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+    },
+    /// `colorbar on/off` (یا برهنه = روشن).
+    Colorbar {
+        on: bool,
+    },
+    /// `caxis([cmin cmax])` — None = خودکار از داده.
+    Caxis {
+        limits: Option<[f64; 2]>,
+    },
+    /// `view(az, el)` / `view(2)` / `view(3)`.
+    View {
+        v: View3,
+    },
+    /// `zlabel(...)` (سه‌بعدی).
+    ZLabel {
+        text: String,
+    },
+    /// `colormap jet` / `colormap('jet')` — پالت سطح/کانتور سلول فعال.
+    ColormapSet {
+        cm: Colormap,
+    },
+    /// `shading flat|faceted|interp` — سایه‌زنی سطح فعال.
+    ShadingSet {
+        s: Shading3,
+    },
+    /// `exportgraphics('name.pdf')` — رندر PDF شکلِ فعال در محل مصرف
+    /// (لایهٔ موتور، وسط fold؛ در خود کاهش‌دهنده no-op است).
+    ExportPdf {
+        name: String,
+    },
+}
+
+/// سایه‌زنی سطح (نگاشت مستقیم به `Shading` قرارداد).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Shading3 {
+    /// وجه‌بسته + لبهٔ مش (پیش‌فرض متلب surf).
+    #[default]
+    Faceted,
+    /// سطح صاف (سایهٔ یک‌نواخت هر مثلث).
+    Flat,
+    /// درون‌یابی گورو (v3: نرمال‌های رأس از موتور می‌آیند).
+    Interp,
+}
+
+/// پالت رنگ سطح (سند ۰۴ §8.3 — parula بازسازی‌شده + پنج پالت دیگر).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Colormap {
+    #[default]
+    Parula,
+    Viridis,
+    Jet,
+    Hot,
+    Cool,
+    Gray,
 }
 
 #[cfg(test)]

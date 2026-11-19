@@ -44,6 +44,29 @@ class _PlotsTabState extends ConsumerState<PlotsTab> {
     }
   }
 
+  /// خروجی PDF برداری از موتور (گام 3.8) — دکمهٔ جدا از PNG.
+  Future<void> _exportPdf() async {
+    final l10n = AppLocalizations.of(context)!;
+    final figures = ref.read(plotsProvider).figures;
+    if (figures.isEmpty) return;
+    final fig = figures[_selected.clamp(0, figures.length - 1)];
+    try {
+      final path = await exportFigurePdf(
+        fig.figureId,
+        'mathcraft-plot-${fig.figureId}.pdf',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.plotsSavedTo(path))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.plotsExportFailed(e.toString()))),
+      );
+    }
+  }
+
   Future<void> _export({required bool share}) async {
     final l10n = AppLocalizations.of(context)!;
     final figures = ref.read(plotsProvider).figures;
@@ -209,6 +232,7 @@ class _PlotsTabState extends ConsumerState<PlotsTab> {
           child: _FloatingBar(
             onList: () => setState(() => _showList = !_showList),
             onSave: () => _export(share: false),
+            onPdf: _exportPdf,
             onShare: () => _export(share: true),
             onInfo: () => _showInfo(fig),
           ),
@@ -276,12 +300,14 @@ class _FloatingBar extends StatelessWidget {
   const _FloatingBar({
     required this.onList,
     required this.onSave,
+    required this.onPdf,
     required this.onShare,
     required this.onInfo,
   });
 
   final VoidCallback onList;
   final VoidCallback onSave;
+  final VoidCallback onPdf;
   final VoidCallback onShare;
   final VoidCallback onInfo;
 
@@ -320,6 +346,34 @@ class _FloatingBar extends StatelessWidget {
           button(CraftIcons.plotList, l10n.plotsListTooltip, onList),
           const SizedBox(height: 4),
           button(CraftIcons.actionSave, l10n.plotsSaveTooltip, onSave),
+          const SizedBox(height: 4),
+          // دکمهٔ PDF — برچسب متنی (آیکون اختصاصی هنوز در مجموعه نیست)
+          Material(
+            color: scheme.surface.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(CdsDimens.radiusSmall),
+            child: InkWell(
+              onTap: onPdf,
+              borderRadius: BorderRadius.circular(CdsDimens.radiusSmall),
+              child: Tooltip(
+                message: l10n.plotsPdfTooltip,
+                child: SizedBox(
+                  width: CdsDimens.touchTarget - 8,
+                  height: CdsDimens.touchTarget - 8,
+                  child: Center(
+                    child: Text(
+                      'PDF',
+                      style: TextStyle(
+                        fontFamily: 'JetBrainsMono',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 4),
           button(CraftIcons.actionShare, l10n.plotsShareTooltip, onShare),
           const SizedBox(height: 4),

@@ -151,7 +151,7 @@ void main() {
       expect(cell, isA<LineCellData>());
     });
 
-    test('3d and quiver are honest nulls (P3-b)', () {
+    test('quiver stays an honest null; surface now renders (v3)', () {
       expect(
         cellDataFromSpec(api.PlotSpec_Surface(
           x: Float64List.fromList([0, 1]),
@@ -164,8 +164,10 @@ void main() {
           colormap: api.Colormap.parula,
           caxis: null,
           colorbar: false,
+          vertexNormals: Float32List.fromList([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+          axes: _axes3d(),
         )),
-        isNull,
+        isA<SurfaceCellData>(),
       );
       expect(
         cellDataFromSpec(api.PlotSpec_Quiver(
@@ -869,6 +871,19 @@ api.PlotFigure _lineFigure() => api.PlotFigure(
       ),
     );
 
+api.Axes3D _axes3d() => api.Axes3D(
+      title: null,
+      xlabel: 'x',
+      ylabel: 'y',
+      zlabel: 'z',
+      grid: true,
+      boxOn: false,
+      view: const api.View3D(az: -37.5, el: 30),
+      xLimits: const api.Limits(min: 0, max: 1),
+      yLimits: const api.Limits(min: 0, max: 1),
+      zLimits: const api.Limits(min: 0, max: 2),
+    );
+
 api.PlotFigure _surfaceFigure() => api.PlotFigure(
       figureId: BigInt.two,
       spec: api.PlotSpec_Surface(
@@ -882,6 +897,8 @@ api.PlotFigure _surfaceFigure() => api.PlotFigure(
         colormap: api.Colormap.parula,
         caxis: null,
         colorbar: false,
+        vertexNormals: Float32List.fromList([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+        axes: _axes3d(),
       ),
     );
 

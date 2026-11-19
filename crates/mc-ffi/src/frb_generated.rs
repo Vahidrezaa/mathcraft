@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -68843805;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -354250382;
 
 // Section: executor
 
@@ -432,6 +432,40 @@ fn wire__crate__api__evaluate_line_impl(
         },
     )
 }
+fn wire__crate__api__export_figure_pdf_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "export_figure_pdf",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_figure_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::export_figure_pdf(api_figure_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__get_plots_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -554,6 +588,38 @@ fn wire__crate__api__legend_position_default_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::LegendPosition::default())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__limits_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "limits_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::Limits::default())?;
                     Ok(output_ok)
                 })())
             }
@@ -860,6 +926,38 @@ fn wire__crate__api__vfs_register_impl(
         },
     )
 }
+fn wire__crate__api__view_3_d_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "view_3_d_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::View3D::default())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__which_name_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1026,12 +1124,22 @@ impl SseDecode for crate::api::Axes3D {
         let mut var_ylabel = <Option<String>>::sse_decode(deserializer);
         let mut var_zlabel = <Option<String>>::sse_decode(deserializer);
         let mut var_grid = <bool>::sse_decode(deserializer);
+        let mut var_boxOn = <bool>::sse_decode(deserializer);
+        let mut var_view = <crate::api::View3D>::sse_decode(deserializer);
+        let mut var_xLimits = <crate::api::Limits>::sse_decode(deserializer);
+        let mut var_yLimits = <crate::api::Limits>::sse_decode(deserializer);
+        let mut var_zLimits = <crate::api::Limits>::sse_decode(deserializer);
         return crate::api::Axes3D {
             title: var_title,
             xlabel: var_xlabel,
             ylabel: var_ylabel,
             zlabel: var_zlabel,
             grid: var_grid,
+            box_on: var_boxOn,
+            view: var_view,
+            x_limits: var_xLimits,
+            y_limits: var_yLimits,
+            z_limits: var_zLimits,
         };
     }
 }
@@ -1267,11 +1375,13 @@ impl SseDecode for crate::api::LineStyle {
         let mut var_width = <f32>::sse_decode(deserializer);
         let mut var_dash = <crate::api::DashStyle>::sse_decode(deserializer);
         let mut var_marker = <crate::api::Marker>::sse_decode(deserializer);
+        let mut var_markerSize = <Option<f32>>::sse_decode(deserializer);
         return crate::api::LineStyle {
             color: var_color,
             width: var_width,
             dash: var_dash,
             marker: var_marker,
+            marker_size: var_markerSize,
         };
     }
 }
@@ -1355,6 +1465,18 @@ impl SseDecode for Vec<crate::api::PlotFigure> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::PlotFigure>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<f32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<f32>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1746,6 +1868,8 @@ impl SseDecode for crate::api::PlotSpec {
                 let mut var_colormap = <crate::api::Colormap>::sse_decode(deserializer);
                 let mut var_caxis = <Option<crate::api::Limits>>::sse_decode(deserializer);
                 let mut var_colorbar = <bool>::sse_decode(deserializer);
+                let mut var_vertexNormals = <Vec<f32>>::sse_decode(deserializer);
+                let mut var_axes = <crate::api::Axes3D>::sse_decode(deserializer);
                 return crate::api::PlotSpec::Surface {
                     x: var_x,
                     y: var_y,
@@ -1754,6 +1878,8 @@ impl SseDecode for crate::api::PlotSpec {
                     colormap: var_colormap,
                     caxis: var_caxis,
                     colorbar: var_colorbar,
+                    vertex_normals: var_vertexNormals,
+                    axes: var_axes,
                 };
             }
             10 => {
@@ -1763,6 +1889,7 @@ impl SseDecode for crate::api::PlotSpec {
                 let mut var_colormap = <crate::api::Colormap>::sse_decode(deserializer);
                 let mut var_caxis = <Option<crate::api::Limits>>::sse_decode(deserializer);
                 let mut var_colorbar = <bool>::sse_decode(deserializer);
+                let mut var_axes = <crate::api::Axes3D>::sse_decode(deserializer);
                 return crate::api::PlotSpec::Mesh {
                     x: var_x,
                     y: var_y,
@@ -1770,6 +1897,7 @@ impl SseDecode for crate::api::PlotSpec {
                     colormap: var_colormap,
                     caxis: var_caxis,
                     colorbar: var_colorbar,
+                    axes: var_axes,
                 };
             }
             11 => {
@@ -1777,25 +1905,33 @@ impl SseDecode for crate::api::PlotSpec {
                 let mut var_y = <Vec<f64>>::sse_decode(deserializer);
                 let mut var_z = <Vec<Vec<f64>>>::sse_decode(deserializer);
                 let mut var_levels = <Vec<f64>>::sse_decode(deserializer);
+                let mut var_filled = <bool>::sse_decode(deserializer);
                 let mut var_colormap = <crate::api::Colormap>::sse_decode(deserializer);
                 let mut var_caxis = <Option<crate::api::Limits>>::sse_decode(deserializer);
                 let mut var_colorbar = <bool>::sse_decode(deserializer);
+                let mut var_axes = <crate::api::Axes2D>::sse_decode(deserializer);
+                let mut var_legend = <Option<crate::api::Legend>>::sse_decode(deserializer);
                 return crate::api::PlotSpec::Contour {
                     x: var_x,
                     y: var_y,
                     z: var_z,
                     levels: var_levels,
+                    filled: var_filled,
                     colormap: var_colormap,
                     caxis: var_caxis,
                     colorbar: var_colorbar,
+                    axes: var_axes,
+                    legend: var_legend,
                 };
             }
             12 => {
                 let mut var_series = <Vec<crate::api::Series3D>>::sse_decode(deserializer);
                 let mut var_axes = <crate::api::Axes3D>::sse_decode(deserializer);
+                let mut var_legend = <Option<crate::api::Legend>>::sse_decode(deserializer);
                 return crate::api::PlotSpec::Plot3 {
                     series: var_series,
                     axes: var_axes,
+                    legend: var_legend,
                 };
             }
             13 => {
@@ -1867,12 +2003,14 @@ impl SseDecode for crate::api::Series2D {
         let mut var_x = <Vec<f64>>::sse_decode(deserializer);
         let mut var_y = <Vec<f64>>::sse_decode(deserializer);
         let mut var_style = <crate::api::LineStyle>::sse_decode(deserializer);
+        let mut var_displayName = <Option<String>>::sse_decode(deserializer);
         return crate::api::Series2D {
             id: var_id,
             raw_len: var_rawLen,
             x: var_x,
             y: var_y,
             style: var_style,
+            display_name: var_displayName,
         };
     }
 }
@@ -1884,11 +2022,13 @@ impl SseDecode for crate::api::Series3D {
         let mut var_y = <Vec<f64>>::sse_decode(deserializer);
         let mut var_z = <Vec<f64>>::sse_decode(deserializer);
         let mut var_style = <crate::api::LineStyle>::sse_decode(deserializer);
+        let mut var_displayName = <Option<String>>::sse_decode(deserializer);
         return crate::api::Series3D {
             x: var_x,
             y: var_y,
             z: var_z,
             style: var_style,
+            display_name: var_displayName,
         };
     }
 }
@@ -1981,6 +2121,18 @@ impl SseDecode for crate::api::VarSummary {
     }
 }
 
+impl SseDecode for crate::api::View3D {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_az = <f64>::sse_decode(deserializer);
+        let mut var_el = <f64>::sse_decode(deserializer);
+        return crate::api::View3D {
+            az: var_az,
+            el: var_el,
+        };
+    }
+}
+
 impl SseDecode for crate::api::WorkspaceDelta {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2012,22 +2164,25 @@ fn pde_ffi_dispatcher_primary_impl(
         10 => wire__crate__api__error_band_default_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__eval_result_default_impl(port, ptr, rust_vec_len, data_len),
         12 => wire__crate__api__evaluate_line_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__get_plots_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__hist_norm_default_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__job_status_default_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__legend_position_default_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__m_functions_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__marker_default_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__mc_error_default_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__plot_contract_version_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__register_m_source_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__register_result_default_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__run_script_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__shading_default_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__vfs_register_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__which_name_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__workspace_delta_default_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__workspace_vars_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__export_figure_pdf_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__get_plots_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__hist_norm_default_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__job_status_default_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__legend_position_default_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__limits_default_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__m_functions_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__marker_default_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__mc_error_default_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__plot_contract_version_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__register_m_source_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__register_result_default_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__run_script_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__shading_default_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__vfs_register_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__view_3_d_default_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__which_name_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__workspace_delta_default_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__workspace_vars_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2081,6 +2236,11 @@ impl flutter_rust_bridge::IntoDart for crate::api::Axes3D {
             self.ylabel.into_into_dart().into_dart(),
             self.zlabel.into_into_dart().into_dart(),
             self.grid.into_into_dart().into_dart(),
+            self.box_on.into_into_dart().into_dart(),
+            self.view.into_into_dart().into_dart(),
+            self.x_limits.into_into_dart().into_dart(),
+            self.y_limits.into_into_dart().into_dart(),
+            self.z_limits.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2329,6 +2489,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::LineStyle {
             self.width.into_into_dart().into_dart(),
             self.dash.into_into_dart().into_dart(),
             self.marker.into_into_dart().into_dart(),
+            self.marker_size.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2559,6 +2720,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlotSpec {
                 colormap,
                 caxis,
                 colorbar,
+                vertex_normals,
+                axes,
             } => [
                 9.into_dart(),
                 x.into_into_dart().into_dart(),
@@ -2568,6 +2731,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlotSpec {
                 colormap.into_into_dart().into_dart(),
                 caxis.into_into_dart().into_dart(),
                 colorbar.into_into_dart().into_dart(),
+                vertex_normals.into_into_dart().into_dart(),
+                axes.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::PlotSpec::Mesh {
@@ -2577,6 +2742,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlotSpec {
                 colormap,
                 caxis,
                 colorbar,
+                axes,
             } => [
                 10.into_dart(),
                 x.into_into_dart().into_dart(),
@@ -2585,6 +2751,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlotSpec {
                 colormap.into_into_dart().into_dart(),
                 caxis.into_into_dart().into_dart(),
                 colorbar.into_into_dart().into_dart(),
+                axes.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::PlotSpec::Contour {
@@ -2592,24 +2759,35 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlotSpec {
                 y,
                 z,
                 levels,
+                filled,
                 colormap,
                 caxis,
                 colorbar,
+                axes,
+                legend,
             } => [
                 11.into_dart(),
                 x.into_into_dart().into_dart(),
                 y.into_into_dart().into_dart(),
                 z.into_into_dart().into_dart(),
                 levels.into_into_dart().into_dart(),
+                filled.into_into_dart().into_dart(),
                 colormap.into_into_dart().into_dart(),
                 caxis.into_into_dart().into_dart(),
                 colorbar.into_into_dart().into_dart(),
+                axes.into_into_dart().into_dart(),
+                legend.into_into_dart().into_dart(),
             ]
             .into_dart(),
-            crate::api::PlotSpec::Plot3 { series, axes } => [
+            crate::api::PlotSpec::Plot3 {
+                series,
+                axes,
+                legend,
+            } => [
                 12.into_dart(),
                 series.into_into_dart().into_dart(),
                 axes.into_into_dart().into_dart(),
+                legend.into_into_dart().into_dart(),
             ]
             .into_dart(),
             crate::api::PlotSpec::Subplot { rows, cols, cells } => [
@@ -2690,6 +2868,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::Series2D {
             self.x.into_into_dart().into_dart(),
             self.y.into_into_dart().into_dart(),
             self.style.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2708,6 +2887,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::Series3D {
             self.y.into_into_dart().into_dart(),
             self.z.into_into_dart().into_dart(),
             self.style.into_into_dart().into_dart(),
+            self.display_name.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2787,6 +2967,22 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::VarSummary> for crate::api::V
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::View3D {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.az.into_into_dart().into_dart(),
+            self.el.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::View3D {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::View3D> for crate::api::View3D {
+    fn into_into_dart(self) -> crate::api::View3D {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::WorkspaceDelta {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [self.changed.into_into_dart().into_dart()].into_dart()
@@ -2848,6 +3044,11 @@ impl SseEncode for crate::api::Axes3D {
         <Option<String>>::sse_encode(self.ylabel, serializer);
         <Option<String>>::sse_encode(self.zlabel, serializer);
         <bool>::sse_encode(self.grid, serializer);
+        <bool>::sse_encode(self.box_on, serializer);
+        <crate::api::View3D>::sse_encode(self.view, serializer);
+        <crate::api::Limits>::sse_encode(self.x_limits, serializer);
+        <crate::api::Limits>::sse_encode(self.y_limits, serializer);
+        <crate::api::Limits>::sse_encode(self.z_limits, serializer);
     }
 }
 
@@ -3064,6 +3265,7 @@ impl SseEncode for crate::api::LineStyle {
         <f32>::sse_encode(self.width, serializer);
         <crate::api::DashStyle>::sse_encode(self.dash, serializer);
         <crate::api::Marker>::sse_encode(self.marker, serializer);
+        <Option<f32>>::sse_encode(self.marker_size, serializer);
     }
 }
 
@@ -3133,6 +3335,16 @@ impl SseEncode for Vec<crate::api::PlotFigure> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::PlotFigure>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<f32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <f32>::sse_encode(item, serializer);
         }
     }
 }
@@ -3467,6 +3679,8 @@ impl SseEncode for crate::api::PlotSpec {
                 colormap,
                 caxis,
                 colorbar,
+                vertex_normals,
+                axes,
             } => {
                 <i32>::sse_encode(9, serializer);
                 <Vec<f64>>::sse_encode(x, serializer);
@@ -3476,6 +3690,8 @@ impl SseEncode for crate::api::PlotSpec {
                 <crate::api::Colormap>::sse_encode(colormap, serializer);
                 <Option<crate::api::Limits>>::sse_encode(caxis, serializer);
                 <bool>::sse_encode(colorbar, serializer);
+                <Vec<f32>>::sse_encode(vertex_normals, serializer);
+                <crate::api::Axes3D>::sse_encode(axes, serializer);
             }
             crate::api::PlotSpec::Mesh {
                 x,
@@ -3484,6 +3700,7 @@ impl SseEncode for crate::api::PlotSpec {
                 colormap,
                 caxis,
                 colorbar,
+                axes,
             } => {
                 <i32>::sse_encode(10, serializer);
                 <Vec<f64>>::sse_encode(x, serializer);
@@ -3492,29 +3709,41 @@ impl SseEncode for crate::api::PlotSpec {
                 <crate::api::Colormap>::sse_encode(colormap, serializer);
                 <Option<crate::api::Limits>>::sse_encode(caxis, serializer);
                 <bool>::sse_encode(colorbar, serializer);
+                <crate::api::Axes3D>::sse_encode(axes, serializer);
             }
             crate::api::PlotSpec::Contour {
                 x,
                 y,
                 z,
                 levels,
+                filled,
                 colormap,
                 caxis,
                 colorbar,
+                axes,
+                legend,
             } => {
                 <i32>::sse_encode(11, serializer);
                 <Vec<f64>>::sse_encode(x, serializer);
                 <Vec<f64>>::sse_encode(y, serializer);
                 <Vec<Vec<f64>>>::sse_encode(z, serializer);
                 <Vec<f64>>::sse_encode(levels, serializer);
+                <bool>::sse_encode(filled, serializer);
                 <crate::api::Colormap>::sse_encode(colormap, serializer);
                 <Option<crate::api::Limits>>::sse_encode(caxis, serializer);
                 <bool>::sse_encode(colorbar, serializer);
+                <crate::api::Axes2D>::sse_encode(axes, serializer);
+                <Option<crate::api::Legend>>::sse_encode(legend, serializer);
             }
-            crate::api::PlotSpec::Plot3 { series, axes } => {
+            crate::api::PlotSpec::Plot3 {
+                series,
+                axes,
+                legend,
+            } => {
                 <i32>::sse_encode(12, serializer);
                 <Vec<crate::api::Series3D>>::sse_encode(series, serializer);
                 <crate::api::Axes3D>::sse_encode(axes, serializer);
+                <Option<crate::api::Legend>>::sse_encode(legend, serializer);
             }
             crate::api::PlotSpec::Subplot { rows, cols, cells } => {
                 <i32>::sse_encode(13, serializer);
@@ -3575,6 +3804,7 @@ impl SseEncode for crate::api::Series2D {
         <Vec<f64>>::sse_encode(self.x, serializer);
         <Vec<f64>>::sse_encode(self.y, serializer);
         <crate::api::LineStyle>::sse_encode(self.style, serializer);
+        <Option<String>>::sse_encode(self.display_name, serializer);
     }
 }
 
@@ -3585,6 +3815,7 @@ impl SseEncode for crate::api::Series3D {
         <Vec<f64>>::sse_encode(self.y, serializer);
         <Vec<f64>>::sse_encode(self.z, serializer);
         <crate::api::LineStyle>::sse_encode(self.style, serializer);
+        <Option<String>>::sse_encode(self.display_name, serializer);
     }
 }
 
@@ -3665,6 +3896,14 @@ impl SseEncode for crate::api::VarSummary {
         <String>::sse_encode(self.class, serializer);
         <Vec<u32>>::sse_encode(self.shape, serializer);
         <Vec<f64>>::sse_encode(self.preview, serializer);
+    }
+}
+
+impl SseEncode for crate::api::View3D {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.az, serializer);
+        <f64>::sse_encode(self.el, serializer);
     }
 }
 

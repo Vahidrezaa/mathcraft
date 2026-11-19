@@ -64,12 +64,31 @@ class PlotViewState extends State<PlotView> {
 
   bool get _isPolar => widget.cell is PolarCellData;
 
-  PlotViewport get _home =>
-      _isPolar ? PlotViewport.any : PlotViewport.home(widget.cell.axes!);
+  /// سلول سه‌بعدی؟ (surf/mesh/plot3 — درگ = چرخش دوربین، سند ۰۶ §7.3)
+  bool get _is3D => widget.cell is SurfaceCellData || widget.cell is Plot3CellData;
+
+  Axes3DData get _axes3dOf {
+    final c = widget.cell;
+    if (c is SurfaceCellData) return c.axes3d;
+    if (c is Plot3CellData) return c.axes3d;
+    throw StateError('not a 3-D cell');
+  }
+
+  /// چرخش محلی (az, el) — null = نمای قرارداد DTO.
+  (double, double)? _view3d;
+
+  PlotViewport get _home {
+    // پلار و سه‌بعدی محور دوبعدی ندارند — دید شناور بی‌معنا
+    if (_isPolar || _is3D) return PlotViewport.any;
+    return PlotViewport.home(widget.cell.axes!);
+  }
 
   /// برای تست‌ها — دید و tip جاری.
   PlotViewport get viewport => _viewport;
   DataTip? get dataTip => _dataTip;
+
+  /// چرخش سه‌بعدی محلی جاری — null = نمای قرارداد (برای تست).
+  (double, double)? get viewOverride3D => _view3d;
 
   @override
   void initState() {
@@ -88,6 +107,7 @@ class PlotViewState extends State<PlotView> {
       _viewport = _home;
       _crosshair = null;
       _dataTip = null;
+      _view3d = null;
     }
   }
 
@@ -101,6 +121,7 @@ class PlotViewState extends State<PlotView> {
       _crosshair = null;
       _dataTip = null;
       _crosshairMode = false;
+      _view3d = null; // سه‌بعدی: بازگشت به view قرارداد
     });
     widget.onCrosshair?.call(null);
   }
@@ -116,7 +137,7 @@ class PlotViewState extends State<PlotView> {
   // ----- crosshair (نگه‌داشتن) -----
 
   void _crosshairAt(Offset localPosition) {
-    if (_isPolar || _viewSize == Size.zero) return;
+    if (_isPolar || _is3D || _viewSize == Size.zero) return;
     final layout = _layout();
     final (dx, dy) = layout.screenToData(localPosition);
     _setCrosshair(snapToNearest(widget.cell.crosshairSeries, dx, dy));
@@ -196,6 +217,21 @@ class PlotViewState extends State<PlotView> {
             },
             onScaleUpdate: (details) {
               if (_isPolar) return;
+              if (_is3D) {
+                // چرخش لمسی (گام 3.8 — DoD سند ۰۷ §P3): افقی = az،
+                // عمودی = el (کلمپ ±۸۹ تا گیمبال نچرخد)
+                if (details.pointerCount == 1) {
+                  final base = _view3d ?? _axes3dOf.view;
+                  final d = details.focalPointDelta;
+                  setState(() {
+                    _view3d = (
+                      base.$1 + d.dx * 0.5,
+                      (base.$2 + d.dy * 0.5).clamp(-89.0, 89.0),
+                    );
+                  });
+                }
+                return;
+              }
               if (details.pointerCount >= 2) {
                 // pinch حول focal جاری — نقطهٔ داده زیر انگشت‌ها ثابت
                 final factor = details.scale / _gestureScale;
@@ -231,7 +267,7 @@ class PlotViewState extends State<PlotView> {
                 _suppressTap = false;
                 return;
               }
-              if (_isPolar || _viewSize == Size.zero) return;
+              if (_isPolar || _is3D || _viewSize == Size.zero) return;
               // تپ نزدیک رأس = tip پایدار؛ تپ دور = پاک
               final tip = pickTip(
                 widget.cell.crosshairSeries,
@@ -248,6 +284,7 @@ class PlotViewState extends State<PlotView> {
                 brightness: widget.brightness,
                 crosshair: _crosshair,
                 dataTip: _dataTip,
+                viewOverride: _view3d,
               ),
             ),
           ),

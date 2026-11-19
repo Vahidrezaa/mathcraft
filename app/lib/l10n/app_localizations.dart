@@ -359,6 +359,12 @@ abstract class AppLocalizations {
   /// **'Figure list'**
   String get plotsListTooltip;
 
+  /// No description provided for @plotsPdfTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Export vector PDF (Rust-rendered)'**
+  String get plotsPdfTooltip;
+
   /// No description provided for @plotsSaveTooltip.
   ///
   /// In en, this message translates to:

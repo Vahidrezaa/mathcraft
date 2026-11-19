@@ -153,6 +153,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get plotsListTooltip => 'Figure list';
 
   @override
+  String get plotsPdfTooltip => 'Export vector PDF (Rust-rendered)';
+
+  @override
   String get plotsSaveTooltip => 'Save PNG';
 
   @override

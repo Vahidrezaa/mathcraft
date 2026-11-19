@@ -35,7 +35,13 @@ pub struct FileWrite {
 /// v1 = پل P0؛ **v2 = فریز P3-a** (رنگ معنایی/دقیق، تیک‌های 1-2-5،
 /// Area/Fill/ErrorBar، Bar سری‌محور، نرمال‌سازی هیستوگرام، شناسهٔ شکل/سری،
 /// caxis/colorbar) — افزودنی از دید UI، شکانده از دید فرم (بامپ صادقانه).
-pub const PLOT_CONTRACT_VERSION: u32 = 2;
+/// **v3 (گام 3.8 — P3-b):** افزودنی — سه‌بعدی موقّع شد (Surface/Mesh با
+/// `axes: Axes3D` + نرمال رأس‌ها؛ Plot3؛ Contour با `axes: Axes2D` +
+/// `filled`)، `View3D {az, el}` + `box_on` روی Axes3D؛
+/// `Series2D/Series3D.display_name` (auto-legend زیر hold — حفرهٔ #4
+/// سند ۱۳) و `LineStyle.marker_size` (هر دو از داربست‌های «فعلاً نیست»
+/// v2 فعال شدند). UI قدیمی فیلدهای نو را نادیده می‌گیرد — افزودنی.
+pub const PLOT_CONTRACT_VERSION: u32 = 3;
 
 // ---------------------------------------------------------------------------
 // انواع قرارداد (سند ۰۲ بخش ۳ — «قرارداد داده اصلی»)
@@ -212,10 +218,7 @@ pub enum PlotSpec {
         legend: Option<Legend>,
     },
     /// چندضلعی‌های بستهٔ توپر (fill) — وجه = رنگ استایل، لبه = خط استایل.
-    Fill2D {
-        series: Vec<Series2D>,
-        axes: Axes2D,
-    },
+    Fill2D { series: Vec<Series2D>, axes: Axes2D },
     /// پلار — x = θ (رادیان)، y = شعاع؛ شبکهٔ پلار در رندرر.
     Polar {
         series: Vec<Series2D>,
@@ -235,7 +238,7 @@ pub enum PlotSpec {
         v: Vec<f64>,
         axes: Axes2D,
     },
-    /// سطح ۳بعدی (P3-b — رزرو؛ داده‌ها از همین حالا قراردادند).
+    /// سطح سه‌بعدی surf (P3-b — موقّع از v3).
     Surface {
         x: Vec<f64>,
         y: Vec<f64>,
@@ -245,7 +248,11 @@ pub enum PlotSpec {
         /// بازهٔ رنگ صریح (caxis) — None = خودکار از z.
         caxis: Option<Limits>,
         colorbar: bool,
+        /// نرمال رأس‌ها (تخت، stride ۳، row-major) — محاسبه در Rust (v3).
+        vertex_normals: Vec<f32>,
+        axes: Axes3D,
     },
+    /// سیم‌باف mesh.
     Mesh {
         x: Vec<f64>,
         y: Vec<f64>,
@@ -253,19 +260,26 @@ pub enum PlotSpec {
         colormap: Colormap,
         caxis: Option<Limits>,
         colorbar: bool,
+        axes: Axes3D,
     },
+    /// سطح هم‌ارزش contour/contourf (v3: levels حل‌شده + filled + محور 2D).
     Contour {
         x: Vec<f64>,
         y: Vec<f64>,
         z: Vec<Vec<f64>>,
         levels: Vec<f64>,
+        filled: bool,
         colormap: Colormap,
         caxis: Option<Limits>,
         colorbar: bool,
+        axes: Axes2D,
+        legend: Option<Legend>,
     },
+    /// منحنی فضایی plot3.
     Plot3 {
         series: Vec<Series3D>,
         axes: Axes3D,
+        legend: Option<Legend>,
     },
     Subplot {
         rows: u32,
@@ -284,6 +298,8 @@ pub struct Series2D {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
     pub style: LineStyle,
+    /// DisplayName — سوخت auto-legend زیر hold (v3).
+    pub display_name: Option<String>,
 }
 
 /// سری errorbar — نوارهای قرینه/ناقرینهٔ هر محور.
@@ -311,6 +327,8 @@ pub struct Series3D {
     pub y: Vec<f64>,
     pub z: Vec<f64>,
     pub style: LineStyle,
+    /// DisplayName (v3).
+    pub display_name: Option<String>,
 }
 
 /// استایل حل‌شده — رنگ معنایی (پالت، resolve در Dart طبق تم) یا دقیق.
@@ -321,6 +339,8 @@ pub struct LineStyle {
     pub width: f32,
     pub dash: DashStyle,
     pub marker: Marker,
+    /// اندازهٔ مارکر — None = پیش‌فرض رندرر (v3).
+    pub marker_size: Option<f32>,
 }
 
 /// رنگ قراردادی — دو لایه (حرفه‌ای‌شدن بدون بازنویسی):
@@ -418,6 +438,22 @@ pub enum HistNorm {
     Cdf,
 }
 
+/// دوربین سه‌بعدی — `view(az, el)` بر حسب درجه (v3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct View3D {
+    pub az: f64,
+    pub el: f64,
+}
+
+impl Default for View3D {
+    fn default() -> Self {
+        Self {
+            az: -37.5,
+            el: 30.0,
+        } // پیش‌فرض متلب
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Axes3D {
     pub title: Option<String>,
@@ -425,10 +461,17 @@ pub struct Axes3D {
     pub ylabel: Option<String>,
     pub zlabel: Option<String>,
     pub grid: bool,
+    /// جعبهٔ سه‌بعدی (`box on`).
+    pub box_on: bool,
+    /// دوربین فعال (v3).
+    pub view: View3D,
+    pub x_limits: Limits,
+    pub y_limits: Limits,
+    pub z_limits: Limits,
 }
 
 /// حدود محور — جفت min/max.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Limits {
     pub min: f64,
     pub max: f64,
@@ -598,7 +641,29 @@ fn eval_core(
             let outcome = eval_program(&program, env);
             // عملیات‌های رسم این اجرا → حالت شکل‌ها (متلب: نمودارهای پیش از
             // خطا می‌مانند)؛ خروجی push = فقط شکل‌های دست‌خورده.
+            // ExportPdf اینجا مصرف می‌شود (گام 3.8): رندر برداری PDF از
+            // شکل فعال با همان وضعیت fold تا این لحظه + صف خروجی میزبان.
+            let mut extra_events: Vec<ConsoleEvent> = Vec::new();
             for op in outcome.plot_ops {
+                if let mc_plot::spec::PlotOp::ExportPdf { name } = &op {
+                    match figures.active_snapshot() {
+                        Some(fig) => {
+                            mc_io::vfs::put_output(name, mc_plot::pdf::render_figure(&fig));
+                        }
+                        None => extra_events.push(ConsoleEvent::Error {
+                            err: mc_core::McError::new(
+                                mc_core::ids::UNSUPPORTED,
+                                0,
+                                0,
+                                format!("exportgraphics: no active figure to export ('{name}')."),
+                                format!(
+                                    "exportgraphics: شکل فعالی برای خروجی‌گرفتن نیست («{name}»)."
+                                ),
+                            )
+                            .into(),
+                        }),
+                    }
+                }
                 figures.apply(op);
             }
             let touched = figures.take_touched();
@@ -607,6 +672,7 @@ fn eval_core(
                 .into_iter()
                 .map(|o| ConsoleEvent::Print { text: o.text })
                 .collect();
+            events.extend(extra_events);
             let status = match outcome.error {
                 None => JobStatus::Done,
                 Some(err) => {
@@ -887,14 +953,32 @@ pub fn get_plots() -> Vec<PlotFigure> {
         .collect()
 }
 
+/// رندر برداری PDF یک شکل مشخص (برای دکمهٔ «خروجی PDF» نمایشگر — pull).
+/// شکل نبود = خروجی خالی (UI پیام می‌دهد).
+pub fn export_figure_pdf(figure_id: u64) -> Vec<u8> {
+    let engine = engine()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    engine
+        .figures
+        .snapshots()
+        .into_iter()
+        .find(|f| f.figure_id == figure_id)
+        .map(|f| mc_plot::pdf::render_figure(&f))
+        .unwrap_or_default()
+}
+
 // ----- نگاشت snapshot موتور → DTO انتقالی (mc-plot → قرارداد v2) -----
 
 use mc_plot::figure::{
-    AxesSnapshot, CellSnapshot, ColorSnapshot, ErrSeriesSnapshot, FigureSnapshot, SeriesSnapshot,
-    StyleSnapshot,
+    Axes3DSnapshot, AxesSnapshot, CellSnapshot, ColorSnapshot, ErrSeriesSnapshot, FigureSnapshot,
+    SeriesSnapshot, StyleSnapshot,
 };
 use mc_plot::histogram::HistNorm as CoreHistNorm;
-use mc_plot::spec::{DashSpec, MarkerSpec};
+use mc_plot::spec::{
+    Colormap as CoreColormap, DashSpec, MarkerSpec, Shading3 as CoreShading3,
+    SurfKind as CoreSurfKind,
+};
 use mc_plot::ticks::Tick as CoreTick;
 
 fn map_figure(f: FigureSnapshot) -> PlotFigure {
@@ -982,6 +1066,89 @@ fn map_cell(c: CellSnapshot) -> PlotSpec {
             axes: map_axes(axes),
             legend: legend.map(map_legend),
         },
+        CellSnapshot::Plot3 {
+            series,
+            axes,
+            legend,
+        } => PlotSpec::Plot3 {
+            series: series
+                .into_iter()
+                .map(|s| Series3D {
+                    x: s.x,
+                    y: s.y,
+                    z: s.z,
+                    style: map_style(s.style),
+                    display_name: s.display_name,
+                })
+                .collect(),
+            axes: map_axes3d(axes),
+            legend: legend.map(map_legend),
+        },
+        CellSnapshot::Surface {
+            x,
+            y,
+            z,
+            kind,
+            shading,
+            colormap,
+            caxis,
+            colorbar,
+            vertex_normals,
+            axes,
+        } => match kind {
+            CoreSurfKind::Surf => PlotSpec::Surface {
+                x,
+                y,
+                z,
+                shading: map_shading(shading),
+                colormap: map_colormap(colormap),
+                caxis: caxis.map(|c| Limits {
+                    min: c[0],
+                    max: c[1],
+                }),
+                colorbar,
+                vertex_normals,
+                axes: map_axes3d(axes),
+            },
+            CoreSurfKind::Mesh => PlotSpec::Mesh {
+                x,
+                y,
+                z,
+                colormap: map_colormap(colormap),
+                caxis: caxis.map(|c| Limits {
+                    min: c[0],
+                    max: c[1],
+                }),
+                colorbar,
+                axes: map_axes3d(axes),
+            },
+        },
+        CellSnapshot::Contour {
+            x,
+            y,
+            z,
+            levels,
+            filled,
+            colormap,
+            caxis,
+            colorbar,
+            axes,
+            legend,
+        } => PlotSpec::Contour {
+            x,
+            y,
+            z,
+            levels,
+            filled,
+            colormap: map_colormap(colormap),
+            caxis: caxis.map(|c| Limits {
+                min: c[0],
+                max: c[1],
+            }),
+            colorbar,
+            axes: map_axes(axes),
+            legend: legend.map(map_legend),
+        },
         CellSnapshot::Subplot { rows, cols, cells } => PlotSpec::Subplot {
             rows,
             cols,
@@ -1004,6 +1171,7 @@ fn map_series(s: SeriesSnapshot) -> Series2D {
         x: s.x,
         y: s.y,
         style: map_style(s.style),
+        display_name: s.display_name,
     }
 }
 
@@ -1030,6 +1198,7 @@ fn map_style(st: StyleSnapshot) -> LineStyle {
     LineStyle {
         color: map_color(st.color),
         width: st.width,
+        marker_size: st.marker_size,
         dash: match st.dash {
             DashSpec::Solid => DashStyle::Solid,
             DashSpec::Dashed => DashStyle::Dashed,
@@ -1056,6 +1225,52 @@ fn map_color(c: ColorSnapshot) -> PlotColor {
     match c {
         ColorSnapshot::Palette(i) => PlotColor::Palette(i),
         ColorSnapshot::Rgb { r, g, b } => PlotColor::Rgba { r, g, b, a: 255 },
+    }
+}
+
+fn map_axes3d(a: Axes3DSnapshot) -> Axes3D {
+    Axes3D {
+        title: a.title,
+        xlabel: a.xlabel,
+        ylabel: a.ylabel,
+        zlabel: a.zlabel,
+        grid: a.grid,
+        box_on: a.box_on,
+        view: View3D {
+            az: a.view.az,
+            el: a.view.el,
+        },
+        x_limits: Limits {
+            min: a.x_limits[0],
+            max: a.x_limits[1],
+        },
+        y_limits: Limits {
+            min: a.y_limits[0],
+            max: a.y_limits[1],
+        },
+        z_limits: Limits {
+            min: a.z_limits[0],
+            max: a.z_limits[1],
+        },
+    }
+}
+
+fn map_shading(s: CoreShading3) -> Shading {
+    match s {
+        CoreShading3::Faceted => Shading::Faceted,
+        CoreShading3::Flat => Shading::Flat,
+        CoreShading3::Interp => Shading::Interp,
+    }
+}
+
+fn map_colormap(c: CoreColormap) -> Colormap {
+    match c {
+        CoreColormap::Parula => Colormap::Parula,
+        CoreColormap::Viridis => Colormap::Viridis,
+        CoreColormap::Jet => Colormap::Jet,
+        CoreColormap::Hot => Colormap::Hot,
+        CoreColormap::Cool => Colormap::Cool,
+        CoreColormap::Gray => Colormap::Gray,
     }
 }
 
@@ -1366,9 +1581,9 @@ mod tests {
         let r = evaluate_line("matrixish = ans * 1".to_owned());
         assert!(r.workspace_delta.changed[0].preview.len() <= 256);
 
-        // -- ثبات نسخه‌های قرارداد (رسم: v2 از فریز P3-a)
+        // -- ثبات نسخه‌های قرارداد (رسم: v3 از گام 3.8 — P3-b سه‌بعدی)
         assert_eq!(api_version(), 3);
-        assert_eq!(plot_contract_version(), 2);
+        assert_eq!(plot_contract_version(), 3);
 
         // -- بازرسی نشست (P0.1): workspace_vars مرتب و clear_workspace سمانتیک clear
         let _ = evaluate_line("zv = 9".to_owned());
@@ -1452,6 +1667,124 @@ mod tests {
         assert!(m_functions().is_empty());
         let r = evaluate_line("sq(1)".to_owned());
         assert_eq!(r.status, JobStatus::Failed);
+    }
+
+    /// قرارداد v3 (گام 3.8 — P3-b): سه‌بعدی موقّع — surf → DTO Surface با
+    /// محور/دوربین/نرمال؛ plot3 + DisplayName + auto-legend؛ MarkerSize.
+    #[test]
+    fn engine_v3_surface_roundtrip() {
+        let _guard = serial_guard();
+        let r =
+            evaluate_line("Z = peaks(9); surf(Z); view(-45, 25); zlabel('z'); colorbar".to_owned());
+        assert_eq!(r.status, JobStatus::Done, "{:?}", r.console_events);
+        assert_eq!(r.plots.len(), 1, "push: شکل فعال");
+        let PlotSpec::Surface {
+            z,
+            axes,
+            colorbar,
+            vertex_normals,
+            caxis,
+            ..
+        } = &r.plots[0].spec
+        else {
+            panic!("گزینهٔ Surface: {:?}", r.plots[0].spec)
+        };
+        assert_eq!((z.len(), z[0].len()), (9, 9));
+        assert_eq!(vertex_normals.len(), 9 * 9 * 3, "stride ۳ برای هر رأس");
+        assert!(colorbar, "colorbar روشن");
+        assert!(caxis.is_some(), "caxis خودکار از z");
+        assert_eq!(axes.view.az, -45.0);
+        assert_eq!(axes.view.el, 25.0);
+        assert_eq!(axes.zlabel.as_deref(), Some("z"));
+        assert_eq!(PLOT_CONTRACT_VERSION, 3);
+    }
+
+    #[test]
+    fn engine_v3_plot3_displayname_autolegend_marker_size() {
+        let _guard = serial_guard();
+        let r = evaluate_line(
+            "hold on; plot3([0 1], [0 1], [0 1], 'DisplayName', 'path', 'MarkerSize', 5)"
+                .to_owned(),
+        );
+        assert_eq!(r.status, JobStatus::Done, "{:?}", r.console_events);
+        let PlotSpec::Plot3 { series, legend, .. } = &r.plots[0].spec else {
+            panic!("گزینهٔ Plot3")
+        };
+        assert_eq!(series.len(), 1);
+        assert_eq!(series[0].display_name.as_deref(), Some("path"));
+        assert_eq!(series[0].style.marker_size, Some(5.0));
+        // auto-legend از DisplayName (حفرهٔ #4 سند ۱۳)
+        assert_eq!(
+            legend.as_ref().map(|l| l.entries.clone()),
+            Some(vec!["path".to_owned()])
+        );
+    }
+
+    #[test]
+    fn engine_v3_contourf_levels_resolved() {
+        let _guard = serial_guard();
+        let r = evaluate_line("contourf(peaks(12))".to_owned());
+        assert_eq!(r.status, JobStatus::Done, "{:?}", r.console_events);
+        let PlotSpec::Contour {
+            levels,
+            filled,
+            axes,
+            ..
+        } = &r.plots[0].spec
+        else {
+            panic!("گزینهٔ Contour")
+        };
+        assert!(*filled);
+        assert!(!levels.is_empty(), "سطح‌های خودکار حل‌شده");
+        let xl = axes.x_limits.expect("contour محور دوبعدی دارد");
+        assert!(xl.max > xl.min, "محور دوبعدی");
+    }
+
+    #[test]
+    fn engine_v3_exportgraphics_writes_pdf_to_outputs() {
+        let _guard = serial_guard();
+        let r = evaluate_line(
+            "f = @(x) sin(x); plot(0:0.1:6, f(0:0.1:6)); exportgraphics('demo.pdf')".to_owned(),
+        );
+        assert_eq!(r.status, JobStatus::Done, "{:?}", r.console_events);
+        let writes: Vec<&FileWrite> = r
+            .files_written
+            .iter()
+            .filter(|w| w.name == "demo.pdf")
+            .collect();
+        assert_eq!(writes.len(), 1, "یک خروجی PDF");
+        let pdf = &writes[0].bytes;
+        assert!(pdf.starts_with(b"%PDF-1.4"), "هدر PDF");
+        assert!(pdf.windows(5).any(|w| w == b"%%EOF"), "پایان PDF");
+        assert!(pdf.len() > 800, "محتوا دارد: {}", pdf.len());
+    }
+
+    #[test]
+    fn engine_v3_exportgraphics_rejects_paths_and_bad_args() {
+        let _guard = serial_guard();
+        // مسیر ممنوع — خطای مفسر (پیش از هر رندر)
+        let r = evaluate_line("exportgraphics('../evil.pdf')".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(
+            r.files_written.is_empty(),
+            "بدون فایل: {:?}",
+            r.files_written
+        );
+        // نام غیر رشته‌ای — خطا
+        let r = evaluate_line("exportgraphics(5)".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        assert!(r.files_written.is_empty());
+    }
+
+    #[test]
+    fn engine_v3_export_figure_pdf_pull() {
+        let _guard = serial_guard();
+        let r = evaluate_line("surf(peaks(7))".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        let id = r.plots[0].figure_id;
+        let pdf = export_figure_pdf(id);
+        assert!(pdf.starts_with(b"%PDF-1.4"));
+        assert!(export_figure_pdf(999_999).is_empty(), "شکل ناموجود = تهی");
     }
 
     /// قرارداد v2 (ROADMAP 2.3): لغو cross-thread روی مسیر evaluate_line
@@ -1622,12 +1955,12 @@ mod tests {
         assert_eq!(r.status, JobStatus::Done); // رشد کوچک همان مسیر، مجاز
     }
 
-    // ----- قرارداد رسم v2 (P3-a — ROADMAP 3.1/3.3) -----
+    // ----- قرارداد رسم (P3-a فریز v2 → گام 3.8 فریز v3) -----
 
-    /// نسخهٔ قرارداد پس از فریز P3-a.
+    /// نسخهٔ قرارداد پس از فریز P3-b (سه‌بعدی + DisplayName/MarkerSize).
     #[test]
-    fn plot_contract_version_is_two_after_p3a_freeze() {
-        assert_eq!(plot_contract_version(), 2);
+    fn plot_contract_version_is_three_after_p3b() {
+        assert_eq!(plot_contract_version(), 3);
     }
 
     /// رفت‌وبرگشت کامل: گزارهٔ plot → PlotOp → FigureState → snapshot → DTO.

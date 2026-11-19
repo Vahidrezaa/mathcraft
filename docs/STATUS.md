@@ -281,6 +281,16 @@ v1.0 انتشار       ⬜
 - **گیت‌ها:** flutter analyze پاک + **۷۳/۷۳** (۵۹ قبلی + ۱۴ جدید) · Rust: fmt ✓ clippy -D ✓ panic-audit صفر ✓ workspace کامل سبز (vdp1000 شامل) · Cargo.lock و app deps صفر تغییر (بدون وابستگی جدید — goldens فقط PNG تستی‌اند)
 - **وضعیت:** ۳ کامیت (perf Rust / فیکس پلار / goldens) روی bd4c58a؛ بعدی طبق §11: گام ۳.۷ فایل I/O
 
+## ۳.۲۴. گام 3.8 / P3-b — سه‌بعدی + فریز v3 (۲۰۲۶-۱۹، نوبت ۴۶)
+
+- **سه‌بعدی کامل:** plot3/surf/mesh/contour/contourf/colorbar/caxis/view/zlabel/colormap/shading + meshgrid/peaks — گرام PlotOp (۸ عملیات نو)، fold و snapshot با Axes3DSnapshot + نرمال رأس در Rust، marching squares (خطوط) + پُرکردن نوار-سلولی (contourf)، جدول‌های parula/viridis/jet/hot/cool/gray.
+- **قرارداد رسم v3** (فریز — doc 04 §8.5): Axes3D+view+box+حدود، vertex_normals، levels حل‌شده+filled برای Contour، **DisplayName + auto-legend زیر hold** (حفرهٔ #4 — پین کاربر)، **MarkerSize**.
+- **خروجی PDF برداری در موتور** (بدون وابستگی): `exportgraphics('x.pdf')` وسط fold → filesWritten + دکمهٔ PDF نمایشگر (pull) — همهٔ نوع‌های سلول + رنگ‌نوار.
+- **نمایشگر 3D:** پروجکشن + مرتب‌سازی عمق painter + سایهٔ صاف (نور سر دوربین)، جعبه/برچسب/شبکه، چرخش لمسی درگ (az/el) با double-tap بازنشانی، رنگ‌نوار مشترک 2D/3D؛ پورت وفادار colormap/projection با تست پاریتی.
+- **تست‌ها:** mc-plot ۸۴ (+۲۲)، mc-interp گزاره‌ای ۶۴ (+۱۲)، mc-ffi ۱۶ (+۶ شامل exportgraphics→PDF)، فلاتر goldenهای 3D ×۵ + چرخش + **بودجهٔ ۵۰k مثلث ≤120ms headless** + پاریتی ×۳؛ analyze پاک.
+- بستن فاز ۳ (P3-a+P3-b سرور-کامل)؛ دمو دستگاه `surf(peaks)` با چرخش + ۶۰fps → چک کاربر.
+- محدودیت‌های ثبت‌شده: PDF متن فارسی با '?' (فونت پایه)، contourf مرز نوار-سلولی + روکش نرم، 3D بی‌پن/زوم، meshgrid تک‌خروجی.
+
 ## ۳.۲۳. رفع قرمزی CI#33 + بستن 3.7 (۲۰۲۶-۱۹، نوبت ۴۵)
 
 - **CI#33 روی پوش کاربر (d44aae2) دو جاب قرمز داشت** (پیش‌بینی‌شده: «اگر CI قرمز شد نوبت بعد اصلاح»):

@@ -86,3 +86,13 @@ GeoGebra هستند و فعلاً نداریم؛ «نمودار ما» امرو�
 بیننده → golden + perf در CI (گام ۳.۶ که خودش پیش‌نیاز P3-b است) → دمو روی
 دستگاه کاربر. هیچ شکافی از جدول ۲ بدون ردیف COMPATIBILITY و تست رگرسیون
 بسته نمی‌شود.
+
+
+## به‌روزرسانی گام 3.8 (۲۰۲۶-۱۱-۱۹) — v3
+
+- پشتیبانی‌شدهٔ نو: plot3, surf, mesh, contour, contourf, colorbar, caxis, view,
+  zlabel, colormap (شش پالت), shading, exportgraphics (PDF), meshgrid (تک‌خروجی),
+  peaks, DisplayName (auto-legend زیر hold), MarkerSize.
+- بازماندهٔ فهرست کوتاه v3 (تعویق صادقانه به E-phases): pie، حاشیه‌نویسی متن،
+  box رسم دوبعدی، رندر quiver، تکمیل جدول مارکرها، [X,Y]=meshgrid (نیازمند
+  multi-assign)، متن فارسی در PDF (فونت پایه WinAnsi — نیاز به فونت تعبیه‌شده).

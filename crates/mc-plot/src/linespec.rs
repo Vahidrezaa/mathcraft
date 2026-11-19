@@ -144,6 +144,7 @@ mod tests {
             dash: None,
             marker: None,
             label: None,
+            marker_size: None,
         }
     }
 

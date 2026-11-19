@@ -8,9 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'api.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `map_axes`, `map_cell`, `map_color`, `map_err_band`, `map_err_series`, `map_figure`, `map_hist_norm`, `map_legend`, `map_series`, `map_style`, `map_tick`, `new`, `panic_error`, `set_active`, `vfs_drain_outputs`, `vfs_sync_from_engine`
+// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `map_axes3d`, `map_axes`, `map_cell`, `map_color`, `map_colormap`, `map_err_band`, `map_err_series`, `map_figure`, `map_hist_norm`, `map_legend`, `map_series`, `map_shading`, `map_style`, `map_tick`, `new`, `panic_error`, `set_active`, `vfs_drain_outputs`, `vfs_sync_from_engine`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Engine`, `JobGuard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// نسخه قرارداد — UI در startup چک می‌کند (سند ۰۲ بخش ۳ بند ۴).
 Future<int> apiVersion() => RustLib.instance.api.crateApiApiVersion();
@@ -51,6 +51,11 @@ Future<BigInt?> activeJobId() => RustLib.instance.api.crateApiActiveJobId();
 /// لیست کامل شکل‌های نشست (مدل pull سند ۰۲ §7) — UI هر زمان می‌تواند کل
 /// شکل‌ها را بگیرد؛ push برای به‌روزرسانی = `EvalResult.plots` همین اجرا.
 Future<List<PlotFigure>> getPlots() => RustLib.instance.api.crateApiGetPlots();
+
+/// رندر برداری PDF یک شکل مشخص (برای دکمهٔ «خروجی PDF» نمایشگر — pull).
+/// شکل نبود = خروجی خالی (UI پیام می‌دهد).
+Future<Uint8List> exportFigurePdf({required BigInt figureId}) =>
+    RustLib.instance.api.crateApiExportFigurePdf(figureId: figureId);
 
 /// فهرست کامل متغیرهای فعلی نشست (مرتب بر اساس نام) — تب «متغیرها»ی UI و
 /// `whos` کنسول ترمینال (توابع الحاقی P0.1 — سند ۰۲ بخش ۳).
@@ -164,12 +169,26 @@ class Axes3D {
   final String? zlabel;
   final bool grid;
 
+  /// جعبهٔ سه‌بعدی (`box on`).
+  final bool boxOn;
+
+  /// دوربین فعال (v3).
+  final View3D view;
+  final Limits xLimits;
+  final Limits yLimits;
+  final Limits zLimits;
+
   const Axes3D({
     this.title,
     this.xlabel,
     this.ylabel,
     this.zlabel,
     required this.grid,
+    required this.boxOn,
+    required this.view,
+    required this.xLimits,
+    required this.yLimits,
+    required this.zLimits,
   });
 
   static Future<Axes3D> default_() =>
@@ -181,7 +200,12 @@ class Axes3D {
       xlabel.hashCode ^
       ylabel.hashCode ^
       zlabel.hashCode ^
-      grid.hashCode;
+      grid.hashCode ^
+      boxOn.hashCode ^
+      view.hashCode ^
+      xLimits.hashCode ^
+      yLimits.hashCode ^
+      zLimits.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -192,7 +216,12 @@ class Axes3D {
           xlabel == other.xlabel &&
           ylabel == other.ylabel &&
           zlabel == other.zlabel &&
-          grid == other.grid;
+          grid == other.grid &&
+          boxOn == other.boxOn &&
+          view == other.view &&
+          xLimits == other.xLimits &&
+          yLimits == other.yLimits &&
+          zLimits == other.zLimits;
 }
 
 /// colormap پیش‌فرض parula (بازسازی‌شده) — سند ۰۴ بخش ۸.۳.
@@ -454,6 +483,9 @@ class Limits {
     required this.max,
   });
 
+  static Future<Limits> default_() =>
+      RustLib.instance.api.crateApiLimitsDefault();
+
   @override
   int get hashCode => min.hashCode ^ max.hashCode;
 
@@ -475,16 +507,24 @@ class LineStyle {
   final DashStyle dash;
   final Marker marker;
 
+  /// اندازهٔ مارکر — None = پیش‌فرض رندرر (v3).
+  final double? markerSize;
+
   const LineStyle({
     required this.color,
     required this.width,
     required this.dash,
     required this.marker,
+    this.markerSize,
   });
 
   @override
   int get hashCode =>
-      color.hashCode ^ width.hashCode ^ dash.hashCode ^ marker.hashCode;
+      color.hashCode ^
+      width.hashCode ^
+      dash.hashCode ^
+      marker.hashCode ^
+      markerSize.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -494,7 +534,8 @@ class LineStyle {
           color == other.color &&
           width == other.width &&
           dash == other.dash &&
-          marker == other.marker;
+          marker == other.marker &&
+          markerSize == other.markerSize;
 }
 
 /// خلاصه یک تابع/اسکریپت ثبت‌شده — برای فهرست تعریف‌ها در UI و `whos`.
@@ -713,7 +754,7 @@ sealed class PlotSpec with _$PlotSpec {
     required Axes2D axes,
   }) = PlotSpec_Quiver;
 
-  /// سطح ۳بعدی (P3-b — رزرو؛ داده‌ها از همین حالا قراردادند).
+  /// سطح سه‌بعدی surf (P3-b — موقّع از v3).
   const factory PlotSpec.surface({
     required Float64List x,
     required Float64List y,
@@ -724,7 +765,13 @@ sealed class PlotSpec with _$PlotSpec {
     /// بازهٔ رنگ صریح (caxis) — None = خودکار از z.
     Limits? caxis,
     required bool colorbar,
+
+    /// نرمال رأس‌ها (تخت، stride ۳، row-major) — محاسبه در Rust (v3).
+    required Float32List vertexNormals,
+    required Axes3D axes,
   }) = PlotSpec_Surface;
+
+  /// سیم‌باف mesh.
   const factory PlotSpec.mesh({
     required Float64List x,
     required Float64List y,
@@ -732,19 +779,28 @@ sealed class PlotSpec with _$PlotSpec {
     required Colormap colormap,
     Limits? caxis,
     required bool colorbar,
+    required Axes3D axes,
   }) = PlotSpec_Mesh;
+
+  /// سطح هم‌ارزش contour/contourf (v3: levels حل‌شده + filled + محور 2D).
   const factory PlotSpec.contour({
     required Float64List x,
     required Float64List y,
     required List<Float64List> z,
     required Float64List levels,
+    required bool filled,
     required Colormap colormap,
     Limits? caxis,
     required bool colorbar,
+    required Axes2D axes,
+    Legend? legend,
   }) = PlotSpec_Contour;
+
+  /// منحنی فضایی plot3.
   const factory PlotSpec.plot3({
     required List<Series3D> series,
     required Axes3D axes,
+    Legend? legend,
   }) = PlotSpec_Plot3;
   const factory PlotSpec.subplot({
     required int rows,
@@ -819,17 +875,26 @@ class Series2D {
   final Float64List y;
   final LineStyle style;
 
+  /// DisplayName — سوخت auto-legend زیر hold (v3).
+  final String? displayName;
+
   const Series2D({
     required this.id,
     required this.rawLen,
     required this.x,
     required this.y,
     required this.style,
+    this.displayName,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ rawLen.hashCode ^ x.hashCode ^ y.hashCode ^ style.hashCode;
+      id.hashCode ^
+      rawLen.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      style.hashCode ^
+      displayName.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -840,7 +905,8 @@ class Series2D {
           rawLen == other.rawLen &&
           x == other.x &&
           y == other.y &&
-          style == other.style;
+          style == other.style &&
+          displayName == other.displayName;
 }
 
 class Series3D {
@@ -849,15 +915,24 @@ class Series3D {
   final Float64List z;
   final LineStyle style;
 
+  /// DisplayName (v3).
+  final String? displayName;
+
   const Series3D({
     required this.x,
     required this.y,
     required this.z,
     required this.style,
+    this.displayName,
   });
 
   @override
-  int get hashCode => x.hashCode ^ y.hashCode ^ z.hashCode ^ style.hashCode;
+  int get hashCode =>
+      x.hashCode ^
+      y.hashCode ^
+      z.hashCode ^
+      style.hashCode ^
+      displayName.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -867,7 +942,8 @@ class Series3D {
           x == other.x &&
           y == other.y &&
           z == other.z &&
-          style == other.style;
+          style == other.style &&
+          displayName == other.displayName;
 }
 
 enum Shading {
@@ -957,6 +1033,31 @@ class VarSummary {
           class_ == other.class_ &&
           shape == other.shape &&
           preview == other.preview;
+}
+
+/// دوربین سه‌بعدی — `view(az, el)` بر حسب درجه (v3).
+class View3D {
+  final double az;
+  final double el;
+
+  const View3D({
+    required this.az,
+    required this.el,
+  });
+
+  static Future<View3D> default_() =>
+      RustLib.instance.api.crateApiView3DDefault();
+
+  @override
+  int get hashCode => az.hashCode ^ el.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is View3D &&
+          runtimeType == other.runtimeType &&
+          az == other.az &&
+          el == other.el;
 }
 
 /// خلاصه یک متغیر برای بازرس متغیرها (سند ۰۲ بخش ۳).

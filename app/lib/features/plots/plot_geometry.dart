@@ -22,6 +22,7 @@ class SeriesGeom {
     required this.width,
     required this.dash,
     this.marker,
+    this.markerSize,
   });
 
   final int id;
@@ -29,6 +30,9 @@ class SeriesGeom {
   final List<double> y;
   final Color color;
   final double width;
+
+  /// اندازهٔ مارکر (pt مفهومی) — null = پیش‌فرض رندرر (v3 — گام 3.8).
+  final double? markerSize;
 
   /// null = صاف؛ خالی = بدون خط (فقط مارکر).
   final List<double>? dash;
@@ -215,7 +219,128 @@ class SeriesWithBand {
   final List<double>? xNeg, xPos, yNeg, yPos;
 }
 
-/// استخراج مدل میانی از قرارداد؛ null برای گونه‌های هنوز بی‌رندر (3D/Quiver).
+
+/// محورهای سه‌بعدی + دوربین (v3 — گام 3.8).
+class Axes3DData {
+  Axes3DData({
+    required this.title,
+    required this.xlabel,
+    required this.ylabel,
+    required this.zlabel,
+    required this.grid,
+    required this.boxOn,
+    required this.view,
+    required this.xLimits,
+    required this.yLimits,
+    required this.zLimits,
+  });
+
+  final String? title, xlabel, ylabel, zlabel;
+  final bool grid, boxOn;
+
+  /// (az, el) بر حسب درجه — پیش‌فرض متلب (-37.5, 30).
+  final (double, double) view;
+  final (double, double) xLimits, yLimits, zLimits;
+}
+
+/// سری plot3 — منحنی فضایی.
+class Series3DGeom {
+  Series3DGeom({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.color,
+    required this.width,
+    required this.dash,
+  });
+
+  final List<double> x, y, z;
+  final Color color;
+  final double width;
+  final List<double>? dash;
+}
+
+/// سطح surf/mesh — شبکهٔ منظم + نرمال رأس‌ها (از موتور).
+class SurfaceCellData extends PlotCellData {
+  SurfaceCellData({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.isMesh,
+    required this.shading,
+    required this.colormap,
+    required this.caxis,
+    required this.colorbar,
+    required this.vertexNormals,
+    required this.axes3d,
+  });
+
+  final List<double> x, y;
+
+  /// z[i][j] — سطر i = y ثابت، ستون j = x ثابت (قرارداد meshgrid).
+  final List<List<double>> z;
+  final bool isMesh;
+  final api.Shading shading;
+  final api.Colormap colormap;
+  final (double, double)? caxis;
+  final bool colorbar;
+
+  /// تخت، stride ۳ (nx, ny, nz) — row-major.
+  final List<double> vertexNormals;
+  final Axes3DData axes3d;
+
+  @override
+  AxesData? get axes => null; // مسیر چیدمان دوبعدی ندارد
+  @override
+  LegendData? get legend => null;
+}
+
+/// contour/contourf — رندر دوبعدی با محور معمولی.
+class ContourCellData extends PlotCellData {
+  ContourCellData({
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.levels,
+    required this.filled,
+    required this.colormap,
+    required this.caxis,
+    required this.colorbar,
+    required this.axes,
+    this.legend,
+  });
+
+  final List<double> x, y;
+  final List<List<double>> z;
+  final List<double> levels;
+  final bool filled;
+  final api.Colormap colormap;
+  final (double, double)? caxis;
+  final bool colorbar;
+  @override
+  final AxesData axes;
+  @override
+  final LegendData? legend;
+}
+
+/// plot3 — منحنی فضایی + محور سه‌بعدی.
+class Plot3CellData extends PlotCellData {
+  Plot3CellData({
+    required this.series,
+    required this.axes3d,
+    this.legend,
+  });
+
+  final List<Series3DGeom> series;
+  final Axes3DData axes3d;
+  @override
+  final LegendData? legend;
+
+  @override
+  AxesData? get axes => null;
+}
+
+/// استخراج مدل میانی از قرارداد — از v3 سه‌بعدی هم رندر می‌شود (گام 3.8).
 PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
   AxesData axesOf(api.Axes2D a) => AxesData(
         title: a.title,
@@ -237,6 +362,18 @@ PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
       );
   LegendData? legendOf(api.Legend? l) =>
       l == null ? null : LegendData(l.entries, l.position);
+  Axes3DData axes3dOf(api.Axes3D a) => Axes3DData(
+        title: a.title,
+        xlabel: a.xlabel,
+        ylabel: a.ylabel,
+        zlabel: a.zlabel,
+        grid: a.grid,
+        boxOn: a.boxOn,
+        view: (a.view.az, a.view.el),
+        xLimits: (a.xLimits.min, a.xLimits.max),
+        yLimits: (a.yLimits.min, a.yLimits.max),
+        zLimits: (a.zLimits.min, a.zLimits.max),
+      );
   List<SeriesGeom> seriesOf(Iterable<api.Series2D> ss) => ss
       .map((s) => SeriesGeom(
             id: s.id.toInt(),
@@ -247,6 +384,7 @@ PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
             dash: dashPatternFor(s.style.dash),
             marker:
                 s.style.marker == api.Marker.none ? null : s.style.marker,
+            markerSize: s.style.markerSize,
           ))
       .toList();
 
@@ -313,12 +451,61 @@ PlotCellData? cellDataFromSpec(api.PlotSpec spec) {
         axes: axesOf(spec.axes),
         legend: legendOf(spec.legend),
       ),
-    api.PlotSpec_Quiver() ||
-    api.PlotSpec_Surface() ||
-    api.PlotSpec_Mesh() ||
-    api.PlotSpec_Contour() ||
-    api.PlotSpec_Plot3() =>
-      null,
+    api.PlotSpec_Surface() => SurfaceCellData(
+        x: spec.x.toList(),
+        y: spec.y.toList(),
+        z: spec.z.map((r) => r.toList()).toList(),
+        isMesh: false,
+        shading: spec.shading,
+        colormap: spec.colormap,
+        caxis: spec.caxis == null
+            ? null
+            : (spec.caxis!.min, spec.caxis!.max),
+        colorbar: spec.colorbar,
+        vertexNormals: spec.vertexNormals.toList(),
+        axes3d: axes3dOf(spec.axes),
+      ),
+    api.PlotSpec_Mesh() => SurfaceCellData(
+        x: spec.x.toList(),
+        y: spec.y.toList(),
+        z: spec.z.map((r) => r.toList()).toList(),
+        isMesh: true,
+        shading: api.Shading.faceted,
+        colormap: spec.colormap,
+        caxis:
+            spec.caxis == null ? null : (spec.caxis!.min, spec.caxis!.max),
+        colorbar: spec.colorbar,
+        vertexNormals: const [],
+        axes3d: axes3dOf(spec.axes),
+      ),
+    api.PlotSpec_Contour() => ContourCellData(
+        x: spec.x.toList(),
+        y: spec.y.toList(),
+        z: spec.z.map((r) => r.toList()).toList(),
+        levels: spec.levels.toList(),
+        filled: spec.filled,
+        colormap: spec.colormap,
+        caxis:
+            spec.caxis == null ? null : (spec.caxis!.min, spec.caxis!.max),
+        colorbar: spec.colorbar,
+        axes: axesOf(spec.axes),
+        legend: legendOf(spec.legend),
+      ),
+    api.PlotSpec_Plot3() => Plot3CellData(
+        series: spec.series
+            .map((s) => Series3DGeom(
+                  x: s.x.toList(),
+                  y: s.y.toList(),
+                  z: s.z.toList(),
+                  color: resolvePlotColor(s.style.color),
+                  width: s.style.width,
+                  dash: dashPatternFor(s.style.dash),
+                ))
+            .toList(),
+        axes3d: axes3dOf(spec.axes),
+        legend: legendOf(spec.legend),
+      ),
+    api.PlotSpec_Quiver() => null, // هنوز بی‌رندر (فهرست کوتاه v3)
     api.PlotSpec_Subplot() => null, // سطح صفحه مدیریت می‌شود
   };
 }

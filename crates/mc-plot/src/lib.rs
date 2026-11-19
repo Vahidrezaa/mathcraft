@@ -30,13 +30,16 @@
     )
 )]
 
+pub mod colormap;
 pub mod figure;
 pub mod histogram;
 pub mod linespec;
 pub mod lttb;
 pub mod palette;
+pub mod pdf;
 pub mod session;
 pub mod spec;
+pub mod surface;
 pub mod ticks;
 
 /// نسخهٔ قرارداد رسم (روی DTO در `mc_ffi::api` تعریف می‌شود؛ اینجا فقط

@@ -153,6 +153,9 @@ class AppLocalizationsFa extends AppLocalizations {
   String get plotsListTooltip => 'فهرست شکل‌ها';
 
   @override
+  String get plotsPdfTooltip => 'خروجی PDF برداری (رندر در موتور)';
+
+  @override
   String get plotsSaveTooltip => 'ذخیرهٔ PNG';
 
   @override

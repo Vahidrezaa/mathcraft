@@ -75,6 +75,7 @@
   "plotsFigureLabel": "Figure {n}",
   "@plotsFigureLabel": { "placeholders": { "n": { "type": "int" } } },
   "plotsListTooltip": "Figure list",
+  "plotsPdfTooltip": "Export vector PDF (Rust-rendered)",
   "plotsSaveTooltip": "Save PNG",
   "plotsShareTooltip": "Share PNG",
   "plotsInfoTooltip": "Figure info",

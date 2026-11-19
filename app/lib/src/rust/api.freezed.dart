@@ -948,16 +948,35 @@ mixin _$PlotSpec {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) =>
@@ -984,22 +1003,34 @@ mixin _$PlotSpec {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) =>
       throw _privateConstructorUsedError;
@@ -1025,22 +1056,33 @@ mixin _$PlotSpec {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) =>
@@ -1240,16 +1282,35 @@ class _$PlotSpec_Line2DImpl extends PlotSpec_Line2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -1279,22 +1340,34 @@ class _$PlotSpec_Line2DImpl extends PlotSpec_Line2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return line2D?.call(series, axes, legend);
@@ -1323,22 +1396,33 @@ class _$PlotSpec_Line2DImpl extends PlotSpec_Line2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -1552,16 +1636,35 @@ class _$PlotSpec_Scatter2DImpl extends PlotSpec_Scatter2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -1591,22 +1694,34 @@ class _$PlotSpec_Scatter2DImpl extends PlotSpec_Scatter2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return scatter2D?.call(series, axes, legend);
@@ -1635,22 +1750,33 @@ class _$PlotSpec_Scatter2DImpl extends PlotSpec_Scatter2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -1911,16 +2037,35 @@ class _$PlotSpec_Bar2DImpl extends PlotSpec_Bar2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -1950,22 +2095,34 @@ class _$PlotSpec_Bar2DImpl extends PlotSpec_Bar2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return bar2D?.call(series, width, horizontal, stacked, axes, legend);
@@ -1994,22 +2151,33 @@ class _$PlotSpec_Bar2DImpl extends PlotSpec_Bar2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -2271,16 +2439,35 @@ class _$PlotSpec_HistogramImpl extends PlotSpec_Histogram {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -2310,22 +2497,34 @@ class _$PlotSpec_HistogramImpl extends PlotSpec_Histogram {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return histogram?.call(binEdges, counts, norm, style, axes, legend);
@@ -2354,22 +2553,33 @@ class _$PlotSpec_HistogramImpl extends PlotSpec_Histogram {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -2604,16 +2814,35 @@ class _$PlotSpec_Area2DImpl extends PlotSpec_Area2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -2643,22 +2872,34 @@ class _$PlotSpec_Area2DImpl extends PlotSpec_Area2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return area2D?.call(series, baseline, axes, legend);
@@ -2687,22 +2928,33 @@ class _$PlotSpec_Area2DImpl extends PlotSpec_Area2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -2910,16 +3162,35 @@ class _$PlotSpec_Fill2DImpl extends PlotSpec_Fill2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -2949,22 +3220,34 @@ class _$PlotSpec_Fill2DImpl extends PlotSpec_Fill2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return fill2D?.call(series, axes);
@@ -2993,22 +3276,33 @@ class _$PlotSpec_Fill2DImpl extends PlotSpec_Fill2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -3212,16 +3506,35 @@ class _$PlotSpec_PolarImpl extends PlotSpec_Polar {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -3251,22 +3564,34 @@ class _$PlotSpec_PolarImpl extends PlotSpec_Polar {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return polar?.call(series, legend);
@@ -3295,22 +3620,33 @@ class _$PlotSpec_PolarImpl extends PlotSpec_Polar {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -3524,16 +3860,35 @@ class _$PlotSpec_ErrorBar2DImpl extends PlotSpec_ErrorBar2D {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -3563,22 +3918,34 @@ class _$PlotSpec_ErrorBar2DImpl extends PlotSpec_ErrorBar2D {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return errorBar2D?.call(series, axes, legend);
@@ -3607,22 +3974,33 @@ class _$PlotSpec_ErrorBar2DImpl extends PlotSpec_ErrorBar2D {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -3859,16 +4237,35 @@ class _$PlotSpec_QuiverImpl extends PlotSpec_Quiver {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -3898,22 +4295,34 @@ class _$PlotSpec_QuiverImpl extends PlotSpec_Quiver {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return quiver?.call(x, y, u, v, axes);
@@ -3942,22 +4351,33 @@ class _$PlotSpec_QuiverImpl extends PlotSpec_Quiver {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
@@ -4070,7 +4490,9 @@ abstract class _$$PlotSpec_SurfaceImplCopyWith<$Res> {
       Shading shading,
       Colormap colormap,
       Limits? caxis,
-      bool colorbar});
+      bool colorbar,
+      Float32List vertexNormals,
+      Axes3D axes});
 }
 
 /// @nodoc
@@ -4093,6 +4515,8 @@ class __$$PlotSpec_SurfaceImplCopyWithImpl<$Res>
     Object? colormap = null,
     Object? caxis = freezed,
     Object? colorbar = null,
+    Object? vertexNormals = null,
+    Object? axes = null,
   }) {
     return _then(_$PlotSpec_SurfaceImpl(
       x: null == x
@@ -4123,6 +4547,14 @@ class __$$PlotSpec_SurfaceImplCopyWithImpl<$Res>
           ? _value.colorbar
           : colorbar // ignore: cast_nullable_to_non_nullable
               as bool,
+      vertexNormals: null == vertexNormals
+          ? _value.vertexNormals
+          : vertexNormals // ignore: cast_nullable_to_non_nullable
+              as Float32List,
+      axes: null == axes
+          ? _value.axes
+          : axes // ignore: cast_nullable_to_non_nullable
+              as Axes3D,
     ));
   }
 }
@@ -4137,7 +4569,9 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
       required this.shading,
       required this.colormap,
       this.caxis,
-      required this.colorbar})
+      required this.colorbar,
+      required this.vertexNormals,
+      required this.axes})
       : _z = z,
         super._();
 
@@ -4164,9 +4598,15 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
   @override
   final bool colorbar;
 
+  /// نرمال رأس‌ها (تخت، stride ۳، row-major) — محاسبه در Rust (v3).
+  @override
+  final Float32List vertexNormals;
+  @override
+  final Axes3D axes;
+
   @override
   String toString() {
-    return 'PlotSpec.surface(x: $x, y: $y, z: $z, shading: $shading, colormap: $colormap, caxis: $caxis, colorbar: $colorbar)';
+    return 'PlotSpec.surface(x: $x, y: $y, z: $z, shading: $shading, colormap: $colormap, caxis: $caxis, colorbar: $colorbar, vertexNormals: $vertexNormals, axes: $axes)';
   }
 
   @override
@@ -4182,7 +4622,10 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
                 other.colormap == colormap) &&
             (identical(other.caxis, caxis) || other.caxis == caxis) &&
             (identical(other.colorbar, colorbar) ||
-                other.colorbar == colorbar));
+                other.colorbar == colorbar) &&
+            const DeepCollectionEquality()
+                .equals(other.vertexNormals, vertexNormals) &&
+            (identical(other.axes, axes) || other.axes == axes));
   }
 
   @override
@@ -4194,7 +4637,9 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
       shading,
       colormap,
       caxis,
-      colorbar);
+      colorbar,
+      const DeepCollectionEquality().hash(vertexNormals),
+      axes);
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -4231,20 +4676,40 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
-    return surface(x, y, z, shading, colormap, caxis, colorbar);
+    return surface(
+        x, y, z, shading, colormap, caxis, colorbar, vertexNormals, axes);
   }
 
   @override
@@ -4270,25 +4735,38 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
-    return surface?.call(x, y, z, shading, colormap, caxis, colorbar);
+    return surface?.call(
+        x, y, z, shading, colormap, caxis, colorbar, vertexNormals, axes);
   }
 
   @override
@@ -4314,27 +4792,39 @@ class _$PlotSpec_SurfaceImpl extends PlotSpec_Surface {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
     if (surface != null) {
-      return surface(x, y, z, shading, colormap, caxis, colorbar);
+      return surface(
+          x, y, z, shading, colormap, caxis, colorbar, vertexNormals, axes);
     }
     return orElse();
   }
@@ -4415,7 +4905,9 @@ abstract class PlotSpec_Surface extends PlotSpec {
       required final Shading shading,
       required final Colormap colormap,
       final Limits? caxis,
-      required final bool colorbar}) = _$PlotSpec_SurfaceImpl;
+      required final bool colorbar,
+      required final Float32List vertexNormals,
+      required final Axes3D axes}) = _$PlotSpec_SurfaceImpl;
   const PlotSpec_Surface._() : super._();
 
   Float64List get x;
@@ -4427,6 +4919,10 @@ abstract class PlotSpec_Surface extends PlotSpec {
   /// بازهٔ رنگ صریح (caxis) — None = خودکار از z.
   Limits? get caxis;
   bool get colorbar;
+
+  /// نرمال رأس‌ها (تخت، stride ۳، row-major) — محاسبه در Rust (v3).
+  Float32List get vertexNormals;
+  Axes3D get axes;
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -4447,7 +4943,8 @@ abstract class _$$PlotSpec_MeshImplCopyWith<$Res> {
       List<Float64List> z,
       Colormap colormap,
       Limits? caxis,
-      bool colorbar});
+      bool colorbar,
+      Axes3D axes});
 }
 
 /// @nodoc
@@ -4469,6 +4966,7 @@ class __$$PlotSpec_MeshImplCopyWithImpl<$Res>
     Object? colormap = null,
     Object? caxis = freezed,
     Object? colorbar = null,
+    Object? axes = null,
   }) {
     return _then(_$PlotSpec_MeshImpl(
       x: null == x
@@ -4495,6 +4993,10 @@ class __$$PlotSpec_MeshImplCopyWithImpl<$Res>
           ? _value.colorbar
           : colorbar // ignore: cast_nullable_to_non_nullable
               as bool,
+      axes: null == axes
+          ? _value.axes
+          : axes // ignore: cast_nullable_to_non_nullable
+              as Axes3D,
     ));
   }
 }
@@ -4508,7 +5010,8 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
       required final List<Float64List> z,
       required this.colormap,
       this.caxis,
-      required this.colorbar})
+      required this.colorbar,
+      required this.axes})
       : _z = z,
         super._();
 
@@ -4530,10 +5033,12 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
   final Limits? caxis;
   @override
   final bool colorbar;
+  @override
+  final Axes3D axes;
 
   @override
   String toString() {
-    return 'PlotSpec.mesh(x: $x, y: $y, z: $z, colormap: $colormap, caxis: $caxis, colorbar: $colorbar)';
+    return 'PlotSpec.mesh(x: $x, y: $y, z: $z, colormap: $colormap, caxis: $caxis, colorbar: $colorbar, axes: $axes)';
   }
 
   @override
@@ -4548,7 +5053,8 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
                 other.colormap == colormap) &&
             (identical(other.caxis, caxis) || other.caxis == caxis) &&
             (identical(other.colorbar, colorbar) ||
-                other.colorbar == colorbar));
+                other.colorbar == colorbar) &&
+            (identical(other.axes, axes) || other.axes == axes));
   }
 
   @override
@@ -4559,7 +5065,8 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
       const DeepCollectionEquality().hash(_z),
       colormap,
       caxis,
-      colorbar);
+      colorbar,
+      axes);
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -4595,20 +5102,39 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
-    return mesh(x, y, z, colormap, caxis, colorbar);
+    return mesh(x, y, z, colormap, caxis, colorbar, axes);
   }
 
   @override
@@ -4634,25 +5160,37 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
-    return mesh?.call(x, y, z, colormap, caxis, colorbar);
+    return mesh?.call(x, y, z, colormap, caxis, colorbar, axes);
   }
 
   @override
@@ -4678,27 +5216,38 @@ class _$PlotSpec_MeshImpl extends PlotSpec_Mesh {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
     if (mesh != null) {
-      return mesh(x, y, z, colormap, caxis, colorbar);
+      return mesh(x, y, z, colormap, caxis, colorbar, axes);
     }
     return orElse();
   }
@@ -4778,7 +5327,8 @@ abstract class PlotSpec_Mesh extends PlotSpec {
       required final List<Float64List> z,
       required final Colormap colormap,
       final Limits? caxis,
-      required final bool colorbar}) = _$PlotSpec_MeshImpl;
+      required final bool colorbar,
+      required final Axes3D axes}) = _$PlotSpec_MeshImpl;
   const PlotSpec_Mesh._() : super._();
 
   Float64List get x;
@@ -4787,6 +5337,7 @@ abstract class PlotSpec_Mesh extends PlotSpec {
   Colormap get colormap;
   Limits? get caxis;
   bool get colorbar;
+  Axes3D get axes;
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -4806,9 +5357,12 @@ abstract class _$$PlotSpec_ContourImplCopyWith<$Res> {
       Float64List y,
       List<Float64List> z,
       Float64List levels,
+      bool filled,
       Colormap colormap,
       Limits? caxis,
-      bool colorbar});
+      bool colorbar,
+      Axes2D axes,
+      Legend? legend});
 }
 
 /// @nodoc
@@ -4828,9 +5382,12 @@ class __$$PlotSpec_ContourImplCopyWithImpl<$Res>
     Object? y = null,
     Object? z = null,
     Object? levels = null,
+    Object? filled = null,
     Object? colormap = null,
     Object? caxis = freezed,
     Object? colorbar = null,
+    Object? axes = null,
+    Object? legend = freezed,
   }) {
     return _then(_$PlotSpec_ContourImpl(
       x: null == x
@@ -4849,6 +5406,10 @@ class __$$PlotSpec_ContourImplCopyWithImpl<$Res>
           ? _value.levels
           : levels // ignore: cast_nullable_to_non_nullable
               as Float64List,
+      filled: null == filled
+          ? _value.filled
+          : filled // ignore: cast_nullable_to_non_nullable
+              as bool,
       colormap: null == colormap
           ? _value.colormap
           : colormap // ignore: cast_nullable_to_non_nullable
@@ -4861,6 +5422,14 @@ class __$$PlotSpec_ContourImplCopyWithImpl<$Res>
           ? _value.colorbar
           : colorbar // ignore: cast_nullable_to_non_nullable
               as bool,
+      axes: null == axes
+          ? _value.axes
+          : axes // ignore: cast_nullable_to_non_nullable
+              as Axes2D,
+      legend: freezed == legend
+          ? _value.legend
+          : legend // ignore: cast_nullable_to_non_nullable
+              as Legend?,
     ));
   }
 }
@@ -4873,9 +5442,12 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
       required this.y,
       required final List<Float64List> z,
       required this.levels,
+      required this.filled,
       required this.colormap,
       this.caxis,
-      required this.colorbar})
+      required this.colorbar,
+      required this.axes,
+      this.legend})
       : _z = z,
         super._();
 
@@ -4894,15 +5466,21 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
   @override
   final Float64List levels;
   @override
+  final bool filled;
+  @override
   final Colormap colormap;
   @override
   final Limits? caxis;
   @override
   final bool colorbar;
+  @override
+  final Axes2D axes;
+  @override
+  final Legend? legend;
 
   @override
   String toString() {
-    return 'PlotSpec.contour(x: $x, y: $y, z: $z, levels: $levels, colormap: $colormap, caxis: $caxis, colorbar: $colorbar)';
+    return 'PlotSpec.contour(x: $x, y: $y, z: $z, levels: $levels, filled: $filled, colormap: $colormap, caxis: $caxis, colorbar: $colorbar, axes: $axes, legend: $legend)';
   }
 
   @override
@@ -4914,11 +5492,14 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
             const DeepCollectionEquality().equals(other.y, y) &&
             const DeepCollectionEquality().equals(other._z, _z) &&
             const DeepCollectionEquality().equals(other.levels, levels) &&
+            (identical(other.filled, filled) || other.filled == filled) &&
             (identical(other.colormap, colormap) ||
                 other.colormap == colormap) &&
             (identical(other.caxis, caxis) || other.caxis == caxis) &&
             (identical(other.colorbar, colorbar) ||
-                other.colorbar == colorbar));
+                other.colorbar == colorbar) &&
+            (identical(other.axes, axes) || other.axes == axes) &&
+            (identical(other.legend, legend) || other.legend == legend));
   }
 
   @override
@@ -4928,9 +5509,12 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
       const DeepCollectionEquality().hash(y),
       const DeepCollectionEquality().hash(_z),
       const DeepCollectionEquality().hash(levels),
+      filled,
       colormap,
       caxis,
-      colorbar);
+      colorbar,
+      axes,
+      legend);
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -4967,20 +5551,40 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
-    return contour(x, y, z, levels, colormap, caxis, colorbar);
+    return contour(
+        x, y, z, levels, filled, colormap, caxis, colorbar, axes, legend);
   }
 
   @override
@@ -5006,25 +5610,38 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
-    return contour?.call(x, y, z, levels, colormap, caxis, colorbar);
+    return contour?.call(
+        x, y, z, levels, filled, colormap, caxis, colorbar, axes, legend);
   }
 
   @override
@@ -5050,27 +5667,39 @@ class _$PlotSpec_ContourImpl extends PlotSpec_Contour {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
     if (contour != null) {
-      return contour(x, y, z, levels, colormap, caxis, colorbar);
+      return contour(
+          x, y, z, levels, filled, colormap, caxis, colorbar, axes, legend);
     }
     return orElse();
   }
@@ -5149,18 +5778,24 @@ abstract class PlotSpec_Contour extends PlotSpec {
       required final Float64List y,
       required final List<Float64List> z,
       required final Float64List levels,
+      required final bool filled,
       required final Colormap colormap,
       final Limits? caxis,
-      required final bool colorbar}) = _$PlotSpec_ContourImpl;
+      required final bool colorbar,
+      required final Axes2D axes,
+      final Legend? legend}) = _$PlotSpec_ContourImpl;
   const PlotSpec_Contour._() : super._();
 
   Float64List get x;
   Float64List get y;
   List<Float64List> get z;
   Float64List get levels;
+  bool get filled;
   Colormap get colormap;
   Limits? get caxis;
   bool get colorbar;
+  Axes2D get axes;
+  Legend? get legend;
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -5175,7 +5810,7 @@ abstract class _$$PlotSpec_Plot3ImplCopyWith<$Res> {
           $Res Function(_$PlotSpec_Plot3Impl) then) =
       __$$PlotSpec_Plot3ImplCopyWithImpl<$Res>;
   @useResult
-  $Res call({List<Series3D> series, Axes3D axes});
+  $Res call({List<Series3D> series, Axes3D axes, Legend? legend});
 }
 
 /// @nodoc
@@ -5193,6 +5828,7 @@ class __$$PlotSpec_Plot3ImplCopyWithImpl<$Res>
   $Res call({
     Object? series = null,
     Object? axes = null,
+    Object? legend = freezed,
   }) {
     return _then(_$PlotSpec_Plot3Impl(
       series: null == series
@@ -5203,6 +5839,10 @@ class __$$PlotSpec_Plot3ImplCopyWithImpl<$Res>
           ? _value.axes
           : axes // ignore: cast_nullable_to_non_nullable
               as Axes3D,
+      legend: freezed == legend
+          ? _value.legend
+          : legend // ignore: cast_nullable_to_non_nullable
+              as Legend?,
     ));
   }
 }
@@ -5211,7 +5851,7 @@ class __$$PlotSpec_Plot3ImplCopyWithImpl<$Res>
 
 class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
   const _$PlotSpec_Plot3Impl(
-      {required final List<Series3D> series, required this.axes})
+      {required final List<Series3D> series, required this.axes, this.legend})
       : _series = series,
         super._();
 
@@ -5225,10 +5865,12 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
 
   @override
   final Axes3D axes;
+  @override
+  final Legend? legend;
 
   @override
   String toString() {
-    return 'PlotSpec.plot3(series: $series, axes: $axes)';
+    return 'PlotSpec.plot3(series: $series, axes: $axes, legend: $legend)';
   }
 
   @override
@@ -5237,12 +5879,13 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
         (other.runtimeType == runtimeType &&
             other is _$PlotSpec_Plot3Impl &&
             const DeepCollectionEquality().equals(other._series, _series) &&
-            (identical(other.axes, axes) || other.axes == axes));
+            (identical(other.axes, axes) || other.axes == axes) &&
+            (identical(other.legend, legend) || other.legend == legend));
   }
 
   @override
   int get hashCode => Object.hash(
-      runtimeType, const DeepCollectionEquality().hash(_series), axes);
+      runtimeType, const DeepCollectionEquality().hash(_series), axes, legend);
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -5279,20 +5922,39 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
-    return plot3(series, axes);
+    return plot3(series, axes, legend);
   }
 
   @override
@@ -5318,25 +5980,37 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
-    return plot3?.call(series, axes);
+    return plot3?.call(series, axes, legend);
   }
 
   @override
@@ -5362,27 +6036,38 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {
     if (plot3 != null) {
-      return plot3(series, axes);
+      return plot3(series, axes, legend);
     }
     return orElse();
   }
@@ -5458,11 +6143,13 @@ class _$PlotSpec_Plot3Impl extends PlotSpec_Plot3 {
 abstract class PlotSpec_Plot3 extends PlotSpec {
   const factory PlotSpec_Plot3(
       {required final List<Series3D> series,
-      required final Axes3D axes}) = _$PlotSpec_Plot3Impl;
+      required final Axes3D axes,
+      final Legend? legend}) = _$PlotSpec_Plot3Impl;
   const PlotSpec_Plot3._() : super._();
 
   List<Series3D> get series;
   Axes3D get axes;
+  Legend? get legend;
 
   /// Create a copy of PlotSpec
   /// with the given fields replaced by the non-null parameter values.
@@ -5590,16 +6277,35 @@ class _$PlotSpec_SubplotImpl extends PlotSpec_Subplot {
     required TResult Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)
         quiver,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)
         surface,
     required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)
         mesh,
-    required TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Float64List levels, Colormap colormap, Limits? caxis, bool colorbar)
+    required TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Float64List levels,
+            bool filled,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)
         contour,
-    required TResult Function(List<Series3D> series, Axes3D axes) plot3,
+    required TResult Function(
+            List<Series3D> series, Axes3D axes, Legend? legend)
+        plot3,
     required TResult Function(int rows, int cols, List<SubplotCell> cells)
         subplot,
   }) {
@@ -5629,22 +6335,34 @@ class _$PlotSpec_SubplotImpl extends PlotSpec_Subplot {
     TResult? Function(Float64List x, Float64List y, Float64List u,
             Float64List v, Axes2D axes)?
         quiver,
-    TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult? Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult? Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult? Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult? Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult? Function(List<Series3D> series, Axes3D axes, Legend? legend)?
+        plot3,
     TResult? Function(int rows, int cols, List<SubplotCell> cells)? subplot,
   }) {
     return subplot?.call(rows, cols, cells);
@@ -5673,22 +6391,33 @@ class _$PlotSpec_SubplotImpl extends PlotSpec_Subplot {
     TResult Function(Float64List x, Float64List y, Float64List u, Float64List v,
             Axes2D axes)?
         quiver,
-    TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Shading shading, Colormap colormap, Limits? caxis, bool colorbar)?
+    TResult Function(
+            Float64List x,
+            Float64List y,
+            List<Float64List> z,
+            Shading shading,
+            Colormap colormap,
+            Limits? caxis,
+            bool colorbar,
+            Float32List vertexNormals,
+            Axes3D axes)?
         surface,
     TResult Function(Float64List x, Float64List y, List<Float64List> z,
-            Colormap colormap, Limits? caxis, bool colorbar)?
+            Colormap colormap, Limits? caxis, bool colorbar, Axes3D axes)?
         mesh,
     TResult Function(
             Float64List x,
             Float64List y,
             List<Float64List> z,
             Float64List levels,
+            bool filled,
             Colormap colormap,
             Limits? caxis,
-            bool colorbar)?
+            bool colorbar,
+            Axes2D axes,
+            Legend? legend)?
         contour,
-    TResult Function(List<Series3D> series, Axes3D axes)? plot3,
+    TResult Function(List<Series3D> series, Axes3D axes, Legend? legend)? plot3,
     TResult Function(int rows, int cols, List<SubplotCell> cells)? subplot,
     required TResult orElse(),
   }) {

@@ -21,7 +21,8 @@ use crate::histogram::HistNorm;
 use crate::lttb;
 use crate::palette;
 use crate::spec::{
-    DashSpec, ErrBand, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair, StyleSpec,
+    Colormap, DashSpec, ErrBand, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair,
+    Shading3, StyleSpec, SurfKind, View3,
 };
 use crate::ticks::Tick;
 use std::collections::BTreeMap;
@@ -90,6 +91,39 @@ pub enum CellSnapshot {
         axes: AxesSnapshot,
         legend: Option<LegendSnapshot>,
     },
+    /// منحنی فضایی plot3 (P3-b — گام 3.8).
+    Plot3 {
+        series: Vec<Series3Snapshot>,
+        axes: Axes3DSnapshot,
+        legend: Option<LegendSnapshot>,
+    },
+    /// سطح/سیم‌باف surf/mesh.
+    Surface {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        kind: SurfKind,
+        shading: Shading3,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+        /// نرمال رأس‌ها — تخت، stride ۳، row-major (سند ۰۴ §8.3: نرمال در Rust).
+        vertex_normals: Vec<f32>,
+        axes: Axes3DSnapshot,
+    },
+    /// سطح هم‌ارزش contour/contourf (رندر دوبعدی؛ marching squares در Dart).
+    Contour {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        levels: Vec<f64>,
+        filled: bool,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+        axes: AxesSnapshot,
+        legend: Option<LegendSnapshot>,
+    },
     Subplot {
         rows: u32,
         cols: u32,
@@ -113,6 +147,8 @@ pub struct SeriesSnapshot {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
     pub style: StyleSnapshot,
+    /// DisplayName — سوخت auto-legend زیر hold (v3).
+    pub display_name: Option<String>,
 }
 
 /// سری errorbar — نوارهای قرینه/ناقرینه.
@@ -125,6 +161,7 @@ pub struct ErrSeriesSnapshot {
     pub x_err: Option<ErrBand>,
     pub y_err: Option<ErrBand>,
     pub style: StyleSnapshot,
+    pub display_name: Option<String>,
 }
 
 /// legend حل‌شدهٔ یک سلول — ورودی‌ها + موقعیت (نگاشت به `Legend` قرارداد).
@@ -141,12 +178,41 @@ pub struct StyleSnapshot {
     pub width: f32,
     pub dash: DashSpec,
     pub marker: Option<MarkerSpec>,
+    /// اندازهٔ مارکر — None = پیش‌فرض رندرر (v3).
+    pub marker_size: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorSnapshot {
     Palette(u8),
     Rgb { r: u8, g: u8, b: u8 },
+}
+
+/// سری سه‌بعدی نمایش‌داده‌شده (plot3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Series3Snapshot {
+    pub id: u64,
+    pub raw_len: u64,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+    pub z: Vec<f64>,
+    pub style: StyleSnapshot,
+    pub display_name: Option<String>,
+}
+
+/// محورهای سه‌بعدی حل‌شده + دوربین (view) + جعبه.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Axes3DSnapshot {
+    pub title: Option<String>,
+    pub xlabel: Option<String>,
+    pub ylabel: Option<String>,
+    pub zlabel: Option<String>,
+    pub grid: bool,
+    pub box_on: bool,
+    pub view: View3,
+    pub x_limits: [f64; 2],
+    pub y_limits: [f64; 2],
+    pub z_limits: [f64; 2],
 }
 
 /// محورهای حل‌شده — حدود مؤثر + تیک‌های 1-2-5 (یا لگاریتمی).
@@ -234,6 +300,12 @@ struct AxesCfg {
     x_ticks_custom: Option<Vec<Tick>>,
     /// تیک‌های سفارشی y (yticks).
     y_ticks_custom: Option<Vec<Tick>>,
+    /// برچسب محور z (سه‌بعدی).
+    zlabel: Option<String>,
+    /// دوربین سه‌بعدی سلول — None = پیش‌فرض متلب.
+    view3d: Option<View3>,
+    /// جعبهٔ سه‌بعدی (box on/off).
+    box3d: bool,
 }
 
 impl AxesCfg {
@@ -279,6 +351,41 @@ enum CellKind {
     Errors {
         series: Vec<BuiltErrSeries>,
     },
+    Plot3 {
+        series: Vec<Built3Series>,
+    },
+    Surf {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        kind: SurfKind,
+        shading: Shading3,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+    },
+    ContourCell {
+        x: Vec<f64>,
+        y: Vec<f64>,
+        z: Vec<Vec<f64>>,
+        levels: Vec<f64>,
+        filled: bool,
+        colormap: Colormap,
+        caxis: Option<[f64; 2]>,
+        colorbar: bool,
+    },
+}
+
+/// سری سه‌بعدی ساخته‌شده (plot3).
+#[derive(Debug, Clone)]
+struct Built3Series {
+    id: u64,
+    raw_len: u64,
+    x: Vec<f64>,
+    y: Vec<f64>,
+    z: Vec<f64>,
+    style: StyleSnapshot,
+    display_name: Option<String>,
 }
 
 /// سری ساخته‌شده — نمایش LTTB-کاسته + دادهٔ خام (برای re-decimation زوم).
@@ -291,6 +398,7 @@ struct BuiltSeries {
     raw_x: Vec<f64>,
     raw_y: Vec<f64>,
     style: StyleSnapshot,
+    display_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -304,6 +412,7 @@ struct BuiltErrSeries {
     x_err: Option<ErrBand>,
     y_err: Option<ErrBand>,
     style: StyleSnapshot,
+    display_name: Option<String>,
 }
 
 /// برچسب نوع سلول برای تصمیم الحاق/جایگزینی (داخلی).
@@ -315,6 +424,7 @@ enum KindTag {
     Fills,
     Polar,
     Errors,
+    Plot3,
 }
 
 impl FigureState {
@@ -457,7 +567,135 @@ impl FigureState {
             PlotOp::AxisEqual { on } => self.active_cell_mut().axes.equal = on,
             PlotOp::AxisVisible { on } => self.active_cell_mut().axes.visible = on,
             PlotOp::AxisTight => self.active_cell_mut().axes.tight = true,
+            // ---- P3-b (گام 3.8) ----
+            PlotOp::Plot3 { series } => {
+                if !self.will_append(KindTag::Plot3) {
+                    self.fresh_axes();
+                }
+                let mut built = Vec::with_capacity(series.len());
+                for sp in series {
+                    let resolved = self.default_style(&sp.style, DashSpec::Solid, None);
+                    self.series_counter += 1;
+                    let n = sp.data.x.len().min(sp.data.y.len()).min(sp.z.len());
+                    built.push(Built3Series {
+                        id: self.series_counter,
+                        raw_len: n as u64,
+                        x: sp.data.x[..n].to_vec(),
+                        y: sp.data.y[..n].to_vec(),
+                        z: sp.z[..n].to_vec(),
+                        style: resolved,
+                        display_name: sp.style.label.clone(),
+                    });
+                }
+                let cell = self.active_cell_mut();
+                let kind = std::mem::take(&mut cell.kind);
+                cell.kind = match kind {
+                    // الحاق زیر hold (پارتی plot)
+                    CellKind::Plot3 { mut series } if cell.hold => {
+                        series.extend(built);
+                        CellKind::Plot3 { series }
+                    }
+                    _ => CellKind::Plot3 { series: built },
+                };
+            }
+            PlotOp::Surface {
+                x,
+                y,
+                z,
+                kind,
+                shading,
+                colormap,
+                caxis,
+                colorbar,
+            } => {
+                // surf/mesh همیشه جایگزین می‌کند (پارتی histogram؛ واگرایی
+                // از متلب ثبت‌شده در سند ۰۴ §8.4 — Overlay رزروشده)
+                self.fresh_axes();
+                let cell = self.active_cell_mut();
+                cell.kind = CellKind::Surf {
+                    x,
+                    y,
+                    z,
+                    kind,
+                    shading,
+                    colormap,
+                    caxis,
+                    colorbar,
+                };
+            }
+            PlotOp::Contour {
+                x,
+                y,
+                z,
+                levels,
+                filled,
+                colormap,
+                caxis,
+                colorbar,
+            } => {
+                // contour جایگزین می‌کند؛ سطح‌ها اینجا «حل» می‌شوند (خودکار
+                // یا صریح) تا snapshot مقدار نهایی را حمل کند.
+                self.fresh_axes();
+                let levels = levels.unwrap_or_else(|| crate::surface::auto_levels(&z, 10));
+                let cell = self.active_cell_mut();
+                cell.kind = CellKind::ContourCell {
+                    x,
+                    y,
+                    z,
+                    levels,
+                    filled,
+                    colormap,
+                    caxis,
+                    colorbar,
+                };
+            }
+            PlotOp::Colorbar { on } => {
+                let cell = self.active_cell_mut();
+                if let CellKind::Surf { colorbar: c, .. }
+                | CellKind::ContourCell { colorbar: c, .. } = &mut cell.kind
+                {
+                    *c = on;
+                }
+            }
+            PlotOp::Caxis { limits } => {
+                let cell = self.active_cell_mut();
+                if let CellKind::Surf { caxis, .. } | CellKind::ContourCell { caxis, .. } =
+                    &mut cell.kind
+                {
+                    *caxis = limits;
+                }
+            }
+            PlotOp::ColormapSet { cm } => {
+                let cell = self.active_cell_mut();
+                if let CellKind::Surf { colormap, .. } | CellKind::ContourCell { colormap, .. } =
+                    &mut cell.kind
+                {
+                    *colormap = cm;
+                }
+            }
+            PlotOp::View { v } => self.active_cell_mut().axes.view3d = Some(v),
+            PlotOp::ZLabel { text } => self.active_cell_mut().axes.zlabel = Some(text),
+            PlotOp::ShadingSet { s } => {
+                let cell = self.active_cell_mut();
+                if let CellKind::Surf { shading, .. } = &mut cell.kind {
+                    *shading = s;
+                }
+            }
+            PlotOp::ExportPdf { .. } => {
+                // مصرف در لایهٔ موتور (mc-ffi وسط fold رندر می‌کند)؛
+                // اینجا عمداً no-op تا fold خالص بماند.
+            }
         }
+    }
+
+    /// snapshot شکلِ فعال (برای exportgraphics — رندر PDF همان شکل).
+    pub fn active_snapshot(&self) -> Option<FigureSnapshot> {
+        let id = self.active_id?;
+        let f = self.figures.iter().find(|f| f.id == id)?;
+        Some(FigureSnapshot {
+            figure_id: f.id,
+            spec: self.cell_grid(f),
+        })
     }
 
     /// شکل‌های دست‌خورده از آخرین تخلیه — سیگنال push برای `EvalResult.plots`.
@@ -644,6 +882,9 @@ impl FigureState {
         axes.tight = false;
         axes.log_x = false;
         axes.log_y = false;
+        axes.zlabel = None;
+        axes.view3d = None;
+        axes.box3d = false;
     }
 
     /// استایل حل‌شده: اجزای غایب از پیش‌فرض‌های موتور؛ رنگ خودکار از
@@ -674,6 +915,7 @@ impl FigureState {
             width: s.width.unwrap_or(DEFAULT_WIDTH),
             dash: s.dash.unwrap_or(dash),
             marker: s.marker.or(marker),
+            marker_size: s.marker_size,
         }
     }
 
@@ -688,7 +930,10 @@ impl FigureState {
         let mut out = Vec::with_capacity(series.len());
         for sp in series {
             let resolved = self.default_style(&sp.style, dash, marker);
-            out.push(self.built_series(sp.data, resolved));
+            let name = sp.style.label.clone();
+            let mut b = self.built_series(sp.data, resolved);
+            b.display_name = name;
+            out.push(b);
         }
         out
     }
@@ -820,6 +1065,7 @@ impl FigureState {
             raw_x: data.x,
             raw_y: data.y,
             style,
+            display_name: None,
         }
     }
 
@@ -843,6 +1089,7 @@ impl FigureState {
             x_err,
             y_err,
             style,
+            display_name: None,
         }
     }
 
@@ -870,10 +1117,42 @@ impl FigureState {
     fn cell_snapshot(&self, f: &Figure, idx: u32) -> CellSnapshot {
         let empty = Cell::default();
         let cell = f.cells.get(&idx).unwrap_or(&empty);
-        let legend = cell.legend.clone().map(|l| LegendSnapshot {
+        let mut legend = cell.legend.clone().map(|l| LegendSnapshot {
             entries: l.entries,
             position: l.position,
         });
+        // auto-legend (v3 — حفرهٔ #4 سند ۱۳): legend صریح مقدم است؛
+        // وگرنه اگر هر سری DisplayName داشته باشد، از همان‌ها ساخته می‌شود.
+        if legend.is_none() {
+            let names: Vec<String> = match &cell.kind {
+                CellKind::Lines { series, .. }
+                | CellKind::Bars { series, .. }
+                | CellKind::Area { series, .. }
+                | CellKind::Fills { series, .. }
+                | CellKind::Polar { series, .. } => series
+                    .iter()
+                    .filter_map(|b| b.display_name.clone())
+                    .collect(),
+                CellKind::Errors { series } => series
+                    .iter()
+                    .filter_map(|b| b.display_name.clone())
+                    .collect(),
+                CellKind::Plot3 { series } => series
+                    .iter()
+                    .filter_map(|b| b.display_name.clone())
+                    .collect(),
+                CellKind::Hist { .. }
+                | CellKind::Empty
+                | CellKind::Surf { .. }
+                | CellKind::ContourCell { .. } => Vec::new(),
+            };
+            if !names.is_empty() {
+                legend = Some(LegendSnapshot {
+                    entries: names,
+                    position: LegendPos::Best,
+                });
+            }
+        }
         let axes = self.axes_snapshot(cell);
         match &cell.kind {
             CellKind::Empty => CellSnapshot::Line {
@@ -944,6 +1223,108 @@ impl FigureState {
                 axes,
                 legend,
             },
+            CellKind::Plot3 { series } => CellSnapshot::Plot3 {
+                series: series
+                    .iter()
+                    .map(|b| Series3Snapshot {
+                        id: b.id,
+                        raw_len: b.raw_len,
+                        x: b.x.clone(),
+                        y: b.y.clone(),
+                        z: b.z.clone(),
+                        style: b.style,
+                        display_name: b.display_name.clone(),
+                    })
+                    .collect(),
+                axes: self.axes3d_snapshot(cell),
+                legend,
+            },
+            CellKind::Surf {
+                x,
+                y,
+                z,
+                kind,
+                shading,
+                colormap,
+                caxis,
+                colorbar,
+            } => CellSnapshot::Surface {
+                x: x.clone(),
+                y: y.clone(),
+                z: z.clone(),
+                kind: *kind,
+                shading: *shading,
+                colormap: *colormap,
+                caxis: caxis.or(crate::surface::z_range(z)),
+                colorbar: *colorbar,
+                vertex_normals: crate::surface::vertex_normals(x, y, z),
+                axes: self.axes3d_snapshot(cell),
+            },
+            CellKind::ContourCell {
+                x,
+                y,
+                z,
+                levels,
+                filled,
+                colormap,
+                caxis,
+                colorbar,
+            } => CellSnapshot::Contour {
+                x: x.clone(),
+                y: y.clone(),
+                z: z.clone(),
+                levels: levels.clone(),
+                filled: *filled,
+                colormap: *colormap,
+                caxis: caxis.or(crate::surface::z_range(z)),
+                colorbar: *colorbar,
+                axes,
+                legend,
+            },
+        }
+    }
+
+    /// محورهای سه‌بعدی حل‌شده + دوربین؛ حدود z از خود شبکه.
+    fn axes3d_snapshot(&self, cell: &Cell) -> Axes3DSnapshot {
+        let zlim = match &cell.kind {
+            CellKind::Surf { z, .. } | CellKind::ContourCell { z, .. } => {
+                crate::surface::z_range(z).unwrap_or([0.0, 1.0])
+            }
+            CellKind::Plot3 { series } => {
+                let mut it = series
+                    .iter()
+                    .flat_map(|s| s.z.iter().copied())
+                    .filter(|v| v.is_finite());
+                match (it.next(),) {
+                    (Some(mut lo),) => {
+                        let mut hi = lo;
+                        for v in it {
+                            if v < lo {
+                                lo = v;
+                            }
+                            if v > hi {
+                                hi = v;
+                            }
+                        }
+                        [lo, hi]
+                    }
+                    _ => [0.0, 1.0],
+                }
+            }
+            _ => [0.0, 1.0],
+        };
+        let (mn_x, mx_x, mn_y, mx_y) = self.data_bounds(cell);
+        Axes3DSnapshot {
+            title: cell.axes.title.clone(),
+            xlabel: cell.axes.xlabel.clone(),
+            ylabel: cell.axes.ylabel.clone(),
+            zlabel: cell.axes.zlabel.clone(),
+            grid: cell.axes.grid,
+            box_on: cell.axes.box3d,
+            view: cell.axes.view3d.unwrap_or(View3::DEFAULT),
+            x_limits: [mn_x, mx_x],
+            y_limits: [mn_y, mx_y],
+            z_limits: zlim,
         }
     }
 
@@ -1003,6 +1384,8 @@ impl FigureState {
             | CellKind::Polar { series, .. } => !series.is_empty(),
             CellKind::Errors { series } => !series.is_empty(),
             CellKind::Hist { edges, .. } => !edges.is_empty(),
+            CellKind::Plot3 { series } => !series.is_empty(),
+            CellKind::Surf { x, .. } | CellKind::ContourCell { x, .. } => !x.is_empty(),
         }
     }
 
@@ -1029,7 +1412,15 @@ impl FigureState {
                 .iter()
                 .find(|s| s.id == series_id)
                 .map(|s| (s.raw_x.as_slice(), s.raw_y.as_slice())),
-            CellKind::Hist { .. } | CellKind::Empty => None,
+            CellKind::Plot3 { .. } => {
+                // منحنی فضایی: نمایش = خام (بدون LTTB)؛ z با اندیس‌ها
+                // جابه‌جا نمی‌شود پس re-decimation معنا ندارد.
+                None
+            }
+            CellKind::Hist { .. }
+            | CellKind::Empty
+            | CellKind::Surf { .. }
+            | CellKind::ContourCell { .. } => None,
         }
     }
 
@@ -1039,6 +1430,16 @@ impl FigureState {
         let mut ys: Vec<f64> = Vec::new();
         match &cell.kind {
             CellKind::Empty => {}
+            CellKind::Plot3 { series } => {
+                for s in series {
+                    xs.extend(s.x.iter().copied());
+                    ys.extend(s.y.iter().copied());
+                }
+            }
+            CellKind::Surf { x, y, .. } | CellKind::ContourCell { x, y, .. } => {
+                xs.extend(x.iter().copied());
+                ys.extend(y.iter().copied());
+            }
             CellKind::Lines { series, .. }
             | CellKind::Fills { series }
             | CellKind::Polar { series } => {
@@ -1119,6 +1520,7 @@ impl BuiltSeries {
             x: self.x.clone(),
             y: self.y.clone(),
             style: self.style,
+            display_name: self.display_name.clone(),
         }
     }
 }
@@ -1133,6 +1535,7 @@ impl BuiltErrSeries {
             x_err: self.x_err.clone(),
             y_err: self.y_err.clone(),
             style: self.style,
+            display_name: self.display_name.clone(),
         }
     }
 }
@@ -1439,6 +1842,245 @@ mod tests {
         assert_eq!(axes.x_limits, [-1.0, 1.0]);
         assert_eq!(axes.y_limits, [0.0, 2.0]);
         assert!(axes.equal_aspect);
+    }
+
+    // ---- P3-b (گام 3.8): سه‌بعدی ----
+
+    fn grid3() -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+        let x = vec![0.0, 1.0, 2.0];
+        let y = vec![0.0, 1.0];
+        let z = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+        (x, y, z)
+    }
+
+    #[test]
+    fn surf_builds_surface_snapshot_with_normals_and_view() {
+        let (x, y, z) = grid3();
+        let st = apply_all(vec![
+            PlotOp::Surface {
+                x,
+                y,
+                z,
+                kind: SurfKind::Surf,
+                shading: Shading3::Flat,
+                colormap: Colormap::Parula,
+                caxis: None,
+                colorbar: false,
+            },
+            PlotOp::View {
+                v: View3 { az: 45.0, el: 25.0 },
+            },
+            PlotOp::ZLabel {
+                text: "ارتفاع".into(),
+            },
+        ]);
+        let CellSnapshot::Surface {
+            x,
+            z,
+            axes,
+            caxis,
+            vertex_normals,
+            ..
+        } = &st.snapshots()[0].spec
+        else {
+            panic!()
+        };
+        assert_eq!(x.len(), 3);
+        assert_eq!(z.len(), 2);
+        assert_eq!(vertex_normals.len(), 2 * 3 * 3, "stride ۳ برای هر رأس");
+        assert_eq!(caxis, &Some([1.0, 6.0]), "caxis خودکار از z");
+        assert_eq!(axes.zlabel.as_deref(), Some("ارتفاع"));
+        assert_eq!(axes.view, View3 { az: 45.0, el: 25.0 });
+        assert_eq!(axes.z_limits, [1.0, 6.0]);
+    }
+
+    #[test]
+    fn mesh_and_colormap_and_colorbar_and_caxis_ops() {
+        let (x, y, z) = grid3();
+        let st = apply_all(vec![
+            PlotOp::Surface {
+                x,
+                y,
+                z,
+                kind: SurfKind::Mesh,
+                shading: Shading3::Faceted,
+                colormap: Colormap::Parula,
+                caxis: None,
+                colorbar: false,
+            },
+            PlotOp::ColormapSet { cm: Colormap::Jet },
+            PlotOp::Colorbar { on: true },
+            PlotOp::Caxis {
+                limits: Some([0.0, 10.0]),
+            },
+        ]);
+        let CellSnapshot::Surface {
+            kind,
+            colormap,
+            colorbar,
+            caxis,
+            ..
+        } = &st.snapshots()[0].spec
+        else {
+            panic!()
+        };
+        assert_eq!(*kind, SurfKind::Mesh);
+        assert_eq!(*colormap, Colormap::Jet);
+        assert!(*colorbar);
+        assert_eq!(*caxis, Some([0.0, 10.0]));
+    }
+
+    #[test]
+    fn surf_always_replaces_even_under_hold() {
+        let (x, y, z) = grid3();
+        let (x2, y2, z2) = grid3();
+        let st = apply_all(vec![
+            PlotOp::Hold { on: true },
+            PlotOp::Surface {
+                x,
+                y,
+                z,
+                kind: SurfKind::Surf,
+                shading: Shading3::Flat,
+                colormap: Colormap::Parula,
+                caxis: None,
+                colorbar: false,
+            },
+            PlotOp::Surface {
+                x: x2,
+                y: y2,
+                z: z2,
+                kind: SurfKind::Surf,
+                shading: Shading3::Flat,
+                colormap: Colormap::Parula,
+                caxis: None,
+                colorbar: false,
+            },
+        ]);
+        // یک سطح در سلول — جایگزینی (پارتی histogram؛ واگرایی ثبت‌شده)
+        let CellSnapshot::Surface { x, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(x.len(), 3);
+    }
+
+    #[test]
+    fn plot3_appends_under_hold_and_autolegends() {
+        let mk = |seed: f64| crate::spec::Series3Pair {
+            data: SeriesData {
+                x: vec![0.0, 1.0, 2.0],
+                y: vec![seed, seed + 1.0, seed + 2.0],
+            },
+            z: vec![0.0, 0.5, 1.0],
+            style: StyleSpec {
+                label: if seed == 0.0 {
+                    Some("منحنی الف".into())
+                } else {
+                    None
+                },
+                ..StyleSpec::default()
+            },
+        };
+        let st = apply_all(vec![
+            PlotOp::Hold { on: true },
+            PlotOp::Plot3 {
+                series: vec![mk(0.0)],
+            },
+            PlotOp::Plot3 {
+                series: vec![mk(10.0)],
+            },
+        ]);
+        let CellSnapshot::Plot3 { series, legend, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(series.len(), 2, "الحاق زیر hold (پارتی plot)");
+        assert_eq!(series[0].display_name.as_deref(), Some("منحنی الف"));
+        // auto-legend: از DisplayName ساخته شد (حفرهٔ #4 سند ۱۳ — v3)
+        assert_eq!(
+            legend.as_ref().map(|l| l.entries.clone()),
+            Some(vec!["منحنی الف".to_owned()])
+        );
+    }
+
+    #[test]
+    fn explicit_legend_beats_autolegend() {
+        let p = crate::spec::Series3Pair {
+            data: SeriesData {
+                x: vec![0.0, 1.0],
+                y: vec![0.0, 1.0],
+            },
+            z: vec![0.0, 1.0],
+            style: StyleSpec {
+                label: Some("خودکار".into()),
+                ..StyleSpec::default()
+            },
+        };
+        let st = apply_all(vec![
+            PlotOp::Plot3 { series: vec![p] },
+            PlotOp::Legend {
+                entries: Some(vec!["صریح".into()]),
+                position: LegendPos::North,
+            },
+        ]);
+        let CellSnapshot::Plot3 { legend, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(
+            legend.as_ref().map(|l| l.entries[0].clone()),
+            Some("صریح".into())
+        );
+    }
+
+    #[test]
+    fn contour_resolves_auto_levels_and_keeps_2d_axes() {
+        let (x, y, z) = grid3();
+        let st = apply_all(vec![PlotOp::Contour {
+            x,
+            y,
+            z,
+            levels: None,
+            filled: true,
+            colormap: Colormap::Parula,
+            caxis: None,
+            colorbar: true,
+        }]);
+        let CellSnapshot::Contour {
+            levels,
+            filled,
+            colorbar,
+            axes,
+            ..
+        } = &st.snapshots()[0].spec
+        else {
+            panic!()
+        };
+        assert!(*filled);
+        assert!(*colorbar);
+        assert!(
+            !levels.is_empty() && levels.iter().all(|l| (1.0..6.0).contains(l)),
+            "سطح‌های خودکار داخل دامنه: {levels:?}"
+        );
+        assert!(axes.x_limits[1] > axes.x_limits[0], "محور دوبعدی معتبر");
+    }
+
+    #[test]
+    fn display_name_autolegend_on_2d_hold_too() {
+        let mut sp = sop(data(5));
+        sp.style.label = Some("sin".into());
+        let mut sp2 = sop(data(5));
+        sp2.style.label = Some("cos".into());
+        let st = apply_all(vec![
+            PlotOp::Hold { on: true },
+            PlotOp::Line { series: vec![sp] },
+            PlotOp::Line { series: vec![sp2] },
+        ]);
+        let CellSnapshot::Line { legend, .. } = &st.snapshots()[0].spec else {
+            panic!()
+        };
+        assert_eq!(
+            legend.as_ref().map(|l| l.entries.clone()),
+            Some(vec!["sin".to_owned(), "cos".to_owned()])
+        );
     }
 
     #[test]

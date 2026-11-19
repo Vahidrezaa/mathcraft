@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/cds/cds_tokens.dart';
 import '../../src/rust/api.dart' as api;
 import 'plot_format.dart';
+import 'plot_colormap.dart';
 import 'plot_geometry.dart';
 
 /// رنگ‌های نقاش برحسب روشنایی تم — همه از توکن‌های CDS (anti-pattern #2).
@@ -59,6 +60,7 @@ class PlotPainter extends CustomPainter {
     required this.brightness,
     this.crosshair,
     this.dataTip,
+    this.viewOverride,
   });
 
   final PlotCellData cell;
@@ -66,6 +68,9 @@ class PlotPainter extends CustomPainter {
   final Brightness brightness;
   final CrosshairSnap? crosshair;
   final DataTip? dataTip;
+
+  /// چرخش تعاملی سه‌بعدی (az, el) — null = نمای قرارداد (view از DTO).
+  final (double, double)? viewOverride;
 
   static const _mono11 = TextStyle(
     fontFamily: 'JetBrainsMono',
@@ -87,6 +92,17 @@ class PlotPainter extends CustomPainter {
     if (cell is PolarCellData) {
       _paintPolar(canvas, size, cell as PolarCellData, theme);
       _paintLegend(canvas, size, cell, theme);
+      return;
+    }
+    // P3-b (گام 3.8): سلول‌های سه‌بعدی مسیر چیدمان دوبعدی ندارند
+    final c = cell;
+    if (c is SurfaceCellData) {
+      _paintSurface3D(canvas, size, c, theme);
+      return;
+    }
+    if (c is Plot3CellData) {
+      _paintPlot3(canvas, size, c, theme);
+      _paintLegend(canvas, size, c, theme);
       return;
     }
 
@@ -157,10 +173,22 @@ class PlotPainter extends CustomPainter {
         for (final s in series) {
           _paintErrorSeries(canvas, layout, s);
         }
+      case ContourCellData():
+        _paintContour(canvas, layout, cell as ContourCellData);
       default:
         break;
     }
     canvas.restore();
+
+    // نوار رنگ کانتور — بیرون از clip
+    if (cell is ContourCellData) {
+      final cc = cell as ContourCellData;
+      if (cc.colorbar) {
+        _paintColorbar(
+          canvas, rect, cc.colormap, cc.caxis ?? _zRangeOf(cc), theme,
+        );
+      }
+    }
 
     // لایه‌های اطلاعاتی — بیرون از clip
     if (cell.axes!.visible) {
@@ -370,12 +398,16 @@ class PlotPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     final fill = Paint()..color = s.color;
+    // v3: MarkerSize — مقیاس نسبت به پیش‌فرض (متلب: 6pt ≈ شعاع ۳ ما)
+    final scale = s.markerSize == null || s.markerSize! <= 0
+        ? 1.0
+        : s.markerSize! / 6.0;
     for (var i = 0; i < s.x.length; i++) {
       final x = s.x[i];
       final y = s.y[i];
       if (!x.isFinite || !y.isFinite) continue;
       final p = layout.dataToScreen(x, y);
-      _drawMarker(canvas, s.marker!, p, stroke, fill);
+      _drawMarker(canvas, s.marker!, p, stroke, fill, scale);
     }
   }
 
@@ -384,61 +416,66 @@ class PlotPainter extends CustomPainter {
     api.Marker marker,
     Offset p,
     Paint stroke,
-    Paint fill,
-  ) {
+    Paint fill, [
+    double scale = 1.0,
+  ]) {
     switch (marker) {
       case api.Marker.point:
-        canvas.drawCircle(p, 1.6, fill);
+        canvas.drawCircle(p, 1.6 * scale, fill);
       case api.Marker.circle:
-        canvas.drawCircle(p, 3, stroke);
+        canvas.drawCircle(p, 3 * scale, stroke);
       case api.Marker.square:
         canvas.drawRect(
-          Rect.fromCenter(center: p, width: 5.5, height: 5.5),
+          Rect.fromCenter(
+            center: p,
+            width: 5.5 * scale,
+            height: 5.5 * scale,
+          ),
           stroke,
         );
       case api.Marker.diamond:
-        canvas.drawPath(_diamond(p), stroke);
+        canvas.drawPath(_diamond(p, scale), stroke);
       case api.Marker.cross:
-        canvas.drawLine(
-            Offset(p.dx - 3, p.dy - 3), Offset(p.dx + 3, p.dy + 3), stroke);
-        canvas.drawLine(
-            Offset(p.dx - 3, p.dy + 3), Offset(p.dx + 3, p.dy - 3), stroke);
+        canvas.drawLine(Offset(p.dx - 3 * scale, p.dy - 3 * scale),
+            Offset(p.dx + 3 * scale, p.dy + 3 * scale), stroke);
+        canvas.drawLine(Offset(p.dx - 3 * scale, p.dy + 3 * scale),
+            Offset(p.dx + 3 * scale, p.dy - 3 * scale), stroke);
       case api.Marker.plus:
-        canvas.drawLine(
-            Offset(p.dx - 3.5, p.dy), Offset(p.dx + 3.5, p.dy), stroke);
-        canvas.drawLine(
-            Offset(p.dx, p.dy - 3.5), Offset(p.dx, p.dy + 3.5), stroke);
+        canvas.drawLine(Offset(p.dx - 3.5 * scale, p.dy),
+            Offset(p.dx + 3.5 * scale, p.dy), stroke);
+        canvas.drawLine(Offset(p.dx, p.dy - 3.5 * scale),
+            Offset(p.dx, p.dy + 3.5 * scale), stroke);
       case api.Marker.star:
         for (var k = 0; k < 3; k++) {
           final a = k * math.pi / 3;
-          final dx = math.cos(a) * 3.5;
-          final dy = math.sin(a) * 3.5;
+          final dx = math.cos(a) * 3.5 * scale;
+          final dy = math.sin(a) * 3.5 * scale;
           canvas.drawLine(Offset(p.dx - dx, p.dy - dy),
               Offset(p.dx + dx, p.dy + dy), stroke);
         }
       case api.Marker.triangleUp:
-        canvas.drawPath(_triangle(p, up: true), stroke);
+        canvas.drawPath(_triangle(p, up: true, scale: scale), stroke);
       case api.Marker.triangleDown:
-        canvas.drawPath(_triangle(p, up: false), stroke);
+        canvas.drawPath(_triangle(p, up: false, scale: scale), stroke);
       case api.Marker.none:
         break;
     }
   }
 
-  Path _diamond(Offset p) => Path()
-    ..moveTo(p.dx, p.dy - 4)
-    ..lineTo(p.dx + 4, p.dy)
-    ..lineTo(p.dx, p.dy + 4)
-    ..lineTo(p.dx - 4, p.dy)
+  Path _diamond(Offset p, [double scale = 1.0]) => Path()
+    ..moveTo(p.dx, p.dy - 4 * scale)
+    ..lineTo(p.dx + 4 * scale, p.dy)
+    ..lineTo(p.dx, p.dy + 4 * scale)
+    ..lineTo(p.dx - 4 * scale, p.dy)
     ..close();
 
-  Path _triangle(Offset p, {required bool up}) {
+  Path _triangle(Offset p, {required bool up, double scale = 1.0}) {
     final dy = up ? -4.0 : 4.0;
     final dyBase = up ? 2.6 : -2.6;
     return Path()
-      ..moveTo(p.dx, p.dy + dy)
-      ..lineTo(p.dx + 3.6, p.dy + dyBase)
-      ..lineTo(p.dx - 3.6, p.dy + dyBase)
+      ..moveTo(p.dx, p.dy + dy * scale)
+      ..lineTo(p.dx + 3.6 * scale, p.dy + dyBase * scale)
+      ..lineTo(p.dx - 3.6 * scale, p.dy + dyBase * scale)
       ..close();
   }
 
@@ -876,6 +913,452 @@ class PlotPainter extends CustomPainter {
       Paint()..color = theme.chipBg.withOpacity(0.75),
     );
     tp.paint(canvas, Offset(topLeft.dx + padH, topLeft.dy + padV));
+  }
+
+
+  // =====================================================================
+  // P3-b (گام 3.8): سه‌بعدی — پروجکشن دوربین + الگوریتم نقاش + سایه صاف
+  // (پورت وفادار mc_plot::pdf::project — سند ۰۴ §8.3: نرمال‌ها از موتور)
+  // =====================================================================
+
+  /// دامنهٔ z شبکه (برای caxis خودکار رنگ‌نوار).
+  (double, double) _zRangeOf(ContourCellData c) {
+    var lo = double.infinity, hi = double.negativeInfinity;
+    for (final row in c.z) {
+      for (final v in row) {
+        if (!v.isFinite) continue;
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+      }
+    }
+    if (lo > hi) return (0, 1);
+    return (lo, hi);
+  }
+
+  /// ناحیهٔ رسم سه‌بعدی: حاشیه + عنوان + نوار رنگ اختیاری.
+  Rect _rect3D(Size size, bool hasColorbar, bool hasTitle) {
+    var left = 56.0, top = 16.0, right = 20.0, bottom = 40.0;
+    if (hasTitle) top += 26;
+    if (hasColorbar) right += 64;
+    return Rect.fromLTWH(
+      left,
+      top,
+      (size.width - left - right).clamp(40.0, size.width),
+      (size.height - top - bottom).clamp(40.0, size.height),
+    );
+  }
+
+  /// جعبهٔ مختصات سه‌بعدی (۱۲ یال مکعب نرمال‌شده) + برچسب‌ها.
+  void _paintBox3D(
+    Canvas canvas,
+    Rect rect,
+    (double, double) view,
+    Axes3DData axes,
+    PlotTheme theme,
+  ) {
+    final edge = Paint()
+      ..color = theme.border
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    // رأس‌های مکعب [0,1]³
+    Offset p3(double x, double y, double z) {
+      final (sx, sy, d) = project3d(view.$1, view.$2, x, y, z);
+      // مرکز‌چین و مقیاس ۰.۸۶ برای جای‌گیری جعبه در مستطیل
+      final cx = rect.left + (sx * 0.86 + 0.07) * rect.width;
+      final cy = rect.bottom - (sy * 0.86 + 0.07) * rect.height;
+      return Offset(cx, cy);
+    }
+
+    // یال‌های پایینی (z=0) + عمودی‌ها + بالایی (z=1)
+    final corners = <List<double>>[
+      [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+      [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
+    ];
+    const edges = [
+      (0, 1), (1, 2), (2, 3), (3, 0), // کف
+      (4, 5), (5, 6), (6, 7), (7, 4), // سقف
+      (0, 4), (1, 5), (2, 6), (3, 7), // عمودی
+    ];
+    for (final (a, b) in edges) {
+      final ca = corners[a], cb = corners[b];
+      canvas.drawLine(
+        p3(ca[0], ca[1], ca[2]),
+        p3(cb[0], cb[1], cb[2]),
+        edge,
+      );
+    }
+    // شبکهٔ دیوارهای عقب (زیر پرچم grid)
+    if (axes.grid) {
+      final grid = Paint()
+        ..color = theme.grid
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.6;
+      for (var k = 1; k < 5; k++) {
+        final t = k / 5;
+        // دیوار z-x (y=0)
+        canvas.drawLine(p3(t, 0, 0), p3(t, 0, 1), grid);
+        canvas.drawLine(p3(0, 0, t), p3(1, 0, t), grid);
+        // دیوار z-y (x=0)
+        canvas.drawLine(p3(0, t, 0), p3(0, t, 1), grid);
+        canvas.drawLine(p3(0, 0, t), p3(0, 1, t), grid);
+      }
+    }
+    // برچسب‌ها — نزدیک وسط یال مربوطه
+    final label = _mono11.copyWith(color: theme.textSecondary);
+    void text(String? t, Offset pos) {
+      if (t == null || t.isEmpty) return;
+      final tp = TextPainter(
+        text: TextSpan(text: t, style: label),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, pos);
+    }
+
+    text(axes.xlabel, p3(0.5, 0, -0.06) + const Offset(-10, 4));
+    text(axes.ylabel, p3(-0.02, 0.5, 0) + const Offset(-34, 0));
+    text(axes.zlabel, p3(0, 1.02, 0.5) + const Offset(4, -6));
+  }
+
+  void _paintSurface3D(
+    Canvas canvas,
+    Size size,
+    SurfaceCellData cell,
+    PlotTheme theme,
+  ) {
+    final view = viewOverride ?? cell.axes3d.view;
+    final rect = _rect3D(
+      size,
+      cell.colorbar,
+      cell.axes3d.title != null,
+    );
+    _paintBox3D(canvas, rect, view, cell.axes3d, theme);
+
+    final rows = cell.z.length;
+    final cols = rows > 0 ? cell.z[0].length : 0;
+    if (rows < 2 || cols < 2) return;
+
+    // نرمال‌سازی داده به [0,1]³ (از حدود محور — همان Rust)
+    final (xlo, xhi) = cell.axes3d.xLimits;
+    final (ylo, yhi) = cell.axes3d.yLimits;
+    final (zlo, zhi) = cell.axes3d.zLimits;
+    final zSpan = (zhi - zlo) > 1e-12 ? (zhi - zlo) : 1.0;
+    final caxis = cell.caxis ?? (zlo, zhi);
+    final hasNormals = cell.vertexNormals.length >= rows * cols * 3;
+
+    // پروجکشن همهٔ رأس‌ها
+    final pts = List<Offset>.filled(rows * cols, Offset.zero);
+    final depth = List<double>.filled(rows * cols, 0);
+    for (var i = 0; i < rows; i++) {
+      for (var j = 0; j < cols; j++) {
+        final nx = (cell.x[j] - xlo) / ((xhi - xlo) > 1e-12 ? (xhi - xlo) : 1);
+        final ny = (cell.y[i] - ylo) / ((yhi - ylo) > 1e-12 ? (yhi - ylo) : 1);
+        final nz = (cell.z[i][j] - zlo) / zSpan;
+        final (sx, sy, d) = project3d(view.$1, view.$2, nx, ny, nz);
+        pts[i * cols + j] = Offset(
+          rect.left + (sx * 0.86 + 0.07) * rect.width,
+          rect.bottom - (sy * 0.86 + 0.07) * rect.height,
+        );
+        depth[i * cols + j] = d;
+      }
+    }
+
+    // خانه‌ها بر عمق مرکز — دورها اول (الگوریتم نقاش)
+    final quads = <(int, int, double)>[
+      for (var i = 0; i < rows - 1; i++)
+        for (var j = 0; j < cols - 1; j++)
+          (i, j, depth[i * cols + j] + depth[(i + 1) * cols + j + 1]),
+    ]..sort((a, b) => b.$3.compareTo(a.$3));
+
+    final light = project3d(view.$1, view.$2, 0.5, 0.5, 2.0);
+    final lightLen = math.sqrt(
+      light.$1 * light.$1 + light.$2 * light.$2 + light.$3 * light.$3,
+    );
+
+    for (final (i, j, _) in quads) {
+      final a = pts[i * cols + j];
+      final b = pts[(i + 1) * cols + j];
+      final c = pts[(i + 1) * cols + j + 1];
+      final d = pts[i * cols + j + 1];
+      final zc = (cell.z[i][j] +
+              cell.z[i + 1][j] +
+              cell.z[i][j + 1] +
+              cell.z[i + 1][j + 1]) /
+          4;
+
+      if (!cell.isMesh) {
+        // سایهٔ صاف: میانگین نرمال رأس‌ها → فضای دید → نقطه‌چین نور سرِ
+        // دوربین؛ fallback نرمال (0,0,1) وقتی موتور نفرستاده (mesh)
+        var shade = 1.0;
+        if (hasNormals) {
+          var nx = 0.0, ny = 0.0, nz = 0.0;
+          for (final (vi, vj) in [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)]) {
+            final base = (vi * cols + vj) * 3;
+            nx += cell.vertexNormals[base];
+            ny += cell.vertexNormals[base + 1];
+            nz += cell.vertexNormals[base + 2];
+          }
+          final nLen = math.sqrt(nx * nx + ny * ny + nz * nz);
+          if (nLen > 1e-9) {
+            final rn = project3d(view.$1, view.$2, nx / nLen, ny / nLen, nz / nLen);
+            final dot =
+                (rn.$1 * light.$1 + rn.$2 * light.$2 + rn.$3 * light.$3) / lightLen;
+            shade = 0.35 + 0.65 * math.max(0, dot);
+          }
+        }
+        final base = sampleColormapZ(cell.colormap, zc, caxis);
+        final face = Paint()
+          ..color = Color.fromARGB(
+            255,
+            (base.red * shade).round().clamp(0, 255),
+            (base.green * shade).round().clamp(0, 255),
+            (base.blue * shade).round().clamp(0, 255),
+          );
+        final path = Path()
+          ..moveTo(a.dx, a.dy)
+          ..lineTo(b.dx, b.dy)
+          ..lineTo(c.dx, c.dy)
+          ..lineTo(d.dx, d.dy)
+          ..close();
+        canvas.drawPath(path, face);
+        if (cell.shading == api.Shading.faceted) {
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = Colors.black.withOpacity(0.35)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.5,
+          );
+        }
+      } else {
+        // mesh: سیم‌باف — یال‌های رنگی از z (وجه‌ها نامرئی)
+        final wire = Paint()
+          ..color = sampleColormapZ(cell.colormap, zc, caxis)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1;
+        final path = Path()
+          ..moveTo(a.dx, a.dy)
+          ..lineTo(b.dx, b.dy)
+          ..lineTo(c.dx, c.dy)
+          ..lineTo(d.dx, d.dy)
+          ..close();
+        canvas.drawPath(path, wire);
+      }
+    }
+
+    if (cell.colorbar) {
+      _paintColorbar(canvas, rect, cell.colormap, cell.caxis ?? (zlo, zhi), theme);
+    }
+    if (cell.axes3d.title case final t?) {
+      _paintTitle3D(canvas, size, t, theme);
+    }
+  }
+
+  void _paintPlot3(
+    Canvas canvas,
+    Size size,
+    Plot3CellData cell,
+    PlotTheme theme,
+  ) {
+    final view = viewOverride ?? cell.axes3d.view;
+    final rect = _rect3D(size, false, cell.axes3d.title != null);
+    _paintBox3D(canvas, rect, view, cell.axes3d, theme);
+
+    final (xlo, xhi) = cell.axes3d.xLimits;
+    final (ylo, yhi) = cell.axes3d.yLimits;
+    final (zlo, zhi) = cell.axes3d.zLimits;
+    Offset p3(double x, double y, double z) {
+      final nx = (x - xlo) / ((xhi - xlo) > 1e-12 ? (xhi - xlo) : 1);
+      final ny = (y - ylo) / ((yhi - ylo) > 1e-12 ? (yhi - ylo) : 1);
+      final nz = (z - zlo) / ((zhi - zlo) > 1e-12 ? (zhi - zlo) : 1);
+      final (sx, sy, _) = project3d(view.$1, view.$2, nx, ny, nz);
+      return Offset(
+        rect.left + (sx * 0.86 + 0.07) * rect.width,
+        rect.bottom - (sy * 0.86 + 0.07) * rect.height,
+      );
+    }
+
+    for (final s in cell.series) {
+      final paint = Paint()
+        ..color = s.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = s.width
+        ..strokeCap = StrokeCap.round;
+      if (s.dash != null && s.dash!.isNotEmpty) {
+        // خط‌چین پاره‌خطی — همان الگوی _dashedLine دوبعدی
+        Offset? last;
+        for (var k = 0; k < s.x.length; k++) {
+          if (!s.x[k].isFinite || !s.y[k].isFinite || !s.z[k].isFinite) {
+            last = null;
+            continue;
+          }
+          final p = p3(s.x[k], s.y[k], s.z[k]);
+          if (last != null) _dashedLine(canvas, last, p, paint);
+          last = p;
+        }
+      } else {
+        var pen = false;
+        var last = Offset.zero;
+        for (var k = 0; k < s.x.length; k++) {
+          if (!s.x[k].isFinite || !s.y[k].isFinite || !s.z[k].isFinite) {
+            pen = false;
+            continue;
+          }
+          final p = p3(s.x[k], s.y[k], s.z[k]);
+          if (pen) canvas.drawLine(last, p, paint);
+          last = p;
+          pen = true;
+        }
+      }
+    }
+    if (cell.axes3d.title case final t?) {
+      _paintTitle3D(canvas, size, t, theme);
+    }
+  }
+
+  void _paintTitle3D(Canvas canvas, Size size, String text, PlotTheme theme) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: _mono11.copyWith(color: theme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width - 32);
+    tp.paint(
+      canvas,
+      Offset(size.width / 2 - tp.width / 2, 6),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // کانتور (v3): پُرکردن نوار-سلولی + خطوط سطح marching squares
+  // (پورت وفادار mc_plot::pdf::marching_cell — الگوی تیک 1-2-5)
+  // ---------------------------------------------------------------------
+
+  void _paintContour(Canvas canvas, CellLayout layout, ContourCellData cell) {
+    final rows = cell.z.length;
+    final cols = rows > 0 ? cell.z[0].length : 0;
+    if (rows < 2 || cols < 2) return;
+    final caxis = cell.caxis ?? _zRangeOf(cell);
+
+    if (cell.filled) {
+      // پُرکردن تقریبی نوار-سلولی + روکش پاره‌خط‌های هم‌سو (مرز نرم‌نما)
+      for (var i = 0; i < rows - 1; i++) {
+        for (var j = 0; j < cols - 1; j++) {
+          final zc = (cell.z[i][j] +
+                  cell.z[i][j + 1] +
+                  cell.z[i + 1][j] +
+                  cell.z[i + 1][j + 1]) /
+              4;
+          final paint = Paint()..color = sampleColormapZ(cell.colormap, zc, caxis);
+          final a = layout.dataToScreen(cell.x[j], cell.y[i]);
+          final c = layout.dataToScreen(cell.x[j + 1], cell.y[i + 1]);
+          canvas.drawRect(
+            Rect.fromLTRB(a.dx, a.dy, c.dx, c.dy),
+            paint,
+          );
+        }
+      }
+    }
+
+    // خطوط سطح — یک رنگ بر سطح، پاره‌خط‌های یکجا
+    for (final level in cell.levels) {
+      final t = caxis.$2 > caxis.$1
+          ? (level - caxis.$1) / (caxis.$2 - caxis.$1)
+          : 0.5;
+      final paint = Paint()
+        ..color = sampleColormap(cell.colormap, t)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = cell.filled ? 0.8 : 1.4;
+      final path = Path();
+      for (var i = 0; i < rows - 1; i++) {
+        for (var j = 0; j < cols - 1; j++) {
+          _marchingCell(
+            layout,
+            cell.x[j], cell.x[j + 1], cell.y[i], cell.y[i + 1],
+            cell.z[i][j], cell.z[i][j + 1],
+            cell.z[i + 1][j + 1], cell.z[i + 1][j],
+            level, path,
+          );
+        }
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  /// یک خانهٔ دوبی‌خطی بر سطح L — پاره‌خط به path اضافه می‌شود.
+  void _marchingCell(
+    CellLayout layout,
+    double x0, double x1, double y0, double y1,
+    double z00, double z10, double z11, double z01,
+    double level,
+    Path path,
+  ) {
+    double? lerp(double a, double b, double za, double zb) {
+      if ((za < level && zb < level) || (za > level && zb > level)) return null;
+      final t = (zb - za).abs() < 1e-15
+          ? 0.5
+          : ((level - za) / (zb - za)).clamp(0.0, 1.0);
+      return a + t * (b - a);
+    }
+
+    final pts = <Offset>[
+      if (lerp(x0, x1, z00, z10) case final x?)
+        layout.dataToScreen(x, y0),
+      if (lerp(y0, y1, z10, z11) case final y?)
+        layout.dataToScreen(x1, y),
+      if (lerp(x1, x0, z11, z01) case final x?)
+        layout.dataToScreen(x, y1),
+      if (lerp(y0, y1, z00, z01) case final y?)
+        layout.dataToScreen(x0, y),
+    ];
+    // نقاط منطبق گوشه‌ای را یکی کن (برخورد سطح با رأس)
+    final dedup = <Offset>[];
+    for (final p in pts) {
+      if (!dedup.any((q) => (q - p).distanceSquared < 1e-16)) dedup.add(p);
+    }
+    if (dedup.length == 2) {
+      path
+        ..moveTo(dedup[0].dx, dedup[0].dy)
+        ..lineTo(dedup[1].dx, dedup[1].dy);
+    }
+  }
+
+  /// نوار رنگ عمودی سمت راست + سه برچسب مقدار.
+  void _paintColorbar(
+    Canvas canvas,
+    Rect plotRect,
+    api.Colormap cm,
+    (double, double) caxis,
+    PlotTheme theme,
+  ) {
+    const steps = 64;
+    final left = plotRect.right + 10;
+    const width = 12.0;
+    for (var k = 0; k < steps; k++) {
+      final t = k / steps;
+      final top = plotRect.bottom - (t + 1 / steps) * plotRect.height;
+      final h = plotRect.height / steps + 0.6;
+      canvas.drawRect(
+        Rect.fromLTWH(left, top, width, h),
+        Paint()..color = sampleColormap(cm, t),
+      );
+    }
+    canvas.drawRect(
+      Rect.fromLTWH(left, plotRect.top, width, plotRect.height),
+      Paint()
+        ..color = theme.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+    for (final (t, v) in [
+      (0.0, caxis.$1),
+      (0.5, (caxis.$1 + caxis.$2) / 2),
+      (1.0, caxis.$2),
+    ]) {
+      final tp = TextPainter(
+        text: TextSpan(text: formatG4(v), style: _mono11.copyWith(color: theme.textSecondary, fontSize: 10)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final y = plotRect.bottom - t * plotRect.height - tp.height / 2;
+      tp.paint(canvas, Offset(left + width + 4, y.clamp(plotRect.top, plotRect.bottom - tp.height)));
+    }
   }
 
   void _paintLegend(

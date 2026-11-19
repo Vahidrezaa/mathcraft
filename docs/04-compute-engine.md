@@ -180,6 +180,35 @@ plot/scatter زیر hold در یک سری‌لست متحد؛ histogram همیش
 خودکار = داده + ۵٪ حاشیه (tight بدون حاشیه، دستی مقدم)؛ رنگ خودکار = سیکل
 پالت ۸رنگی سند ۰۶ §3 و ریست آن با هر جایگزینی؛ یک استایل در هر فراخوانی.
 
+### 8.5 فریز نسخهٔ v3 (P3-b — ROADMAP 3.8؛ ۲۰۲۶-۱۱-۱۹)
+
+اجرای سه‌بعدی + دو قلم پین‌شدهٔ فهرست کوتاه (هر دو افزودنی از دید UI):
+
+- **سه‌بعدی موقّع:** `Surface/Mesh` با `axes: Axes3D` (عنوان/برچسب‌ها/grid/box +
+  `view: View3D{az,el}` + حدود x/y/z) و `vertex_normals` (تخت، stride ۳،
+  row-major — سند §8.3: نرمال‌ها در Rust)؛ `Plot3 { series, axes3d, legend }`؛
+  `Contour { levels حل‌شده, filled, axes2d, legend }`.
+- **DisplayName + auto-legend زیر hold** (حفرهٔ #4 سند ۱۳ — پین کاربر
+  «یادت باشه»): `Series2D/Series3D.display_name`؛ legend وقتی صریح نباشد و هر
+  سری DisplayName داشته باشد خودکار از همان‌ها ساخته می‌شود؛ explicit مقدم.
+- **MarkerSize** (`LineStyle.marker_size`) — از داربست «فعلاً نیست» فعال شد؛
+  مارکرها با مقیاس MarkerSize/۶ رندر می‌شوند.
+- رندر 3D: پروجکشن دوربین (پورت وفادار در `plot_colormap.dart` +
+  `project3d`)، مرتب‌سازی عمق painter در Dart، سایهٔ صاف با نور سرِ دوربین؛
+  contourf = پُرکردن نوار-سلولی + روکش پاره‌خط‌های marching squares (تقریب
+  مرز نرم‌نما — ثبت‌شده)؛ رنگ‌نوار عمودی با سه برچسب.
+- خروجی **PDF برداری در موتور** (mc-plot::pdf — PDF 1.4 بدون وابستگی):
+  `exportgraphics('name.pdf')` (شکل فعال، وسط fold → filesWritten) + دکمهٔ
+  «PDF» نمایشگر (pull: `export_figure_pdf(id)`). متن غیر لاتین۱ با '?'
+  جایگزین می‌شود (فونت پایهٔ Helvetica/WinAnsi — محدودیت ثبت‌شده سند ۱۳).
+- واگرایی‌های ثبت‌شده: surf/mesh/contour همیشه جایگزین می‌شوند (پارتی
+  histogram؛ Overlay رزروشده)؛ plot3 زیر hold الحاق می‌شود (پارتی plot)؛
+  meshgrid تک‌خروجی (X) — [X,Y] با مایل‌استون multi-assign؛ 3D زیر درگ =
+  چرخش (پن/زوم دوبعدی ندارد)؛ کلیدهای پالت: colormap parula/viridis/jet/
+  hot/cool/gray.
+- تعویق صادقانه از فهرست کوتاه v3: pie / حاشیه‌نویسی متن / box رسم 2D /
+  رندر quiver / تکمیل جدول مارکرها → E-phases (سند ۱۳ به‌روز شد).
+
 ### 8.3 مدل 3D
 - `surf/mesh`: meshgrid → مثلث‌بازی grid (دو مثلث در خانه)؛ نرمال‌ها در Rust؛ **رندر در Dart** با painter's algorithm (sort بر عمق مرکز مثلث، flat shading با یک نور ثابت قابل تنظیم `camlight`) — بدون GPU dependency؛ بودجه ۶۰fps تا ۵۰k مثلث (sort O(n log n) در Dart isolate per frame قابل قبول است؛ در صورت نیاز، sort عمق در Rust cache می‌شود و چرخش کامل re-project سبک انجام می‌شود).
 - `contourf`: marching squares استاندارد با ۱۰ سطح پیش‌فرض.

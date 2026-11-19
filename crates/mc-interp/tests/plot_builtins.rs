@@ -9,7 +9,8 @@ use mc_interp::{eval_program, Environment};
 use mc_parser::parse;
 use mc_plot::figure::CellSnapshot;
 use mc_plot::spec::{
-    DashSpec, FillPair, HistNorm, LegendPos, MarkerSpec, PlotColorSpec, PlotOp, SeriesPair,
+    Colormap, DashSpec, FillPair, HistNorm, LegendPos, MarkerSpec, PlotColorSpec, PlotOp,
+    SeriesPair, Shading3, SurfKind,
 };
 
 fn run(env: &mut Environment, src: &str) -> mc_interp::EvalOutcome {
@@ -148,9 +149,14 @@ fn plot_name_value_linewidth_and_color() {
 }
 
 #[test]
-fn plot_displayname_is_rejected_with_message() {
-    let e = err_of("plot(1:10, 'DisplayName', 's')");
-    assert!(e.message_en.contains("DisplayName"));
+fn plot_displayname_reaches_the_op_since_v3() {
+    // v3 (گام 3.8 — حفرهٔ #4 سند ۱۳): پذیرفته می‌شود و به استایل سری می‌چسبد
+    match first_op("plot(1:10, 'DisplayName', 's')") {
+        PlotOp::Line { series } => {
+            assert_eq!(series[0].style.label.as_deref(), Some("s"));
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
 }
 
 #[test]
@@ -621,9 +627,13 @@ fn plot_name_values_marker_and_linestyle() {
         }
         other => panic!("expected Line, got {other:?}"),
     }
-    // MarkerSize صادقانه خطا می‌دهد (قرارداد v3)
-    let msg = err_of("plot([1 2], [1 2], 'MarkerSize', 8)").message_en;
-    assert!(msg.contains("MarkerSize"), "{msg}");
+    // MarkerSize از v3 پذیرفته و منتقل می‌شود (گام 3.8)
+    match first_op("plot([1 2], [1 2], 'MarkerSize', 8)") {
+        PlotOp::Line { series } => {
+            assert_eq!(series[0].style.marker_size, Some(8.0));
+        }
+        other => panic!("expected Line, got {other:?}"),
+    }
 }
 
 #[test]
@@ -994,4 +1004,203 @@ fn user_repro_stale_legend_after_semilogx() {
     assert!(legend.is_none(), "STALE sin/cos legend must be gone");
     assert!(axes.log_x, "semilogx keeps its own log flag");
     assert!(axes.grid, "grid on from the same submission");
+}
+
+// ===========================================================================
+// P3-b (گام 3.8): سه‌بعدی + DisplayName/MarkerSize + خروجی PDF
+// ===========================================================================
+
+mod step38 {
+    use super::*;
+
+    #[test]
+    fn plot3_vec_emits_series_op() {
+        match first_op("plot3([1,2,3], [4,5,6], [1,4,9])") {
+            PlotOp::Plot3 { series } => {
+                assert_eq!(series.len(), 1);
+                assert_eq!(series[0].data.x, vec![1.0, 2.0, 3.0]);
+                assert_eq!(series[0].z, vec![1.0, 4.0, 9.0]);
+            }
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn surf_z_only_and_with_grid() {
+        match first_op("surf([1,2; 3,4])") {
+            PlotOp::Surface { x, y, z, kind, .. } => {
+                assert_eq!((z.len(), z[0].len()), (2, 2));
+                assert_eq!(x, vec![0.0, 1.0], "x خودکار از ستون‌ها");
+                assert_eq!(y, vec![0.0, 1.0]);
+                assert_eq!(kind, SurfKind::Surf);
+            }
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("surf([0, 1], [0, 1, 2], [1,2; 3,4; 5,6])") {
+            PlotOp::Surface { x, y, z, .. } => {
+                assert_eq!(x, vec![0.0, 1.0]);
+                assert_eq!(y, vec![0.0, 1.0, 2.0]);
+                assert_eq!(z.len(), 3);
+            }
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mesh_is_mesh_kind() {
+        match first_op("mesh([1,2; 3,4])") {
+            PlotOp::Surface { kind, .. } => assert_eq!(kind, SurfKind::Mesh),
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn contourf_with_explicit_levels_sorted() {
+        match first_op("contourf([1,2; 3,4], [3.0, 1.0, 2.0])") {
+            PlotOp::Contour { levels, filled, .. } => {
+                assert!(filled);
+                assert_eq!(levels, Some(vec![1.0, 2.0, 3.0]), "مرتب‌شده");
+            }
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn view_forms() {
+        match first_op("view(-45, 20)") {
+            PlotOp::View { v } => assert_eq!((v.az, v.el), (-45.0, 20.0)),
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("view(2)") {
+            PlotOp::View { v } => assert_eq!((v.az, v.el), (0.0, 90.0)),
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("view(3)") {
+            PlotOp::View { v } => assert_eq!((v.az, v.el), (-37.5, 30.0)),
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("view([10, 40])") {
+            PlotOp::View { v } => assert_eq!((v.az, v.el), (10.0, 40.0)),
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn colorbar_caxis_colormap_shading_statements() {
+        assert!(matches!(
+            first_op("colorbar"),
+            PlotOp::Colorbar { on: true }
+        ));
+        assert!(matches!(
+            first_op("colorbar off"),
+            PlotOp::Colorbar { on: false }
+        ));
+        match first_op("caxis([-2, 8])") {
+            PlotOp::Caxis { limits } => assert_eq!(limits, Some([-2.0, 8.0])),
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("colormap jet") {
+            PlotOp::ColormapSet { cm } => assert_eq!(cm, Colormap::Jet),
+            other => panic!("wrong op: {other:?}"),
+        }
+        match first_op("shading interp") {
+            PlotOp::ShadingSet { s } => assert_eq!(s, Shading3::Interp),
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn exportgraphics_validates_name_and_emits() {
+        match first_op("exportgraphics('surf.pdf')") {
+            PlotOp::ExportPdf { name } => assert_eq!(name, "surf.pdf"),
+            other => panic!("wrong op: {other:?}"),
+        }
+        // پسوند اضافه می‌شود
+        match first_op("exportgraphics('out')") {
+            PlotOp::ExportPdf { name } => assert_eq!(name, "out.pdf"),
+            other => panic!("wrong op: {other:?}"),
+        }
+        // مسیر ممنوع — صادقانه
+        assert!(!err_of("exportgraphics('../x.pdf')").message_en.is_empty());
+        assert!(!err_of("exportgraphics(5)").message_en.is_empty());
+    }
+
+    #[test]
+    fn display_name_and_marker_size_now_supported() {
+        let mut env = Environment::new();
+        let out = run(
+            &mut env,
+            "plot([1,2], [3,4], 'DisplayName', 'الف', 'MarkerSize', 7)",
+        );
+        assert!(out.error.is_none());
+        match out.plot_ops.into_iter().next() {
+            Some(PlotOp::Line { series }) => {
+                assert_eq!(series[0].style.label.as_deref(), Some("الف"));
+                assert_eq!(series[0].style.marker_size, Some(7.0));
+            }
+            other => panic!("wrong: {other:?}"),
+        }
+        // MarkerSize خارج بازه رد می‌شود
+        assert!(!err_of("plot([1,2],[3,4],'MarkerSize', 0)")
+            .message_en
+            .is_empty());
+    }
+
+    #[test]
+    fn zlabel_statement() {
+        match first_op("zlabel('ارتفاع')") {
+            PlotOp::ZLabel { text } => assert_eq!(text, "ارتفاع"),
+            other => panic!("wrong op: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn meshgrid_single_output_returns_x_grid() {
+        let mut env = Environment::new();
+        let out = run(&mut env, "G = meshgrid([1, 2, 3]); G");
+        assert!(out.error.is_none());
+        let v = out.outputs.first().expect("output");
+        // 3×3 — هر سطر همان [1 2 3]
+        assert!(v.text.contains("1") && v.text.contains("3"));
+        // با دو ورودی: سطرها = numel(y)
+        let out = run(&mut env, "G = meshgrid([1,2], [10;20;30]); numel(G)");
+        assert!(out.error.is_none());
+        assert!(
+            out.outputs[0].text.contains('6'),
+            "3×2=6: {}",
+            out.outputs[0].text
+        );
+    }
+
+    #[test]
+    fn peaks_default_and_sized() {
+        let mut env = Environment::new();
+        let out = run(&mut env, "Z = peaks(9); numel(Z)");
+        assert!(out.error.is_none());
+        assert!(
+            out.outputs[0].text.contains('8') || out.outputs[0].text.contains('1'),
+            "81: {}",
+            out.outputs[0].text
+        );
+        // مقدار مشخص: فرمول متلب در (0,0) = (3 + 1/3)·e⁻¹ ≈ 1.22626
+        let out = run(&mut env, "format long; Z = peaks(49); Z(25, 25)");
+        assert!(out.error.is_none(), "خطای peaks: {:?}", out.error);
+        assert!(
+            out.outputs[0].text.contains("1.22626"),
+            "peaks(0,0)=1.2263: {}",
+            out.outputs[0].text
+        );
+    }
+
+    #[test]
+    fn surf_peaks_full_script_roundtrip() {
+        // اسکریپت دمو از سند ۰۷ — بدون خطا از مفسر رد می‌شود
+        let mut env = Environment::new();
+        let out = run(
+            &mut env,
+            "Z = peaks(25); surf(Z); colorbar; view(-45, 25); zlabel('z')",
+        );
+        assert!(out.error.is_none());
+        assert_eq!(out.plot_ops.len(), 4);
+    }
 }

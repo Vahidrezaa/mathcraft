@@ -5,12 +5,13 @@ use mc_plot::histogram::{self, HistNorm};
 use mc_plot::linespec;
 use mc_plot::session;
 use mc_plot::spec::{
-    ErrBand, FillPair, LegendPos, PlotColorSpec, PlotOp, SeriesData, SeriesPair, StyleSpec,
+    Colormap, ErrBand, FillPair, LegendPos, PlotColorSpec, PlotOp, Series3Pair, SeriesData,
+    SeriesPair, Shading3, StyleSpec, SurfKind, View3,
 };
 use mc_plot::ticks::format_g4;
 
 /// نام‌های گزاره‌ای رسم — الگوی dict در exec_stmt (تقدم: متغیر/تابع کاربر).
-pub const PLOT_STATEMENT_FNS: [&str; 30] = [
+pub const PLOT_STATEMENT_FNS: [&str; 42] = [
     "plot",
     "scatter",
     "bar",
@@ -41,6 +42,19 @@ pub const PLOT_STATEMENT_FNS: [&str; 30] = [
     "yticks",
     "xticklabels",
     "yticklabels",
+    // ---- P3-b (گام 3.8): سه‌بعدی + خروجی ----
+    "plot3",
+    "surf",
+    "mesh",
+    "contour",
+    "contourf",
+    "colorbar",
+    "caxis",
+    "view",
+    "zlabel",
+    "colormap",
+    "shading",
+    "exportgraphics",
 ];
 
 /// آیا نام، تابع رسم گزاره‌ای است؟
@@ -79,6 +93,19 @@ pub fn apply(name: &str, args: &[Value], line: u32, col: u32) -> Result<(), McEr
         "ylim" => bi_lim(args, line, col, false),
         "xticks" => bi_ticks(args, line, col, true),
         "yticks" => bi_ticks(args, line, col, false),
+        // ---- P3-b (گام 3.8) ----
+        "plot3" => bi_plot3(args, line, col),
+        "surf" => bi_surf(args, line, col, false),
+        "mesh" => bi_surf(args, line, col, true),
+        "contour" => bi_contour(args, line, col, false),
+        "contourf" => bi_contour(args, line, col, true),
+        "colorbar" => bi_colorbar(args, line, col),
+        "caxis" => bi_caxis(args, line, col),
+        "view" => bi_view(args, line, col),
+        "zlabel" => bi_zlabel(args, line, col),
+        "colormap" => bi_colormap(args, line, col),
+        "shading" => bi_shading(args, line, col),
+        "exportgraphics" => bi_exportgraphics(args, line, col),
         "xticklabels" | "yticklabels" => Err(perr(
             line,
             col,
@@ -337,26 +364,53 @@ fn style_from_trailing(
                     style.marker = parts.marker;
                 }
                 "MarkerSize" => {
-                    return Err(perr(
-                        line,
-                        col,
-                        "MarkerSize is not supported yet (contract v3) — marker size is fixed."
-                            .into(),
-                        "MarkerSize هنوز پشتیبانی نمی‌شود (قرارداد v3) — اندازهٔ مارکر ثابت است."
-                            .into(),
-                    ));
+                    i += 1;
+                    let sz = args
+                        .get(i)
+                        .and_then(|v| scalar_of(v, name, line, col).ok())
+                        .ok_or_else(|| {
+                            perr(
+                                line,
+                                col,
+                                "MarkerSize needs a positive number.".into(),
+                                "MarkerSize عددی مثبت لازم دارد.".into(),
+                            )
+                        })?;
+                    if !(sz.is_finite() && sz > 0.0 && sz <= 64.0) {
+                        return Err(perr(
+                            line,
+                            col,
+                            "MarkerSize must be in (0, 64].".into(),
+                            "MarkerSize باید در بازهٔ (۰، ۶۴] باشد.".into(),
+                        ));
+                    }
+                    style.marker_size = Some(sz as f32);
                 }
                 "stacked" => stacked = true,
                 // 'filled' (stem) — مارکر پر در قرارداد نیست؛ no-op صادقانه
                 "filled" => {}
+                // v3 (گام 3.8 — حفرهٔ #4 سند ۱۳): سوخت auto-legend زیر hold
                 "DisplayName" => {
-                    return Err(perr(
-                        line,
-                        col,
-                        "DisplayName is not supported yet — use legend('label', ...).".into(),
-                        "DisplayName هنوز پشتیبانی نمی‌شود — از legend('برچسب', ...) استفاده کنید."
-                            .into(),
-                    ));
+                    i += 1;
+                    if let Some(Value::Char(label)) = args.get(i) {
+                        style.label = Some(label.clone());
+                    } else if let Some(v) = args.get(i).filter(|v| is_numeric(v)) {
+                        // متلب رشته می‌خواهد؛ عدد را صادقانه رد می‌کنیم
+                        let _ = v;
+                        return Err(perr(
+                            line,
+                            col,
+                            "DisplayName needs a text label.".into(),
+                            "DisplayName برچسب متنی لازم دارد.".into(),
+                        ));
+                    } else {
+                        return Err(perr(
+                            line,
+                            col,
+                            "DisplayName needs a text label.".into(),
+                            "DisplayName برچسب متنی لازم دارد.".into(),
+                        ));
+                    }
                 }
                 other => {
                     let parts = linespec::parse(other).map_err(|e| {
@@ -476,9 +530,15 @@ fn parse_plot_groups(
     // روی «همهٔ» گروه‌ها اعمال می‌شوند (پارتی متلب: LineWidth انتهایی روی
     // همهٔ خط‌ها)؛ رشتهٔ LineSpec به گروه خودش می‌چسبد و بر سراسری می‌چربد.
     let mut global = StyleSpec::default();
-    // (x، ستون‌های y، اجزای LineSpec گروه) — ادغام با سراسری‌ها «پس از» پارس
-    // کامل می‌شود تا name-valueهای انتهایی روی همهٔ گروه‌ها بیفتند
-    type ParsedGroup = (Option<Vec<f64>>, Vec<Vec<f64>>, linespec::LineSpecParts);
+    // (x، ستون‌های y، اجزای LineSpec گروه، برچسب DisplayName گروه) —
+    // ادغام با سراسری‌ها «پس از» پارس کامل می‌شود تا name-valueهای
+    // انتهایی روی همهٔ گروه‌ها بیفتند
+    type ParsedGroup = (
+        Option<Vec<f64>>,
+        Vec<Vec<f64>>,
+        linespec::LineSpecParts,
+        Option<String>,
+    );
     let mut parsed: Vec<ParsedGroup> = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -520,6 +580,8 @@ fn parse_plot_groups(
         }
         // LineSpecهای این گروه (نشان‌ها)؛ nvها فقط global را به‌روز می‌کنند
         let mut parts = linespec::LineSpecParts::default();
+        // برچسب DisplayName همین گروه (v3) — با گروه فعلی push می‌شود
+        let mut group_label: Option<String> = None;
         while i < args.len() {
             let Value::Char(s) = &args[i] else {
                 break;
@@ -606,13 +668,45 @@ fn parse_plot_groups(
                     })?;
                     global.marker = p.marker;
                 }
-                "MarkerSize" | "DisplayName" => {
-                    return Err(perr(
-                        line,
-                        col,
-                        format!("{s} is not supported yet (contract v3)."),
-                        format!("{s} هنوز پشتیبانی نمی‌شود (قرارداد v3)."),
-                    ));
+                // v3 (گام 3.8): MarkerSize سراسری (مثل LineWidth)؛
+                // DisplayName به «گروه قبل از خودش» می‌چسبد (پارتی متلب).
+                "MarkerSize" => {
+                    i += 1;
+                    let sz = args
+                        .get(i)
+                        .and_then(|v| scalar_of(v, name, line, col).ok())
+                        .ok_or_else(|| {
+                            perr(
+                                line,
+                                col,
+                                "MarkerSize needs a positive number.".into(),
+                                "MarkerSize عددی مثبت لازم دارد.".into(),
+                            )
+                        })?;
+                    if !(sz.is_finite() && sz > 0.0 && sz <= 64.0) {
+                        return Err(perr(
+                            line,
+                            col,
+                            "MarkerSize must be in (0, 64].".into(),
+                            "MarkerSize باید در بازهٔ (۰، ۶۴] باشد.".into(),
+                        ));
+                    }
+                    global.marker_size = Some(sz as f32);
+                }
+                "DisplayName" => {
+                    i += 1;
+                    let label = match args.get(i) {
+                        Some(Value::Char(t)) => t.clone(),
+                        _ => {
+                            return Err(perr(
+                                line,
+                                col,
+                                "DisplayName needs a text label.".into(),
+                                "DisplayName برچسب متنی لازم دارد.".into(),
+                            ))
+                        }
+                    };
+                    group_label = Some(label);
                 }
                 other => {
                     let p = linespec::parse(other).map_err(|e| {
@@ -645,7 +739,7 @@ fn parse_plot_groups(
             }
             i += 1;
         }
-        parsed.push((x, ycols, parts));
+        parsed.push((x, ycols, parts, group_label));
     }
     if parsed.is_empty() {
         return Err(perr(
@@ -657,10 +751,12 @@ fn parse_plot_groups(
     }
     let groups = parsed
         .into_iter()
-        .map(|(x, ycols, parts)| PlotGroup {
-            x,
-            ycols,
-            style: linespec::merge_into(&global, parts),
+        .map(|(x, ycols, parts, label)| {
+            let mut style = linespec::merge_into(&global, parts);
+            if label.is_some() {
+                style.label = label;
+            }
+            PlotGroup { x, ycols, style }
         })
         .collect();
     Ok(groups)
@@ -752,6 +848,7 @@ fn bi_stem(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
         dash: s.dash,
         marker: None,
         label: None,
+        marker_size: None,
     };
     let head_style = StyleSpec {
         color: s.color,
@@ -759,6 +856,7 @@ fn bi_stem(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
         dash: Some(mc_plot::spec::DashSpec::Invisible),
         marker: Some(s.marker.unwrap_or(mc_plot::spec::MarkerSpec::Circle)),
         label: None,
+        marker_size: None,
     };
     session::emit(PlotOp::Line {
         series: vec![
@@ -1518,6 +1616,383 @@ fn bi_ticks(args: &[Value], line: u32, col: u32, is_x: bool) -> Result<(), McErr
     } else {
         session::emit(PlotOp::YTicks { ticks });
     }
+    Ok(())
+}
+
+// ===========================================================================
+// P3-b (گام 3.8) — سه‌بعدی و خروجی
+// ===========================================================================
+
+/// استخراج شبکهٔ Z به‌همراه x/y اختیاری — (Z) | (X, Y, Z).
+/// Z ماتریس است (سطر i = y ثابت، ستون j = x ثابت — قرارداد meshgrid).
+type Grid3 = (Vec<f64>, Vec<f64>, Vec<Vec<f64>>);
+
+fn grid_args(
+    args: &[Value],
+    name: &str,
+    line: u32,
+    col: u32,
+) -> Result<Grid3, McError> {
+    let bad = |why: &str, why_fa: &str| {
+        perr(
+            line,
+            col,
+            format!("{name}: {why}"),
+            format!("{name}: {why_fa}"),
+        )
+    };
+    fn as_matrix(v: &Value) -> Option<&mc_core::Matrix> {
+        match v {
+            Value::Double(m) => Some(m),
+            _ => None,
+        }
+    }
+    let z_val = args
+        .iter()
+        .rev()
+        .find(|v| matches!(v, Value::Double(m) if m.rows() >= 1 && m.cols() >= 1 && !m.is_scalar()))
+        .ok_or_else(|| {
+            bad(
+                "a 2-D matrix Z is required, e.g. surf(Z) or surf(X, Y, Z).",
+                "ماتریس دوبعدی Z لازم است، مثل surf(Z) یا surf(X, Y, Z).",
+            )
+        })?;
+    let zm = as_matrix(z_val).ok_or_else(|| bad("Z must be numeric.", "Z باید عددی باشد."))?;
+    let (rows, cols) = (zm.rows(), zm.cols());
+    let z: Vec<Vec<f64>> = (0..rows)
+        .map(|i| (0..cols).map(|j| zm.get(i, j)).collect())
+        .collect();
+    // x/y از اندازه (یا صریح اگر سه آرگومان عددی اول داده شده)
+    let (xs, ys): (Option<Vec<f64>>, Option<Vec<f64>>) = if args.len() >= 3
+        && is_numeric(&args[0])
+        && is_numeric(&args[1])
+        && as_matrix(&args[0]).is_none()
+    {
+        let xv = numeric_vec(&args[0], name, line, col)?;
+        let yv = numeric_vec(&args[1], name, line, col)?;
+        (Some(xv), Some(yv))
+    } else {
+        (None, None)
+    };
+    let mk = |n: usize| (0..n).map(|i| i as f64).collect::<Vec<f64>>();
+    let x = match xs {
+        Some(v) if v.len() == cols => v,
+        Some(v) => {
+            return Err(bad(
+                &format!("X has {} values but Z has {} columns.", v.len(), cols),
+                &format!("X بردار {} مقدار دارد ولی Z {} ستون.", v.len(), cols),
+            ))
+        }
+        None => mk(cols),
+    };
+    let y = match ys {
+        Some(v) if v.len() == rows => v,
+        Some(v) => {
+            return Err(bad(
+                &format!("Y has {} values but Z has {} rows.", v.len(), rows),
+                &format!("Y بردار {} مقدار دارد ولی Z {} سطر.", v.len(), rows),
+            ))
+        }
+        None => mk(rows),
+    };
+    Ok((x, y, z))
+}
+
+fn bi_plot3(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    // plot3(x, y, z) — سه بردار هم‌طول (یا ستون‌های هم‌شکل ماتریس‌ها)
+    let numeric: Vec<&Value> = args.iter().take(3).filter(|v| is_numeric(v)).collect();
+    if numeric.len() != 3 {
+        return Err(perr(
+            line,
+            col,
+            "plot3: three equal-length vectors expected — plot3(x, y, z).".into(),
+            "plot3: سه بردار هم‌طول لازم است — plot3(x, y, z).".into(),
+        ));
+    }
+    let xcols = columns_of(numeric[0], "plot3", line, col)?;
+    let ycols = columns_of(numeric[1], "plot3", line, col)?;
+    let zcols = columns_of(numeric[2], "plot3", line, col)?;
+    let n = xcols.len().min(ycols.len()).max(1);
+    let style = style_from_trailing(args, 3, "plot3", line, col)?.style;
+    let mut series = Vec::new();
+    for k in 0..n {
+        let x = xcols.get(k).cloned().unwrap_or_default();
+        let y = ycols.get(k).cloned().unwrap_or_default();
+        let z = zcols.get(k).cloned().unwrap_or_default();
+        let len = x.len().min(y.len()).min(z.len());
+        series.push(Series3Pair {
+            data: SeriesData {
+                x: x[..len].to_vec(),
+                y: y[..len].to_vec(),
+            },
+            z: z[..len].to_vec(),
+            style: style.clone(),
+        });
+    }
+    session::emit(PlotOp::Plot3 { series });
+    Ok(())
+}
+
+fn bi_surf(args: &[Value], line: u32, col: u32, as_mesh: bool) -> Result<(), McError> {
+    let (x, y, z) = grid_args(args, if as_mesh { "mesh" } else { "surf" }, line, col)?;
+    session::emit(PlotOp::Surface {
+        x,
+        y,
+        z,
+        kind: if as_mesh {
+            SurfKind::Mesh
+        } else {
+            SurfKind::Surf
+        },
+        shading: Shading3::Faceted,
+        colormap: Colormap::Parula,
+        caxis: None,
+        colorbar: false,
+    });
+    Ok(())
+}
+
+fn bi_contour(args: &[Value], line: u32, col: u32, filled: bool) -> Result<(), McError> {
+    let name = if filled { "contourf" } else { "contour" };
+    // سطح‌های صریح: آخرین آرگومان عددی برداری که Z نیست
+    let mut levels: Option<Vec<f64>> = None;
+    for v in args.iter().skip(1) {
+        if let Value::Double(m) = v {
+            if m.is_scalar() || m.rows() == 1 || m.cols() == 1 {
+                let vals = numeric_vec(v, name, line, col)?;
+                if !vals.is_empty() {
+                    // تک‌عدد = تعداد سطح؛ بردار = خود سطح‌ها
+                    if vals.len() == 1 && m.is_scalar() && vals[0] >= 2.0 {
+                        levels = None; // تعداد — فعلاً پیش‌فرض ۱۰ سطح خودکار
+                    } else {
+                        let mut sorted = vals;
+                        sorted
+                            .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                        levels = Some(sorted);
+                    }
+                }
+            }
+        }
+    }
+    let (x, y, z) = grid_args(args, name, line, col)?;
+    session::emit(PlotOp::Contour {
+        x,
+        y,
+        z,
+        levels,
+        filled,
+        colormap: Colormap::Parula,
+        caxis: None,
+        colorbar: false,
+    });
+    Ok(())
+}
+
+fn bi_colorbar(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let on = match args.first() {
+        None => true,
+        Some(Value::Char(s)) => match s.as_str() {
+            "off" | "delete" => false,
+            _ => true,
+        },
+        Some(_) => {
+            return Err(perr(
+                line,
+                col,
+                "colorbar: no argument or 'off' expected.".into(),
+                "colorbar: بدون آرگومان یا 'off'.".into(),
+            ))
+        }
+    };
+    session::emit(PlotOp::Colorbar { on });
+    Ok(())
+}
+
+fn bi_caxis(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let limits = match args.first() {
+        None => None,
+        Some(Value::Char(s)) if s.eq_ignore_ascii_case("auto") => None,
+        Some(v) if is_numeric(v) => {
+            let lim = numeric_vec(v, "caxis", line, col)?;
+            if lim.len() != 2 || !(lim[0] < lim[1]) {
+                return Err(perr(
+                    line,
+                    col,
+                    "caxis: [min max] with min < max expected (or 'auto').".into(),
+                    "caxis: [کمینه بیشینه] با کمینه < بیشینه لازم است (یا 'auto').".into(),
+                ));
+            }
+            Some([lim[0], lim[1]])
+        }
+        Some(_) => {
+            return Err(perr(
+                line,
+                col,
+                "caxis: [min max] or 'auto' expected.".into(),
+                "caxis: [کمینه بیشینه] یا 'auto' لازم است.".into(),
+            ))
+        }
+    };
+    session::emit(PlotOp::Caxis { limits });
+    Ok(())
+}
+
+fn bi_view(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let v = match args.len() {
+        1 => match &args[0] {
+            Value::Double(m) if m.is_scalar() => {
+                let n = m.get(0, 0);
+                if n == 2.0 {
+                    View3::TOP
+                } else {
+                    View3::DEFAULT
+                }
+            }
+            Value::Double(m) if m.cols() == 2 && m.rows() == 1 => View3 {
+                az: m.get(0, 0),
+                el: m.get(0, 1),
+            },
+            _ => {
+                return Err(perr(
+                    line,
+                    col,
+                    "view: view(2)/view(3) or view([az el]) or view(az, el).".into(),
+                    "view: view(2)/view(3) یا view([az el]) یا view(az, el).".into(),
+                ))
+            }
+        },
+        2 => View3 {
+            az: numeric_vec(&args[0], "view", line, col)?
+                .first()
+                .copied()
+                .ok_or_else(|| {
+                    perr(
+                        line,
+                        col,
+                        "view: az must be a number.".into(),
+                        "view: az باید عدد باشد.".into(),
+                    )
+                })?,
+            el: numeric_vec(&args[1], "view", line, col)?
+                .first()
+                .copied()
+                .ok_or_else(|| {
+                    perr(
+                        line,
+                        col,
+                        "view: el must be a number.".into(),
+                        "view: el باید عدد باشد.".into(),
+                    )
+                })?,
+        },
+        _ => {
+            return Err(perr(
+                line,
+                col,
+                "view: view(az, el) | view([az el]) | view(2) | view(3).".into(),
+                "view: view(az, el) | view([az el]) | view(2) | view(3).".into(),
+            ))
+        }
+    };
+    session::emit(PlotOp::View { v });
+    Ok(())
+}
+
+fn bi_zlabel(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let text = one_label(args, "zlabel", line, col)?;
+    session::emit(PlotOp::ZLabel { text });
+    Ok(())
+}
+
+fn bi_colormap(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let cm = match args.first() {
+        Some(Value::Char(s)) => match s.to_ascii_lowercase().as_str() {
+            "parula" => Colormap::Parula,
+            "viridis" => Colormap::Viridis,
+            "jet" => Colormap::Jet,
+            "hot" => Colormap::Hot,
+            "cool" => Colormap::Cool,
+            "gray" | "grey" => Colormap::Gray,
+            other => {
+                return Err(perr(
+                    line,
+                    col,
+                    format!("colormap: '{other}' is not one of parula/viridis/jet/hot/cool/gray."),
+                    format!("colormap: «{other}» یکی از parula/viridis/jet/hot/cool/gray نیست."),
+                ))
+            }
+        },
+        None => {
+            // colormap برهنه = بازگشت به پیش‌فرض
+            Colormap::Parula
+        }
+        Some(_) => {
+            return Err(perr(
+                line,
+                col,
+                "colormap: a palette name expected (parula/viridis/jet/hot/cool/gray).".into(),
+                "colormap: نام پالت لازم است (parula/viridis/jet/hot/cool/gray).".into(),
+            ))
+        }
+    };
+    session::emit(PlotOp::ColormapSet { cm });
+    Ok(())
+}
+
+fn bi_shading(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    let s = match args.first() {
+        Some(Value::Char(t)) => match t.as_str() {
+            "flat" => Shading3::Flat,
+            "faceted" => Shading3::Faceted,
+            "interp" => Shading3::Interp,
+            other => {
+                return Err(perr(
+                    line,
+                    col,
+                    format!("shading: '{other}' — expected flat, faceted or interp."),
+                    format!("shading: «{other}» — flat یا faceted یا interp."),
+                ))
+            }
+        },
+        _ => {
+            return Err(perr(
+                line,
+                col,
+                "shading: flat | faceted | interp.".into(),
+                "shading: flat | faceted | interp.".into(),
+            ))
+        }
+    };
+    session::emit(PlotOp::ShadingSet { s });
+    Ok(())
+}
+
+fn bi_exportgraphics(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
+    // exportgraphics('name.pdf') — شکل فعال (مصرف: موتور، وسط fold)
+    let mut name = match args.last() {
+        Some(Value::Char(s)) if s.ends_with(".pdf") => s.clone(),
+        Some(Value::Char(s)) if !s.is_empty() => format!("{s}.pdf"),
+        _ => {
+            return Err(perr(
+                line,
+                col,
+                "exportgraphics: a file name is required — exportgraphics('surf.pdf').".into(),
+                "exportgraphics: نام فایل لازم است — exportgraphics('surf.pdf').".into(),
+            ))
+        }
+    };
+    if name.contains("..") || name.contains('/') || name.contains('\\') {
+        return Err(perr(
+            line,
+            col,
+            "exportgraphics: a bare file name (no path) expected — files land in the MathCraft sandbox.".into(),
+            "exportgraphics: فقط نام فایل (بدون مسیر) — فایل‌ها در سندباکس MathCraft می‌نشینند.".into(),
+        ));
+    }
+    if name.len() > 120 {
+        name.truncate(120);
+    }
+    session::emit(PlotOp::ExportPdf { name });
     Ok(())
 }
 

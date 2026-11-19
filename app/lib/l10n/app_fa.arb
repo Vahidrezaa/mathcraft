@@ -69,6 +69,7 @@
   "plotsFigureLabel": "شکل {n}",
   "@plotsFigureLabel": { "placeholders": { "n": { "type": "int" } } },
   "plotsListTooltip": "فهرست شکل‌ها",
+  "plotsPdfTooltip": "خروجی PDF برداری (رندر در موتور)",
   "plotsSaveTooltip": "ذخیرهٔ PNG",
   "plotsShareTooltip": "اشتراک PNG",
   "plotsInfoTooltip": "اطلاعات شکل",

@@ -44,6 +44,8 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("ones", bi_ones),
     ("eye", bi_eye),
     ("linspace", bi_linspace),
+    ("meshgrid", bi_meshgrid),
+    ("peaks", bi_peaks),
     ("logspace", bi_logspace),
     ("diag", bi_diag),
     ("tril", bi_tril),
@@ -401,6 +403,111 @@ fn dim2(args: &[Value], name: &str) -> Result<(usize, usize), McError> {
             Ok((r, c))
         }
         _ => Err(arity_err(name, "1 or 2", args.len())),
+    }
+}
+
+/// `meshgrid(x)` / `meshgrid(x, y)` — سمانتیک تک‌خروجی متلب: فقط شبکهٔ X
+/// برمی‌گردد (تعداد سطر = numel(y)، ستون = numel(x))؛ خروجی دوم
+/// ([X, Y] = ...) با مایل‌استون multi-assign می‌آید (همان پیام صادقانهٔ
+/// qr/svd). تا آن زمان surf(Z) شبکه را خودش می‌سازد.
+fn bi_meshgrid(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.is_empty() || args.len() > 2 {
+        return Err(arity_err("meshgrid", "1 or 2", args.len()));
+    }
+    let xv = match &args[0] {
+        Value::Double(m) if m.rows() == 1 || m.cols() == 1 => m.as_column_slice().to_vec(),
+        _ => return Err(type_err("meshgrid")),
+    };
+    let yv = if args.len() == 2 {
+        match &args[1] {
+            Value::Double(m) if m.rows() == 1 || m.cols() == 1 => m.as_column_slice().to_vec(),
+            _ => return Err(type_err("meshgrid")),
+        }
+    } else {
+        xv.clone()
+    };
+    if xv.is_empty() || yv.is_empty() {
+        return Err(type_err("meshgrid"));
+    }
+    let rows = yv.len();
+    let cols = xv.len();
+    let mut m = Matrix::try_full(rows, cols, 0.0)?;
+    for (i, _) in yv.iter().enumerate() {
+        for (j, &x) in xv.iter().enumerate() {
+            m.set(i, j, x);
+        }
+    }
+    Ok(Value::Double(m))
+}
+
+/// `peaks(n)` / `peaks` / `peaks(x, y)` — تابع نمونهٔ متلب (نمایشی surf).
+/// پیش‌فرض n = 49 روی [-3, 3]؛ فرم مختصاتی برای x/y برداری.
+fn bi_peaks(args: &[Value], _n: usize) -> Result<Value, McError> {
+    let peaks_at = |x: f64, y: f64| -> f64 {
+        3.0 * (1.0 - x).powi(2) * (-x * x - (y + 1.0).powi(2)).exp()
+            - 10.0 * (x / 5.0 - x.powi(3) - y.powi(5)) * (-x * x - y * y).exp()
+            + (1.0 / 3.0) * (-(x + 1.0).powi(2) - y * y).exp()
+    };
+    match args.len() {
+        0 => {
+            let n = 49;
+            let (lo, hi) = (-3.0, 3.0);
+            let step = (hi - lo) / (n as f64 - 1.0);
+            let mut m = Matrix::try_full(n, n, 0.0)?;
+            for i in 0..n {
+                for j in 0..n {
+                    let x = lo + j as f64 * step;
+                    let y = lo + i as f64 * step;
+                    m.set(i, j, peaks_at(x, y));
+                }
+            }
+            Ok(Value::Double(m))
+        }
+        1 => {
+            let n = need_int_scalar(args, 0)?;
+            if !(2..=512).contains(&n) {
+                return Err(McError::new(
+                    ids::TYPE_ERROR,
+                    0,
+                    0,
+                    "peaks: n must be between 2 and 512.".to_owned(),
+                    "peaks: n باید بین ۲ و ۵۱۲ باشد.".to_owned(),
+                ));
+            }
+            let (lo, hi) = (-3.0, 3.0);
+            let step = (hi - lo) / (n as f64 - 1.0);
+            let mut m = Matrix::try_full(n as usize, n as usize, 0.0)?;
+            for i in 0..n as usize {
+                for j in 0..n as usize {
+                    let x = lo + j as f64 * step;
+                    let y = lo + i as f64 * step;
+                    m.set(i, j, peaks_at(x, y));
+                }
+            }
+            Ok(Value::Double(m))
+        }
+        2 => {
+            // peaks(x, y): x بردار ستون‌ها، y بردار سطرها → ماتریس numel(y)×numel(x)
+            let xv = match &args[0] {
+                Value::Double(m) if m.rows() == 1 || m.cols() == 1 => m.as_column_slice().to_vec(),
+                _ => return Err(type_err("peaks")),
+            };
+            let yv = match &args[1] {
+                Value::Double(m) if m.rows() == 1 || m.cols() == 1 => m.as_column_slice().to_vec(),
+                _ => return Err(type_err("peaks")),
+            };
+            if xv.is_empty() || yv.is_empty() {
+                return Err(type_err("peaks"));
+            }
+            let mut m = Matrix::try_full(yv.len(), xv.len(), 0.0)?;
+            for (i, &y) in yv.iter().enumerate() {
+                for (j, &x) in xv.iter().enumerate() {
+                    m.set(i, j, peaks_at(x, y));
+                }
+            }
+            Ok(Value::Double(m))
+        }
+        n => Err(arity_err("peaks", "0, 1 or 2", n)),
     }
 }
 
