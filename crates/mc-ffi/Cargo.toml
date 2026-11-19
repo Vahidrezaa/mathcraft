@@ -16,4 +16,5 @@ mc-core.workspace = true
 mc-plot = { path = "../mc-plot" }
 mc-parser.workspace = true
 mc-interp.workspace = true
+mc-io.workspace = true
 flutter_rust_bridge = "=2.12.0"

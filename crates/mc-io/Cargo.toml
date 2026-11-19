@@ -1,0 +1,17 @@
+[package]
+name = "mc-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "MathCraft file & data I/O — MCWS v1 (bit-exact workspace), .mat v5 read subset, delimited text (readmatrix/writematrix), session VFS (ROADMAP 3.7)"
+
+[dependencies]
+mc-core = { workspace = true }
+# zlib فقط برای بازکردن miCOMPRESSED فایل‌های .mat v5 (سند MAT-File Format
+# 1-6: «use the uncompress function from the zlib library»). بک‌اند pure-Rust
+# (miniz_oxide) — بدون کد C؛ الزام F-Droid (سند ۰۸ §7) و deny-gate.
+flate2 = { workspace = true }
+
+[dev-dependencies]

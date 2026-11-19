@@ -94,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FileWrite dco_decode_file_write(dynamic raw);
+
+  @protected
   HistNorm dco_decode_hist_norm(dynamic raw);
 
   @protected
@@ -124,6 +127,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ErrorSeries2D> dco_decode_list_error_series_2_d(dynamic raw);
 
   @protected
+  List<FileWrite> dco_decode_list_file_write(dynamic raw);
+
+  @protected
   List<Float64List> dco_decode_list_list_prim_f_64_strict(dynamic raw);
 
   @protected
@@ -137,6 +143,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -311,6 +320,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FileWrite sse_decode_file_write(SseDeserializer deserializer);
+
+  @protected
   HistNorm sse_decode_hist_norm(SseDeserializer deserializer);
 
   @protected
@@ -343,6 +355,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<FileWrite> sse_decode_list_file_write(SseDeserializer deserializer);
+
+  @protected
   List<Float64List> sse_decode_list_list_prim_f_64_strict(
       SseDeserializer deserializer);
 
@@ -358,6 +373,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -538,6 +556,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_file_write(FileWrite self, SseSerializer serializer);
+
+  @protected
   void sse_encode_hist_norm(HistNorm self, SseSerializer serializer);
 
   @protected
@@ -571,6 +592,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ErrorSeries2D> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_file_write(
+      List<FileWrite> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_list_prim_f_64_strict(
       List<Float64List> self, SseSerializer serializer);
 
@@ -589,6 +614,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_32_strict(
       Uint32List self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(

@@ -76,6 +76,7 @@ mod tests {
     fn sample_result(events: Vec<ConsoleEvent>, status: JobStatus) -> EvalResult {
         EvalResult {
             job_id: 1,
+            files_written: Vec::new(),
             console_events: events,
             plots: Vec::new(),
             workspace_delta: WorkspaceDelta::default(),

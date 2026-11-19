@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,9 @@ import 'package:mathcraft/features/editor/matlab_highlight.dart';
 /// موتور ساختگی — همان الگوی console_demo_test (سند ۰۸ بخش ۶):
 /// بدون libmathcraft.so؛ رفتار قطعی برای ادیتور.
 class FakeEngineClient implements EngineClient {
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
+
   EvalResult _resultFor(String code) {
     if (code.trim() == 'x = 41 + 1') {
       return EvalResult(
@@ -23,6 +27,7 @@ class FakeEngineClient implements EngineClient {
         workspaceDelta: WorkspaceDelta(changed: const []),
         status: JobStatus.done,
         durationMs: BigInt.from(1),
+        filesWritten: const [],
       );
     }
     return EvalResult(
@@ -42,7 +47,8 @@ class FakeEngineClient implements EngineClient {
       workspaceDelta: WorkspaceDelta(changed: const []),
       status: JobStatus.failed,
       durationMs: BigInt.from(1),
-    );
+        filesWritten: const [],
+      );
   }
 
   @override

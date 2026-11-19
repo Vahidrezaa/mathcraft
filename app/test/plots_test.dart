@@ -886,6 +886,9 @@ api.PlotFigure _surfaceFigure() => api.PlotFigure(
     );
 
 class _FakeEngine implements EngineClient {
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
+
   _FakeEngine(this.figures);
 
   final List<api.PlotFigure> figures;
@@ -899,6 +902,7 @@ class _FakeEngine implements EngineClient {
         workspaceDelta: const api.WorkspaceDelta(changed: []),
         status: api.JobStatus.done,
         durationMs: BigInt.one,
+        filesWritten: const [],
       );
 
   @override

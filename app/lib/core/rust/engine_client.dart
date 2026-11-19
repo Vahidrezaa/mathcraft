@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../../src/rust/api.dart';
 import '../../src/rust/api.dart' as api;
@@ -8,6 +9,7 @@ import '../../src/rust/frb_generated.dart' show RustLib;
 export '../../src/rust/api.dart'
     show
         EvalResult,
+        FileWrite,
         ConsoleEvent,
         ConsoleEvent_Print,
         ConsoleEvent_Error,
@@ -38,6 +40,11 @@ abstract class EngineClient {
 
   /// pull کامل شکل‌های نشست (قرارداد رسم v2 — سند ۰۴ §8.4).
   Future<List<api.PlotFigure>> getPlots();
+
+  /// ثبت بایت‌های یک فایل در VFS موتور (گام 3.7 — قرارداد v3). پیش‌فرض
+  /// no-op تا Fakeهای تست بدون تغییر کامپایل بمانند؛ UI همیشه از
+  /// RustEngineClient واقعی می‌گذرد.
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
 }
 
 /// کلاینت واقعی روی موتور Rust (libmathcraft.so — سند ۰۲ بخش ۸).
@@ -49,10 +56,11 @@ class RustEngineClient implements EngineClient {
     await RustLib.init();
     _initialized = true;
     final version = await api.apiVersion();
-    if (version != 2) {
+    if (version != 3) {
       // قرارداد ناسازگار = پیام واضح، نه کرش (سند ۰۲ بخش ۳ بند ۴).
+      // v3 = گام 3.7: files_written + vfs_register (افزودنی).
       throw StateError(
-        'MathCraft engine contract mismatch: expected 2, got $version',
+        'MathCraft engine contract mismatch: expected 3, got $version',
       );
     }
   }
@@ -83,6 +91,12 @@ class RustEngineClient implements EngineClient {
   Future<List<api.PlotFigure>> getPlots() async {
     await ensureInitialized();
     return api.getPlots();
+  }
+
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {
+    await ensureInitialized();
+    await api.vfsRegister(name: name, data: bytes);
   }
 }
 

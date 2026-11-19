@@ -97,6 +97,45 @@ class AppLocalizationsFa extends AppLocalizations {
   String get editorClearTooltip => 'پاک‌کردن ادیتور';
 
   @override
+  String get editorSaveTooltip => 'ذخیرهٔ .m در پوشهٔ MathCraft';
+
+  @override
+  String get editorOpenTooltip => 'بازکردن اسکریپت .m';
+
+  @override
+  String get editorSaveTitle => 'ذخیرهٔ اسکریپت';
+
+  @override
+  String get editorSaveNameHint => 'نام فایل (script.m)';
+
+  @override
+  String get editorSaveAction => 'ذخیره';
+
+  @override
+  String get editorCancelAction => 'انصراف';
+
+  @override
+  String get editorOpenTitle => 'بازکردن اسکریپت';
+
+  @override
+  String get editorNoScripts => 'هنوز فایل .m‌ای در پوشهٔ MathCraft نیست — اول یکی ذخیره کنید';
+
+  @override
+  String editorSavedTo(String path) {
+    return 'ذخیره شد: $path';
+  }
+
+  @override
+  String editorOpened(String name) {
+    return 'باز شد: $name';
+  }
+
+  @override
+  String consoleFilesSaved(int count, String names) {
+    return '$count فایل در پوشهٔ MathCraft ذخیره شد: $names';
+  }
+
+  @override
   String get plotsEmptyTitle => 'هنوز نموداری نیست';
 
   @override

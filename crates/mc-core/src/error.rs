@@ -33,6 +33,9 @@ pub mod ids {
     // سطح ۴ «منابع» سند ۰۲ §9 (timeout/cancel)؛ نتیجهٔ جزئی دور ریخته می‌شود
     // و FFI آن را به JobStatus::Cancelled نگاشت می‌کند (ROADMAP 2.3).
     pub const CANCELLED: &str = "MC:E4002_CANCELLED";
+
+    /// خطای فایل/دادهٔ I/O — گام 3.7 (گم‌بودن فایل، قالب خراب، نامعتبر).
+    pub const FILE_ERROR: &str = "MC:E5001_FILE_ERROR";
     // MC:E4003 — سقف تخصیص حافظه: چک «قبل از تخصیص» در mc-core::budget
     // (ROADMAP 2.5 — بستن بند ۲ ممیزی؛ abort تخصیص با catch_unwind مهار نمی‌شود).
     pub const OUT_OF_MEMORY: &str = "MC:E4003_OUT_OF_MEMORY";

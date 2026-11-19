@@ -10,6 +10,9 @@ import 'package:mathcraft/core/rust/engine_provider.dart';
 
 /// موتور ساختگی برای تست UI بدون libmathcraft.so (سند ۰۸ بخش ۶ — UI golden/test).
 class FakeEngineClient implements EngineClient {
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
+
   EvalResult _resultFor(String code) {
     if (code.trim() == '1+1') {
       return EvalResult(
@@ -21,6 +24,7 @@ class FakeEngineClient implements EngineClient {
         workspaceDelta: WorkspaceDelta(changed: const []),
         status: JobStatus.done,
         durationMs: BigInt.from(1),
+        filesWritten: const [],
       );
     }
     return EvalResult(
@@ -40,7 +44,8 @@ class FakeEngineClient implements EngineClient {
       workspaceDelta: WorkspaceDelta(changed: const []),
       status: JobStatus.failed,
       durationMs: BigInt.from(1),
-    );
+        filesWritten: const [],
+      );
   }
 
   @override

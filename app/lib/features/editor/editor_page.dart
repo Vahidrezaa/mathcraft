@@ -11,6 +11,8 @@ import '../../l10n/app_localizations.dart';
 import '../console/console_widgets.dart';
 import '../shell/app_shell.dart';
 import 'matlab_highlight.dart';
+import '../../core/io/mathcraft_dir.dart';
+import 'dart:convert' show utf8;
 
 /// ادیتور پایه P1 (آیتم DoD #8 — سند ۰۹ §2):
 /// - هایلایت سینتکس متلب (کلیدواژه/عدد/رشته/کامنت) با فونت مونو JetBrains
@@ -43,6 +45,7 @@ class ErrEntry extends EditorEntry {
 
 class _EditorPageState extends ConsumerState<EditorPage> {
   late final MatlabCodeController _code;
+  String? _fileName; // نام فایل ذخیره‌شدهٔ اخیر (پیش‌فرض دیالوگ ذخیره)
   final _outputScroll = ScrollController();
   final _entries = <EditorEntry>[];
   bool _running = false;
@@ -61,6 +64,91 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     _code.dispose();
     _outputScroll.dispose();
     super.dispose();
+  }
+
+  /// ذخیرهٔ بافر در پوشهٔ MathCraft (.m) + ثبت در VFS موتور — بعداً
+  /// `run('name.m')` از کنسول همان را می‌یابد (گام 3.7، D-39).
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final controller = TextEditingController(
+      text: _fileName ?? 'script.m',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.editorSaveTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: l10n.editorSaveNameHint),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(l10n.editorCancelAction),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: Text(l10n.editorSaveAction),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.trim().isEmpty) return;
+    final path = await MathCraftDir.writeScript(name, _code.text);
+    final base = path.split('/').last;
+    setState(() => _fileName = base);
+    // ثبت در VFS موتور — دقیقاً همان بایت‌های UTF-8 که روی دیسک رفت
+    try {
+      await ref.read(engineProvider).vfsRegister(
+            base,
+            Uint8List.fromList(utf8.encode(_code.text)),
+          );
+    } catch (_) {
+      // موتور در دسترس نیست — فایل ذخیره شد؛ ثبت بعدی خودکار می‌آید (D-39)
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.editorSavedTo(path))),
+    );
+  }
+
+  /// بازکردن یک اسکریپت .m از پوشهٔ MathCraft در بافر.
+  Future<void> _open() async {
+    final l10n = AppLocalizations.of(context)!;
+    final scripts = await MathCraftDir.listScripts();
+    if (!mounted) return;
+    if (scripts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.editorNoScripts)),
+      );
+      return;
+    }
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.editorOpenTitle),
+        children: [
+          for (final s in scripts)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(s),
+              child: Text(
+                s,
+                style: const TextStyle(fontFamily: 'JetBrainsMono'),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (name == null) return;
+    final text = await MathCraftDir.readScript(name);
+    if (!mounted) return;
+    _code.text = text;
+    setState(() => _fileName = name);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.editorOpened(name))),
+    );
   }
 
   Future<void> _run() async {
@@ -182,6 +270,48 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                           ),
                     ),
                   ),
+                  CdsPressable(
+                    onTap: _save,
+                    child: Tooltip(
+                      message: l10n.editorSaveTooltip,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius:
+                              BorderRadius.circular(CdsDimens.radiusSmall),
+                          border: Border.all(color: scheme.outline),
+                        ),
+                        child: CraftIcon(
+                          CraftIcons.actionSave,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  CdsPressable(
+                    onTap: _open,
+                    child: Tooltip(
+                      message: l10n.editorOpenTooltip,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          borderRadius:
+                              BorderRadius.circular(CdsDimens.radiusSmall),
+                          border: Border.all(color: scheme.outline),
+                        ),
+                        child: CraftIcon(
+                          CraftIcons.actionHistory,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   CdsPressable(
                     onTap: () {
                       _code.clear();

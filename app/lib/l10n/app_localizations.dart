@@ -263,6 +263,72 @@ abstract class AppLocalizations {
   /// **'Clear editor'**
   String get editorClearTooltip;
 
+  /// No description provided for @editorSaveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Save .m to the MathCraft folder'**
+  String get editorSaveTooltip;
+
+  /// No description provided for @editorOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a .m script'**
+  String get editorOpenTooltip;
+
+  /// No description provided for @editorSaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save script'**
+  String get editorSaveTitle;
+
+  /// No description provided for @editorSaveNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'File name (script.m)'**
+  String get editorSaveNameHint;
+
+  /// No description provided for @editorSaveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get editorSaveAction;
+
+  /// No description provided for @editorCancelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get editorCancelAction;
+
+  /// No description provided for @editorOpenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open script'**
+  String get editorOpenTitle;
+
+  /// No description provided for @editorNoScripts.
+  ///
+  /// In en, this message translates to:
+  /// **'No .m files in the MathCraft folder yet — save one first'**
+  String get editorNoScripts;
+
+  /// No description provided for @editorSavedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved: {path}'**
+  String editorSavedTo(String path);
+
+  /// No description provided for @editorOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened: {name}'**
+  String editorOpened(String name);
+
+  /// No description provided for @consoleFilesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} file(s) saved to the MathCraft folder: {names}'**
+  String consoleFilesSaved(int count, String names);
+
   /// No description provided for @plotsEmptyTitle.
   ///
   /// In en, this message translates to:

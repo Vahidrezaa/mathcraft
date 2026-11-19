@@ -8,9 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'api.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `map_axes`, `map_cell`, `map_color`, `map_err_band`, `map_err_series`, `map_figure`, `map_hist_norm`, `map_legend`, `map_series`, `map_style`, `map_tick`, `new`, `panic_error`, `set_active`
+// These functions are ignored because they are not marked as `pub`: `build_delta`, `clear_active`, `engine`, `eval_core`, `from_value`, `map_axes`, `map_cell`, `map_color`, `map_err_band`, `map_err_series`, `map_figure`, `map_hist_norm`, `map_legend`, `map_series`, `map_style`, `map_tick`, `new`, `panic_error`, `set_active`, `vfs_drain_outputs`, `vfs_sync_from_engine`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Engine`, `JobGuard`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// نسخه قرارداد — UI در startup چک می‌کند (سند ۰۲ بخش ۳ بند ۴).
 Future<int> apiVersion() => RustLib.instance.api.crateApiApiVersion();
@@ -60,6 +60,13 @@ Future<List<VarSummary>> workspaceVars() =>
 /// پاک‌کردن همه متغیرهای نشست (سمانتیک `clear` متلب) — تعداد متغیرهای پاک‌شده.
 Future<BigInt> clearWorkspace() =>
     RustLib.instance.api.crateApiClearWorkspace();
+
+/// ثبت بایت‌های یک فایل در VFS نشست (گام 3.7 — میزبان → موتور).
+/// میزبان (Dart) فایل‌های پوشهٔ MathCraft و فایل‌های گشوده‌شده را ثبت
+/// می‌کند؛ دستورهای `load`/`run`/`readmatrix` از همین‌جا می‌خوانند.
+/// true = جایگزینی نام موجود.
+Future<bool> vfsRegister({required String name, required List<int> data}) =>
+    RustLib.instance.api.crateApiVfsRegister(name: name, data: data);
 
 /// ثبت منبع یک فایل .m (بدون پسوند) در مخزن نشست — توابع فوراً
 /// فراخوانی‌پذیر می‌شوند؛ اسکریپت با نامش اجرا می‌شود (سمانتیک متلب §9).
@@ -305,6 +312,10 @@ class ErrorSeries2D {
 class EvalResult {
   final BigInt jobId;
 
+  /// فایل‌های نوشته‌شدهٔ این job (save/writematrix — گام 3.7): میزبان
+  /// آن‌ها را در پوشهٔ MathCraft روی دیسک می‌نویسد و به کاربر اعلام می‌کند.
+  final List<FileWrite> filesWritten;
+
   /// متن، خطا، warning — در P0 دسته‌ای؛ streaming کامل با `runScript` در P2.
   final List<ConsoleEvent> consoleEvents;
 
@@ -318,6 +329,7 @@ class EvalResult {
 
   const EvalResult({
     required this.jobId,
+    required this.filesWritten,
     required this.consoleEvents,
     required this.plots,
     required this.workspaceDelta,
@@ -331,6 +343,7 @@ class EvalResult {
   @override
   int get hashCode =>
       jobId.hashCode ^
+      filesWritten.hashCode ^
       consoleEvents.hashCode ^
       plots.hashCode ^
       workspaceDelta.hashCode ^
@@ -343,11 +356,34 @@ class EvalResult {
       other is EvalResult &&
           runtimeType == other.runtimeType &&
           jobId == other.jobId &&
+          filesWritten == other.filesWritten &&
           consoleEvents == other.consoleEvents &&
           plots == other.plots &&
           workspaceDelta == other.workspaceDelta &&
           status == other.status &&
           durationMs == other.durationMs;
+}
+
+/// یک فایل خروجی job — نام (بدون مسیر) + بایت‌ها (گام 3.7).
+class FileWrite {
+  final String name;
+  final Uint8List bytes;
+
+  const FileWrite({
+    required this.name,
+    required this.bytes,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ bytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FileWrite &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          bytes == other.bytes;
 }
 
 /// نرمال‌سازی هیستوگرام (پارتی 'Normalization' متلب).

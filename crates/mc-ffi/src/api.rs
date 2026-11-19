@@ -22,7 +22,14 @@ use crate::frb_generated::StreamSink;
 
 /// نسخه قرارداد API — UI در startup با `api_version()` مقایسه می‌کند.
 /// v2: افزودن ScriptEvent + run_script/cancel_job/active_job_id (ROADMAP 2.3).
-pub const API_CONTRACT_VERSION: u32 = 2;
+pub const API_CONTRACT_VERSION: u32 = 3;
+
+/// یک فایل خروجی job — نام (بدون مسیر) + بایت‌ها (گام 3.7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FileWrite {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
 
 /// نسخه قرارداد رسم (DTO) رسم‌ها — سند ۰۴ بخش ۸، سند ۰۷ بخش ۳ بند ۲.
 /// v1 = پل P0؛ **v2 = فریز P3-a** (رنگ معنایی/دقیق، تیک‌های 1-2-5،
@@ -38,6 +45,9 @@ pub const PLOT_CONTRACT_VERSION: u32 = 2;
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct EvalResult {
     pub job_id: u64,
+    /// فایل‌های نوشته‌شدهٔ این job (save/writematrix — گام 3.7): میزبان
+    /// آن‌ها را در پوشهٔ MathCraft روی دیسک می‌نویسد و به کاربر اعلام می‌کند.
+    pub files_written: Vec<FileWrite>,
     /// متن، خطا، warning — در P0 دسته‌ای؛ streaming کامل با `runScript` در P2.
     pub console_events: Vec<ConsoleEvent>,
     /// شکل‌های دست‌خوردهٔ این اجرا (سند ۰۴ §8 — push؛ لیست کامل با get_plots).
@@ -480,6 +490,10 @@ struct Engine {
     jobs: u64,
     /// حالت شکل‌های نشست — fold روی PlotOpهای هر ارزیابی (P3-a).
     figures: mc_plot::figure::FigureState,
+    /// آینهٔ سراسری فایل‌های ثبت‌شدهٔ میزبان (گام 3.7) — mc_io::vfs
+    /// سریال-نخی است و FRB هر فراخوانی را می‌تواند روی نخ دیگری براند؛
+    /// این آینه پیش از هر job به thread-local سینک می‌شود.
+    files: HashMap<String, std::sync::Arc<Vec<u8>>>,
 }
 
 static ENGINE: OnceLock<Mutex<Engine>> = OnceLock::new();
@@ -490,6 +504,7 @@ fn engine() -> &'static Mutex<Engine> {
             env: Environment::new(),
             jobs: 0,
             figures: mc_plot::figure::FigureState::new(),
+            files: HashMap::new(),
         })
     })
 }
@@ -497,6 +512,29 @@ fn engine() -> &'static Mutex<Engine> {
 /// job فعال فعلی — فقط صاحب قفل موتور آن را ست/پاک می‌کند؛ `cancel_job`
 /// بدون قفل موتور (فقط پرچم اتمیک) تا از نخ دیگر قابل فراخوانی باشد.
 static ACTIVE_JOB: Mutex<Option<(u64, Arc<JobSignals>)>> = Mutex::new(None);
+
+/// سینک آینهٔ سراسری فایل‌ها به VFS سریال-نخیِ همین نخ — آغاز هر job
+/// (خروجی‌های جاماندهٔ job قبلی/ترکیده هم پاک می‌شود).
+fn vfs_sync_from_engine(engine: &Engine) {
+    mc_io::vfs::clear_all();
+    for (name, data) in &engine.files {
+        mc_io::vfs::register_shared(name, std::sync::Arc::clone(data));
+    }
+}
+
+/// برداشت خروجی‌های فایلِ همین job + بازثبتشان در آینهٔ سراسری —
+/// save/load در یک اسکریپت، بدون رفت‌وبرگشت میزبان هم کار می‌کند.
+fn vfs_drain_outputs(engine: &mut Engine) -> Vec<FileWrite> {
+    let outs = mc_io::vfs::take_outputs();
+    let mut written = Vec::with_capacity(outs.len());
+    for (name, bytes) in outs {
+        engine
+            .files
+            .insert(name.clone(), std::sync::Arc::new(bytes.clone()));
+        written.push(FileWrite { name, bytes });
+    }
+    written
+}
 
 fn set_active(job_id: u64, ctx: &Arc<JobSignals>) {
     *ACTIVE_JOB
@@ -626,6 +664,7 @@ pub fn evaluate_line(code: String) -> EvalResult {
     engine.jobs += 1;
     let job_id = engine.jobs;
     let before: HashMap<String, Value> = engine.env.snapshot();
+    vfs_sync_from_engine(&engine);
 
     // گارد مرزی: هر panic داخلی موتور هرگز نباید از مرز FFI بگذرد (کرش اپ
     // اندروید). به خطای موتور نگاشت می‌شود؛ وضعیت env بعد از panic ناسازگار
@@ -657,11 +696,13 @@ pub fn evaluate_line(code: String) -> EvalResult {
     }
 
     let workspace_delta = build_delta(&before, &engine.env);
+    let files_written = vfs_drain_outputs(&mut engine);
     EvalResult {
         job_id,
         console_events: events,
         plots,
         workspace_delta,
+        files_written,
         status,
         duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
     }
@@ -706,6 +747,7 @@ pub fn run_script(code: String, sink: StreamSink<ScriptEvent>) -> EvalResult {
     engine.jobs += 1;
     let job_id = engine.jobs;
     let before: HashMap<String, Value> = engine.env.snapshot();
+    vfs_sync_from_engine(&engine);
     let guard = JobGuard::new(job_id);
 
     // ticker پیشرفت — park_timeout برای خروج فوری در پایان job
@@ -779,6 +821,7 @@ pub fn run_script(code: String, sink: StreamSink<ScriptEvent>) -> EvalResult {
         console_events: events,
         plots,
         workspace_delta: build_delta(&before, &engine.env),
+        files_written: vfs_drain_outputs(&mut engine),
         status,
         duration_ms: u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX),
     };
@@ -817,6 +860,10 @@ pub fn active_job_id() -> Option<u64> {
 /// قطعی باشد (رفع CI قرمز ۲۰۲۶-۱۱-۱۷ — رقابت «ثبت job» با «نخستین کامیت»).
 /// `#[cfg(test)]` + خارج از قرارداد FFI (codegen فقط pub غیرِ‌شرطی را
 /// می‌بیند؛ بدون تغییر API_CONTRACT_VERSION).
+///
+/// **v3 (گام 3.7 — فایل/دادهٔ I/O):** افزودنی — `EvalResult.files_written`
+/// (خروجی‌های save/writematrix برای نوشتن روی دیسک) + تابع `vfs_register`
+/// (ثبت بایت‌های فایل از میزبان). فیلدهای قبلی دست‌نخورده.
 #[cfg(test)]
 pub(crate) fn active_job_loop_passes() -> Option<u64> {
     ACTIVE_JOB
@@ -1106,6 +1153,20 @@ pub struct RegisterResult {
     pub error: Option<McError>,
 }
 
+/// ثبت بایت‌های یک فایل در VFS نشست (گام 3.7 — میزبان → موتور).
+/// میزبان (Dart) فایل‌های پوشهٔ MathCraft و فایل‌های گشوده‌شده را ثبت
+/// می‌کند؛ دستورهای `load`/`run`/`readmatrix` از همین‌جا می‌خوانند.
+/// true = جایگزینی نام موجود.
+pub fn vfs_register(name: String, data: Vec<u8>) -> bool {
+    let mut engine = engine()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    engine
+        .files
+        .insert(name, std::sync::Arc::new(data))
+        .is_some()
+}
+
 /// ثبت منبع یک فایل .m (بدون پسوند) در مخزن نشست — توابع فوراً
 /// فراخوانی‌پذیر می‌شوند؛ اسکریپت با نامش اجرا می‌شود (سمانتیک متلب §9).
 pub fn register_m_source(name: String, source: String) -> RegisterResult {
@@ -1306,7 +1367,7 @@ mod tests {
         assert!(r.workspace_delta.changed[0].preview.len() <= 256);
 
         // -- ثبات نسخه‌های قرارداد (رسم: v2 از فریز P3-a)
-        assert_eq!(api_version(), 2);
+        assert_eq!(api_version(), 3);
         assert_eq!(plot_contract_version(), 2);
 
         // -- بازرسی نشست (P0.1): workspace_vars مرتب و clear_workspace سمانتیک clear
@@ -1656,5 +1717,101 @@ mod tests {
         let r = evaluate_line("figure(14); plot(1:3); undefined_fn_xyz()".to_owned());
         assert_eq!(r.status, JobStatus::Failed);
         assert_eq!(r.plots.len(), 1, "figure drawn before the error is kept");
+    }
+
+    // ---------- گام 3.7 — فایل/دادهٔ I/O (قرارداد v3) ----------
+
+    /// سناریوی کامل در یک تست ترتیبی (نشست جهانی) — who/whos، save→
+    /// files_written→load، vfs_register بیرونی، run از VFS، readmatrix،
+    /// writematrix، خطاهای صادقانه.
+    #[test]
+    fn file_io_session_flow() {
+        let _guard = serial_guard();
+
+        // who/whos — جدول متلب‌گونه
+        let _ = evaluate_line("mca = [1 2; 3 4]".to_owned());
+        let _ = evaluate_line("mcb = 'txt37'".to_owned());
+        let r = evaluate_line("who".to_owned());
+        assert_eq!(r.status, JobStatus::Done, "who ok");
+        match &r.console_events[0] {
+            ConsoleEvent::Print { text } => {
+                assert!(text.contains("Your variables are:"), "{text}");
+                assert!(text.contains("mca") && text.contains("mcb"), "{text}");
+            }
+            other => panic!("who print, got {other:?}"),
+        }
+        let r = evaluate_line("whos".to_owned());
+        match &r.console_events[0] {
+            ConsoleEvent::Print { text } => {
+                assert!(text.contains("Name") && text.contains("Bytes"), "{text}");
+                assert!(text.contains("Attributes"), "{text}");
+                assert!(text.contains("char") && text.contains("double"), "{text}");
+            }
+            other => panic!("whos print, got {other:?}"),
+        }
+
+        // save → files_written → (آینهٔ درونی) → load
+        let r = evaluate_line("save mcws_fio mca mcb".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(r.console_events.is_empty(), "save is silent (MATLAB)");
+        assert_eq!(r.files_written.len(), 1);
+        assert_eq!(r.files_written[0].name, "mcws_fio.mcws");
+        assert!(r.files_written[0].bytes.len() > 16);
+        let _ = evaluate_line("clear mca mcb".to_owned());
+        let r = evaluate_line("load mcws_fio".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(r.console_events.is_empty(), "load is silent (MATLAB)");
+        assert!(r.workspace_delta.changed.iter().any(|v| v.name == "mca"));
+        let r = evaluate_line("mca(2,1)".to_owned());
+        assert!(matches!(&r.console_events[0], ConsoleEvent::Print { text } if text.contains("3")));
+
+        // run از VFS — خروجی گزاره‌های بدون «;» می‌آید
+        assert!(
+            !vfs_register(
+                "hello37.m".to_owned(),
+                b"q37 = 5;\ndisp(q37 * 2)\n".to_vec()
+            ),
+            "first registration"
+        );
+        let r = evaluate_line("run('hello37.m')".to_owned());
+        assert_eq!(r.status, JobStatus::Done, "run ok");
+        assert!(
+            matches!(&r.console_events[0], ConsoleEvent::Print { text } if text.contains("10")),
+            "run prints disp output"
+        );
+
+        // readmatrix از VFS — سرصفحه رد، ستونی درست
+        assert!(!vfs_register(
+            "d37.csv".to_owned(),
+            b"a,b\n1,2\n3,4\n".to_vec()
+        ));
+        let r = evaluate_line("m37 = readmatrix('d37.csv'); disp(m37(2,1))".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(matches!(&r.console_events[0], ConsoleEvent::Print { text } if text.contains("3")));
+
+        // writematrix — نام فایل از متغیر، خروجی در files_written
+        let r = evaluate_line("writematrix(m37, 'out37.tsv')".to_owned());
+        assert_eq!(r.status, JobStatus::Done);
+        assert!(r.console_events.is_empty(), "writematrix is silent");
+        assert_eq!(r.files_written.len(), 1);
+        assert_eq!(r.files_written[0].name, "out37.tsv");
+        assert_eq!(r.files_written[0].bytes, b"1\t2\n3\t4\n".to_vec());
+
+        // خطاهای صادقانه — فایل غایب با راهنما؛ .mat نوشتن رد
+        let r = evaluate_line("load missing_xyz".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+        match &r.console_events[0] {
+            ConsoleEvent::Error { err } => {
+                assert!(
+                    err.message_fa.contains("MathCraft") || err.message_en.contains("not found")
+                );
+            }
+            other => panic!("missing file error, got {other:?}"),
+        }
+        let r = evaluate_line("save bad.mat".to_owned());
+        assert_eq!(r.status, JobStatus::Failed);
+
+        // پاک‌سازی سناریو برای بقیهٔ تست‌های ترتیبی
+        let _ = evaluate_line("clear mca mcb q37 m37 hello37".to_owned());
     }
 }

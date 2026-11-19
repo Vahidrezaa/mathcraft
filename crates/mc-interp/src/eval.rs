@@ -411,6 +411,47 @@ fn exec_stmt_inner(
                     return Ok((Flow::Normal, Vec::new()));
                 }
             }
+            // فرمان‌های لخت گام 3.7 — `who`/`clear`/`save` بدون پرانتز به‌شکل
+            // Expr::Var می‌رسند (قانون فرمانی 3.5.1 فقط «Ident + Ident» را
+            // Call می‌کند)؛ همان تقدم override این‌جا هم برقرار است.
+            if let Expr::Var {
+                name, line, col, ..
+            } = expr
+            {
+                if matches!(
+                    name.as_str(),
+                    "who" | "whos" | "clear" | "clearvars" | "save"
+                ) && env.get(name).is_none()
+                    && env.lookup_item(name).is_none()
+                {
+                    return io_command(env, name, &[], *line, *col, depth);
+                }
+            }
+            // فرمان‌های فایل/دادهٔ I/O گام 3.7 (ROADMAP §3.7؛ الگوی disp/rng —
+            // گزاره‌ای، بدون اکو و بدون ans؛ تقدم override کاربر مثل بقیه).
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                let is_io_cmd = matches!(
+                    name.as_str(),
+                    "who"
+                        | "whos"
+                        | "clear"
+                        | "clearvars"
+                        | "save"
+                        | "load"
+                        | "run"
+                        | "writematrix"
+                );
+                if is_io_cmd && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    return io_command(env, name, args, *line, *col, depth);
+                }
+            }
             // توابع رسم گزاره‌ای (P3-a — ROADMAP 3.2) — الگوی disp/rng:
             // بدون اکو، بدون ans، فقط اثر جانبی (emit به سینک mc-plot)؛
             // فراخوانی داخل عبارت به رجیستری می‌خورد و خطای روشن می‌دهد.
@@ -3115,4 +3156,149 @@ fn transpose(m: &Matrix) -> Matrix {
         }
     }
     out
+}
+
+// ---------- فرمان‌های I/O گزاره‌ای (گام 3.7 — ROADMAP §3.7) ----------
+
+/// استخراج نام فایل/متغیر از آرگومان خام — `save ws A` / `save('ws', 'A')`
+/// هر دو پارتی متلب‌اند: شناسه یا رشتهٔ مستقیم (نه عبارت ارزیابی‌شونده).
+fn io_arg_name(a: &Expr) -> Result<&str, McError> {
+    match a {
+        Expr::Var { name, .. } => Ok(name.as_str()),
+        Expr::Str(s) => Ok(s.as_str()),
+        _ => Err(McError::new(
+            mc_core::error::ids::TYPE_ERROR,
+            0,
+            0,
+            "file I/O commands take literal names, e.g. save('ws') or: save ws A",
+            "فرمان‌های فایل نام مستقیم می‌گیرند، مثل save('ws') یا: save ws A",
+        )),
+    }
+}
+
+/// دیسپچ گزاره‌ای who/whos/clear/clearvars/save/load/run/writematrix —
+/// بدون اکو، بدون ans (سمانتیک متلب). متن خروجی (who/whos/run) برمی‌گردد.
+fn io_command(
+    env: &mut Environment,
+    name: &str,
+    args: &[Expr],
+    line: u32,
+    col: u32,
+    depth: usize,
+) -> Result<(Flow, Vec<String>), McError> {
+    let _ = depth; // فقط writematrix برای ارزیابی آرگومانش می‌خواهدش
+    let (line, col) = (line as usize, col as usize);
+    match name {
+        "who" | "whos" => {
+            if !args.is_empty() {
+                return Err(McError::new(
+                    mc_core::error::ids::UNSUPPORTED,
+                    line as u32,
+                    col as u32,
+                    format!("{name}: filtering arguments are not available yet"),
+                    format!("{name}: آرگومان‌های پالایش هنوز پشتیبانی نمی‌شوند"),
+                ));
+            }
+            let text = if name == "who" {
+                crate::io_builtins::who_text(env)
+            } else {
+                crate::io_builtins::whos_text(env)
+            };
+            Ok((Flow::Normal, vec![text]))
+        }
+        "clear" | "clearvars" => {
+            let names: Vec<String> = args
+                .iter()
+                .map(io_arg_name)
+                .map(|r| r.map(str::to_owned))
+                .collect::<Result<_, _>>()?;
+            crate::io_builtins::clear_apply(env, &names);
+            Ok((Flow::Normal, Vec::new()))
+        }
+        "save" => {
+            let mut it = args.iter();
+            let file = it.next().map(io_arg_name).transpose()?.map(str::to_owned);
+            let names: Vec<String> = it
+                .map(io_arg_name)
+                .map(|r| r.map(str::to_owned))
+                .collect::<Result<_, _>>()?;
+            crate::io_builtins::save_apply(env, file, &names, line, col)?;
+            Ok((Flow::Normal, Vec::new()))
+        }
+        "load" => {
+            let mut it = args.iter();
+            let file = it.next().map(io_arg_name).transpose()?.ok_or_else(|| {
+                McError::new(
+                    mc_core::error::ids::TYPE_ERROR,
+                    line as u32,
+                    col as u32,
+                    "load needs a file name, e.g. load('ws') or: load ws",
+                    "load نام فایل می‌خواهد، مثل load('ws') یا: load ws",
+                )
+            })?;
+            let names: Vec<String> = it
+                .map(io_arg_name)
+                .map(|r| r.map(str::to_owned))
+                .collect::<Result<_, _>>()?;
+            crate::io_builtins::load_apply(env, file, &names, line, col)?;
+            Ok((Flow::Normal, Vec::new()))
+        }
+        "run" => {
+            let src = match args {
+                [a] => io_arg_name(a)?.to_owned(),
+                _ => {
+                    return Err(McError::new(
+                        mc_core::error::ids::TYPE_ERROR,
+                        line as u32,
+                        col as u32,
+                        "run takes one script name, e.g. run('myscript.m')",
+                        "run یک نام اسکریپت می‌گیرد، مثل run('myscript.m')",
+                    ));
+                }
+            };
+            let texts = crate::io_builtins::run_source(env, &src, line, col)?;
+            Ok((Flow::Normal, texts))
+        }
+        "writematrix" => {
+            let mut it = args.iter();
+            let value_expr = it.next().ok_or_else(|| {
+                McError::new(
+                    mc_core::error::ids::TYPE_ERROR,
+                    line as u32,
+                    col as u32,
+                    "writematrix needs a matrix, e.g. writematrix(A) or writematrix(A, 'out.csv')",
+                    "writematrix یک ماتریس می‌خواهد، مثل writematrix(A) یا writematrix(A, 'out.csv')",
+                )
+            })?;
+            let value = eval_expr(value_expr, env, depth)?;
+            let file = match it.next() {
+                Some(Expr::Str(s)) => Some(s.as_str()),
+                None => None,
+                Some(_other) => {
+                    return Err(McError::new(
+                        mc_core::error::ids::TYPE_ERROR,
+                        line as u32,
+                        col as u32,
+                        "writematrix: the file name must be a literal char",
+                        "writematrix: نام فایل باید رشتهٔ مستقیم باشد",
+                    ))
+                }
+            };
+            // نام پیش‌فرض فایل از نام متغیر (رفتار متلب) — فقط وقتی آرگومان
+            // اول شناسهٔ ساده بود؛ وگرنه matrix.txt
+            let fallback = match value_expr {
+                Expr::Var { name, .. } => name.as_str(),
+                _ => "matrix",
+            };
+            crate::io_builtins::writematrix_apply(&value, file, fallback, line, col)?;
+            Ok((Flow::Normal, Vec::new()))
+        }
+        _ => Err(McError::new(
+            mc_core::error::ids::UNSUPPORTED,
+            line as u32,
+            col as u32,
+            format!("{name}: not a file I/O command"),
+            format!("{name}: فرمان فایل نیست"),
+        )),
+    }
 }

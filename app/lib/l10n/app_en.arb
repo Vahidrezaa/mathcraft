@@ -58,6 +58,17 @@
   "editorOutputTitle": "Output",
   "editorEmptyOutput": "Run output appears here. Function files register instantly — call them in the Console.",
   "editorClearTooltip": "Clear editor",
+  "editorSaveTooltip": "Save .m to the MathCraft folder",
+  "editorOpenTooltip": "Open a .m script",
+  "editorSaveTitle": "Save script",
+  "editorSaveNameHint": "File name (script.m)",
+  "editorSaveAction": "Save",
+  "editorCancelAction": "Cancel",
+  "editorOpenTitle": "Open script",
+  "editorNoScripts": "No .m files in the MathCraft folder yet — save one first",
+  "editorSavedTo": "Saved: {path}",
+  "editorOpened": "Opened: {name}",
+  "consoleFilesSaved": "{count} file(s) saved to the MathCraft folder: {names}",
   "plotsEmptyTitle": "No plots yet",
   "plotsEmptyHint": "Run plot(...) in the Console — figures land here instantly.",
   "plotsEngineError": "Engine unavailable",
@@ -91,5 +102,8 @@
   "plotsKindError": "Error bar",
   "plotsKindQuiver": "Quiver",
   "plotsKind3d": "3D",
-  "plotsKindSubplot": "Subplot"
+  "plotsKindSubplot": "Subplot",
+  "@editorSavedTo": { "placeholders": { "path": { "type": "String" } } },
+  "@editorOpened": { "placeholders": { "name": { "type": "String" } } },
+  "@consoleFilesSaved": { "placeholders": { "count": { "type": "int" }, "names": { "type": "String" } } }
 }

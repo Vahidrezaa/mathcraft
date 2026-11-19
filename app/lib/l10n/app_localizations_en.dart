@@ -97,6 +97,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorClearTooltip => 'Clear editor';
 
   @override
+  String get editorSaveTooltip => 'Save .m to the MathCraft folder';
+
+  @override
+  String get editorOpenTooltip => 'Open a .m script';
+
+  @override
+  String get editorSaveTitle => 'Save script';
+
+  @override
+  String get editorSaveNameHint => 'File name (script.m)';
+
+  @override
+  String get editorSaveAction => 'Save';
+
+  @override
+  String get editorCancelAction => 'Cancel';
+
+  @override
+  String get editorOpenTitle => 'Open script';
+
+  @override
+  String get editorNoScripts => 'No .m files in the MathCraft folder yet — save one first';
+
+  @override
+  String editorSavedTo(String path) {
+    return 'Saved: $path';
+  }
+
+  @override
+  String editorOpened(String name) {
+    return 'Opened: $name';
+  }
+
+  @override
+  String consoleFilesSaved(int count, String names) {
+    return '$count file(s) saved to the MathCraft folder: $names';
+  }
+
+  @override
   String get plotsEmptyTitle => 'No plots yet';
 
   @override

@@ -7,6 +7,7 @@ import '../../core/cds/cds_tokens.dart';
 import '../../core/icons/craft_icons.dart';
 import '../../core/rust/engine_client.dart';
 import '../../core/rust/engine_provider.dart';
+import '../../core/io/mathcraft_dir.dart';
 import '../../l10n/app_localizations.dart';
 import '../shell/app_shell.dart';
 import 'console_widgets.dart';
@@ -54,10 +55,29 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
   double? _progress;
 
   @override
+  void initState() {
+    super.initState();
+    // گام 3.7 — فایل‌های پوشهٔ MathCraft در VFS موتور ثبت شوند تا
+    // load/run/readmatrix از همان فرمان کنسول بیابندشان (D-39).
+    _registerSandbox();
+  }
+
+  @override
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// ثبت فایل‌های پوشهٔ MathCraft در VFS موتور — fire-and-forget با
+  /// تحمل خطا (موتور نبود = پیام از مسیر اجرا می‌آید، این‌جا ساکت).
+  Future<void> _registerSandbox() async {
+    try {
+      final engine = ref.read(engineProvider);
+      await MathCraftDir.registerAll(engine.vfsRegister);
+    } catch (_) {
+      // بدون بوت موتور — اولین اجرا خطای روشن می‌دهد (سند ۰۲ §3)
+    }
   }
 
   Future<void> _run(String code) async {
@@ -109,6 +129,30 @@ class _ConsolePageState extends ConsumerState<ConsolePage> {
       }
       if (result.status == JobStatus.done) {
         HapticFeedback.mediumImpact(); // موفقیت اجرا — سند ۰۶ بخش ۸
+      }
+      // گام 3.7 — خروجی‌های save/writematrix روی دیسک + اعلام مسیر
+      // (موتور خودش خروجی را در آینهٔ VFS هم ثبت کرده — load بعدی می‌بیند)
+      if (result.filesWritten.isNotEmpty) {
+        final names = <String>[];
+        for (final f in result.filesWritten) {
+          try {
+            await MathCraftDir.writeOutput(f.name, f.bytes);
+            names.add(f.name);
+          } catch (_) {
+            // نوشتن ناکام — بقیه ادامه؛ خطا در SnackBar جمع می‌شود
+          }
+        }
+        if (!mounted) return;
+        if (names.isNotEmpty) {
+          final l10n = AppLocalizations.of(context)!;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.consoleFilesSaved(names.length, names.join(', ')),
+              ),
+            ),
+          );
+        }
       }
       if (!mounted) return;
       setState(() => _entries.addAll(newEntries));

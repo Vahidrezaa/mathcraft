@@ -19,6 +19,7 @@ pub mod complex_ops;
 pub mod env;
 pub mod eval;
 pub mod format;
+pub mod io_builtins;
 pub mod plot_builtins;
 pub mod registry;
 pub mod registry_p2;

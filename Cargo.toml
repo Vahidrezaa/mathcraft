@@ -12,6 +12,7 @@ members = [
     "crates/mc-num",
     "crates/mc-cas",
     "crates/mc-plot",
+    "crates/mc-io",
     "crates/mc-ffi",
     "crates/mc-cli",
 ]
@@ -33,6 +34,9 @@ mc-interp = { path = "crates/mc-interp" }
 mc-num = { path = "crates/mc-num" }
 mc-cas = { path = "crates/mc-cas" }
 mc-plot = { path = "crates/mc-plot" }
+mc-io = { path = "crates/mc-io" }
+# فقط بک‌اند rust (miniz_oxide) — بدون C؛ الزام F-Droid (سند ۰۸ §7).
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 mc-ffi = { path = "crates/mc-ffi" }
 
 # doc 02 §8: release budget — stripped, LTO, panic=abort (last line of defense;

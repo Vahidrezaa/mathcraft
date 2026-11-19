@@ -56,6 +56,9 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("isscalar", bi_isscalar),
     ("repmat", bi_repmat),
     ("reshape", bi_reshape),
+    // ---- فایل/دادهٔ I/O (گام 3.7 — سند ۱۴ §۵.۱) ----
+    ("readmatrix", bi_readmatrix),
+    ("readtable", bi_readtable),
     // ---- جبر خطی (سند ۰۴ §3) ----
     ("inv", bi_inv),
     ("det", bi_det),
@@ -1692,4 +1695,16 @@ fn bi_fix(x: f64) -> Result<f64, McError> {
 fn bi_angle(x: f64) -> Result<f64, McError> {
     // روی محور حقیقی: منفی → π، غیرمنفی → 0
     Ok(if x < 0.0 { std::f64::consts::PI } else { 0.0 })
+}
+
+// ---------- فایل/دادهٔ I/O (گام 3.7 — ROADMAP §3.7) ----------
+
+/// `A = readmatrix('data.csv')` — متن محدودشدهٔ ثبت‌شده در VFS نشست.
+fn bi_readmatrix(args: &[Value], line: usize) -> Result<Value, McError> {
+    crate::io_builtins::readmatrix_fn(args, line)
+}
+
+/// `readtable` — ارجاع صادقانه به readmatrix (نوع table = E4؛ پیمان ضد-انحراف).
+fn bi_readtable(args: &[Value], line: usize) -> Result<Value, McError> {
+    crate::io_builtins::readtable_fn(args, line)
 }

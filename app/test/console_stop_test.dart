@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,9 @@ import 'package:mathcraft/core/rust/engine_provider.dart';
 /// جریان `runScript` از یک StreamController دستی تغذیه می‌شود تا تست،
 /// توالی Progress → Cancelled → Done را قطعی هدایت کند.
 class ControllableFakeEngine implements EngineClient {
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
+
   final controller = StreamController<ScriptEvent>();
   int cancelCalls = 0;
 
@@ -35,6 +39,7 @@ class ControllableFakeEngine implements EngineClient {
         workspaceDelta: WorkspaceDelta(changed: const []),
         status: JobStatus.cancelled,
         durationMs: BigInt.from(1),
+        filesWritten: const [],
       );
 
   @override

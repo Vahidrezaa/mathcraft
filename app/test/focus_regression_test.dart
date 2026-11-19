@@ -19,6 +19,9 @@ import 'package:mathcraft/src/rust/api.dart' as api;
 
 /// موتور ساختگی — همان الگوی editor_test؛ یک شکل خطی برای دکمهٔ info.
 class FakeEngineClient implements EngineClient {
+  @override
+  Future<void> vfsRegister(String name, Uint8List bytes) async {}
+
   api.PlotFigure _fig() => api.PlotFigure(
         figureId: BigInt.one,
         spec: api.PlotSpec_Line2D(
@@ -59,6 +62,7 @@ class FakeEngineClient implements EngineClient {
         workspaceDelta: WorkspaceDelta(changed: const []),
         status: JobStatus.done,
         durationMs: BigInt.one,
+        filesWritten: const [],
       );
 
   @override

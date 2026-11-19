@@ -99,6 +99,31 @@ jobs:
           cd app
           flutter test
 
+  mat-parity:
+    name: .mat v5 parity vs Octave (step 3.7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned toolchain (rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Octave
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
+
+      - name: Generate fixtures with Octave (the CI oracle)
+        run: |
+          mkdir -p /tmp/oct-fix
+          MC_OCTAVE_OUT=/tmp/oct-fix octave --quiet crates/mc-io/tests/gen_octave_fixtures.m
+          ls -la /tmp/oct-fix
+
+      - name: Parity tests (value equality against Octave-written files)
+        run: MC_OCTAVE_FIXTURES=/tmp/oct-fix cargo test -p mc-io --test matv5_octave_parity
+
   octave-differential:
     name: Octave differential (corpus P1 — doc 08 §2)
     runs-on: ubuntu-latest
