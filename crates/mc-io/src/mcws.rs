@@ -100,6 +100,14 @@ fn write_value(out: &mut Vec<u8>, value: &Value) -> Result<(), IoError> {
                 "توابع بی‌نام قابل ذخیره نیستند (با interop گام 5.5)",
             ));
         }
+        // CAS-0: قالب v1 هنوز kind سمبولیک ندارد — صادقانه رد می‌شود؛
+        // افزودن KIND_SYM با CAS-1 (وقتی diff/simplify هم معنا دارد).
+        Value::Sym(_) => {
+            return Err(err_unsupported(
+                "symbolic values cannot be saved in MCWS v1 yet (arrives with CAS-1)",
+                "مقادیر سمبولیک در MCWS v1 قابل ذخیره نیستند (با CAS-1 می‌آید)",
+            ));
+        }
     }
     Ok(())
 }

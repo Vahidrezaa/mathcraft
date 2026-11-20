@@ -260,6 +260,8 @@ pub fn format_value_spec(v: &Value, spec: &DisplaySpec) -> String {
         Value::Char(s) => format!("'{s}'"),
         Value::Anon(_) => "function_handle".to_owned(),
         Value::Struct(s) => format_struct(s, spec),
+        // نمایش خطی درخت سمبولیک (CAS-0) — قطعی؛ LaTeX در CAS-1 (سند ۰۵ §۱۰)
+        Value::Sym(_) => crate::sym_ops::sym_value_to_string(v),
     };
     format!("{body}\n")
 }
@@ -290,6 +292,8 @@ fn format_struct(s: &StructVal, spec: &DisplaySpec) -> String {
 /// `[1x1 struct]` (مثل متلب — از بازگشت نمایش عمیق جلوگیری می‌شود).
 fn field_preview(v: &Value, spec: &DisplaySpec) -> String {
     match v {
+        // سمبولیک: نمایش خطی درون‌خطی
+        Value::Sym(_) => crate::sym_ops::sym_value_to_string(v),
         Value::Double(m) => {
             if m.is_empty() {
                 return "[]".to_owned();

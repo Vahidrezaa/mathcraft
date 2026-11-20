@@ -7,4 +7,5 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+mc-cas.workspace = true
 thin-vec.workspace = true

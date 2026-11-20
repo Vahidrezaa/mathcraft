@@ -25,6 +25,7 @@ pub mod registry;
 pub mod registry_p2;
 pub mod source;
 pub mod stdio;
+pub mod sym_ops;
 
 pub use env::Environment;
 pub use eval::{eval_program, EvalOutcome, StmtOutput};

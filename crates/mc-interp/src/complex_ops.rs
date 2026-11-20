@@ -33,6 +33,13 @@ pub fn to_complex(v: &Value, line: u32, col: u32) -> Result<ComplexMatrix, McErr
             "Function handle in numeric expression.",
             "function_handle در عبارت عددی.",
         )),
+        // CAS-0: مختلطِ سمبولیک نیست — اول subs/double بعد حساب مختلط
+        Value::Sym(_) => Err(cerr(
+            line,
+            col,
+            "Symbolic value in complex arithmetic; substitute (subs) or convert (double) first.",
+            "مقدار سمبولیک در حساب مختلط؛ اول جای‌گذاری (subs) یا تبدیل (double) کنید.",
+        )),
         Value::Struct(_) => Err(cerr(
             line,
             col,

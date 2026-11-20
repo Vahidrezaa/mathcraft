@@ -106,6 +106,10 @@ pub enum Value {
     Anon(AnonFn),
     /// ساختار ۱×۱ با فیلدهای نام‌دار (ROADMAP 2.9 — سند ۰۳ §3/§10).
     Struct(StructVal),
+    /// عبارت سمبولیک (گام 4.1/CAS-0 — سند ۰۵ §۲): درخت دقیق؛ `class` متلب‌گونه
+    /// آن "sym" است. حساب روی آن درخت را بزرگ می‌کند؛ عمل ناموجود = خطای
+    /// صادقانه، هرگز جواب غلطِ عددی نه.
+    Sym(Arc<mc_cas::Sym>),
 }
 
 impl PartialEq for Value {
@@ -120,6 +124,8 @@ impl PartialEq for Value {
                 b.is_all_real() && a == &b.real_part()
             }
             (Value::Char(a), Value::Char(b)) => a == b,
+            // سمبولیک: برابری ساختاری درخت (تست‌ها)؛ Rc ارزان clone می‌شود
+            (Value::Sym(a), Value::Sym(b)) => a == b,
             // ساختارها: مجموعهٔ فیلد یکسان (ترتیب بی‌اثر — اوراکل Octave 10.3:
             // isequal(struct('a',1,'b',2), struct('b',2,'a',1)) = 1؛ رفتار متلب)
             (Value::Struct(a), Value::Struct(b)) => {
@@ -142,6 +148,7 @@ impl Value {
             Value::Char(_) => "char",
             Value::Anon(_) => "function_handle",
             Value::Struct(_) => "struct",
+            Value::Sym(_) => "sym",
         }
     }
 
@@ -161,6 +168,8 @@ impl Value {
             Value::Anon(_) => (1, 1),
             // فقط ۱×۱ — آرایهٔ ساختاری = انبساط E4 (سند ۰۳ §3)
             Value::Struct(_) => (1, 1),
+            // عبارت سمبولیک همیشه اسکالر است (CAS-0؛ ماتریس سمبولیک CAS-1+)
+            Value::Sym(_) => (1, 1),
         }
     }
 

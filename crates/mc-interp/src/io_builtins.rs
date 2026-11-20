@@ -82,6 +82,8 @@ pub fn value_bytes(v: &Value) -> usize {
         Value::Char(s) => s.chars().count() * 2,
         Value::Struct(s) => s.fields.iter().map(|(n, f)| n.len() + value_bytes(f)).sum(),
         Value::Anon(_) => 0,
+        // سمبولیک: نمایش خطی به‌عنوان تخمین اندازه (whos متلب هم نمایش محور است)
+        Value::Sym(s) => mc_cas::sym_display(s).len() + 8,
     }
 }
 
@@ -97,6 +99,7 @@ pub fn whos_text(env: &Environment) -> String {
                 Value::Struct(_) => "struct",
                 Value::Char(_) => "char",
                 Value::Anon(_) => "function_handle",
+                Value::Sym(_) => "sym",
                 Value::Double(_) | Value::Complex(_) => "double",
             };
             let attr: &'static str = match v {
@@ -170,12 +173,13 @@ fn v_rows(v: &Value) -> usize {
     match v {
         Value::Double(m) => m.rows(),
         Value::Complex(m) => m.rows(),
-        Value::Char(_) | Value::Struct(_) | Value::Anon(_) => 1,
+        Value::Char(_) | Value::Struct(_) | Value::Anon(_) | Value::Sym(_) => 1,
     }
 }
 
 fn v_cols(v: &Value) -> usize {
     match v {
+        Value::Sym(s) => mc_cas::sym_display(s).len().max(1),
         Value::Double(m) => m.cols(),
         Value::Complex(m) => m.cols(),
         // کاراکتری خالی 1×0 است در متلب؛ رشتهٔ خالی → 0 (Max با ۱ نگه‌داشته شد

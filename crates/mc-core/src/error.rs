@@ -28,6 +28,7 @@ pub mod ids {
     pub const SINGULAR_MATRIX: &str = "MC:E2004_SINGULAR_MATRIX";
     // MC:E2005 — شکست Cholesky: ماتریس متقارن مثبت معین نیست (سند ۰۴ §3.1).
     pub const NOT_POSITIVE_DEFINITE: &str = "MC:E2005_NOT_POSITIVE_DEFINITE";
+    pub const DIV_BY_ZERO: &str = "MC:E2006_DIV_BY_ZERO";
     pub const PARSE_ERROR: &str = "MC:E3001_PARSE_ERROR";
     // MC:E4001 — شکست تلورانس حلگر ODE (سند ۰۴ §4). MC:E4002 — لغو همکاری‌گر:
     // سطح ۴ «منابع» سند ۰۲ §9 (timeout/cancel)؛ نتیجهٔ جزئی دور ریخته می‌شود

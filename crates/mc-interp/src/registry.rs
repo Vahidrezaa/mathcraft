@@ -125,6 +125,9 @@ static REGISTRY: &[(&str, Builtin)] = &[
     // ---- char/رشته (ROADMAP 2.8 — بند ۶/۱۲ ممیزی خارجی) ----
     ("char", bi_char),
     ("double", bi_double),
+    // ---- سمبولیک CAS-0 (گام 4.1 — سند ۰۵ §۲؛ syms گزاره است در eval.rs) ----
+    ("sym", bi_sym),
+    ("subs", bi_subs),
     ("ischar", bi_ischar),
     ("blanks", bi_blanks),
     ("str2double", bi_str2double),
@@ -1392,6 +1395,7 @@ fn bi_class(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Char(_) => "char",
         Value::Anon(_) => "function_handle",
         Value::Struct(_) => "struct",
+        Value::Sym(_) => "sym",
     };
     Ok(Value::Char(name.to_owned()))
 }
@@ -1460,11 +1464,78 @@ fn bi_char(args: &[Value], _n: usize) -> Result<Value, McError> {
 
 /// `double(x)` — char → ردیف کدها؛ double/مختلط (کلاس double) → خودش
 /// (ROADMAP 2.8 — «interplay» char/double).
+/// sym(x) — پل عدد→سمبولیک (گام 4.1): دودویی مرتب → گویای دقیق، وگرنه
+/// Real تقریبی صادقانه (sym(0.1) هرگز 1/10 جا نمی‌زند). sym('x') هم نماد
+/// می‌سازد (مکمل syms برای نام‌های دینامیک).
+fn bi_sym(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("sym", "1", args.len()));
+    }
+    match &args[0] {
+        Value::Char(name) => {
+            if name.is_empty() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                return Err(McError::new(
+                    mc_core::error::ids::TYPE_ERROR,
+                    0,
+                    0,
+                    "sym: the name must be a valid identifier.",
+                    "sym: نام باید شناسهٔ معتبر باشد.",
+                ));
+            }
+            Ok(Value::Sym(std::sync::Arc::new(mc_cas::Sym::symbol(name))))
+        }
+        Value::Sym(_) => Ok(args[0].clone()),
+        Value::Double(m) if m.is_scalar() => Ok(Value::Sym(std::sync::Arc::new(
+            mc_cas::Sym::from_f64(m.get(0, 0)),
+        ))),
+        Value::Double(m) => Err(McError::new(
+            mc_core::error::ids::UNSUPPORTED,
+            0,
+            0,
+            format!(
+                "sym: only scalars in CAS-0 (got {}x{}).",
+                m.rows(),
+                m.cols()
+            ),
+            format!(
+                "sym: در CAS-0 فقط اسکالر (دریافت شد {}×{}).",
+                m.rows(),
+                m.cols()
+            ),
+        )),
+        Value::Complex(_) => Err(McError::new(
+            mc_core::error::ids::UNSUPPORTED,
+            0,
+            0,
+            "sym: complex symbolic values arrive in CAS-1.",
+            "sym: مقادیر سمبولیک مختلط در CAS-1 می‌آیند.",
+        )),
+        _ => Err(McError::new(
+            mc_core::error::ids::TYPE_ERROR,
+            0,
+            0,
+            "sym: expected a number, a symbol name, or a symbolic value.",
+            "sym: عدد، نام نماد یا مقدار سمبولیک لازم است.",
+        )),
+    }
+}
+
+/// subs(expr, old, new) — جای‌گذاری نماد (گام 4.1): subs(y, x, 2.5)؛
+/// بازساخت از سازنده‌های کانونی ⇒ ساده‌سازی سطح-۰ دوباره اعمال می‌شود.
+fn bi_subs(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 3 {
+        return Err(arity_err("subs", "3", args.len()));
+    }
+    crate::sym_ops::subs_core(&args[0], &args[1], &args[2], 0, 0)
+}
+
 fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
     if args.len() != 1 {
         return Err(arity_err("double", "1", args.len()));
     }
     match &args[0] {
+        // سمبولیک → عدد (CAS-0): کامل عددی باشد وگرنه خطای صادقانه
+        Value::Sym(_) => crate::sym_ops::double_sym(&args[0], 0, 0),
         Value::Double(m) => Ok(Value::Double(m.clone())),
         Value::Complex(z) => Ok(Value::Complex(z.clone())),
         Value::Char(s) => Ok(Value::Double(Value::char_codes_row(s))),
@@ -1561,6 +1632,8 @@ fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
         return Err(arity_err("num2str", "1", args.len()));
     }
     match &args[0] {
+        // سمبولیک → رشتهٔ نمایش خطی
+        Value::Sym(_) => Ok(Value::Char(crate::sym_ops::sym_value_to_string(&args[0]))),
         Value::Char(s) => Ok(Value::Char(s.clone())),
         Value::Double(m) if m.is_scalar() => {
             Ok(Value::Char(crate::format::format_num2str_elem(m.get(0, 0))))

@@ -1,9 +1,13 @@
 [package]
 name = "mc-cas"
-description = "MathCraft symbolic engine: exact arithmetic (rug/GMP), simplification, diff/int/limit/taylor/solve/dsolve (doc 05)"
+description = "MathCraft symbolic engine: exact arithmetic (pure-Rust num-bigint/num-rational — CAS-0 decision, doc 05 §2), simplification, diff/int/limit/taylor/solve/dsolve (doc 05)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [dependencies]
+
+num-bigint.workspace = true
+num-rational.workspace = true
+num-traits.workspace = true

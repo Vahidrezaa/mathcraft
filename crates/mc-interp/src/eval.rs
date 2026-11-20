@@ -411,6 +411,52 @@ fn exec_stmt_inner(
                     return Ok((Flow::Normal, Vec::new()));
                 }
             }
+            // گزارهٔ سمبولیک CAS-0 (گام 4.1): `syms x y` — فرمان (سینتکس 3.5.1:
+            // آرگومان‌های Char)، اعلان نمادها در env؛ بدون اکو و بدون ans
+            // (رفتار متلب). override کاربر مثل rng/hold برقرار است.
+            if let Expr::Call {
+                name,
+                args,
+                line,
+                col,
+                ..
+            } = expr
+            {
+                if name == "syms" && env.get(name).is_none() && env.lookup_item(name).is_none() {
+                    let mut declared: Vec<String> = Vec::new();
+                    for a in args {
+                        match a {
+                            Expr::Str(s) => {
+                                if s.is_empty()
+                                    || !s.chars().all(|c| c.is_alphanumeric() || c == '_')
+                                {
+                                    return Err(McError::new(
+                                        ids::TYPE_ERROR,
+                                        *line,
+                                        *col,
+                                        "syms: names must be valid identifiers.",
+                                        "syms: نام‌ها باید شناسهٔ معتبر باشند.",
+                                    ));
+                                }
+                                declared.push(s.clone());
+                            }
+                            _ => {
+                                return Err(McError::new(
+                                    ids::TYPE_ERROR,
+                                    *line,
+                                    *col,
+                                    "syms: list symbol names (syms x y), not expressions.",
+                                    "syms: نام نمادها را فهرست کنید (syms x y)، نه عبارت.",
+                                ));
+                            }
+                        }
+                    }
+                    for n in &declared {
+                        env.set(n, Value::Sym(Arc::new(mc_cas::Sym::symbol(n))));
+                    }
+                    return Ok((Flow::Normal, Vec::new()));
+                }
+            }
             // فرمان‌های لخت گام 3.7 — `who`/`clear`/`save` بدون پرانتز به‌شکل
             // Expr::Var می‌رسند (قانون فرمانی 3.5.1 فقط «Ident + Ident» را
             // Call می‌کند)؛ همان تقدم override این‌جا هم برقرار است.
@@ -659,6 +705,16 @@ fn exec_stmt_inner(
         } => {
             let iter_val = eval_expr(iter_expr, env, depth)?;
             let columns: Vec<Value> = match &iter_val {
+                // CAS-0: تکرار روی مقدار سمبولیک بی‌معنا است — خطای صادقانه
+                Value::Sym(_) => {
+                    return Err(McError::new(
+                        ids::TYPE_ERROR,
+                        0,
+                        0,
+                        "Cannot iterate over a symbolic value.",
+                        "روی مقدار سمبولیک نمی‌توان تکرار کرد.",
+                    ))
+                }
                 Value::Double(m) => {
                     if m.is_scalar() {
                         vec![iter_val.clone()]
@@ -1345,6 +1401,14 @@ fn index_value(
     col: u32,
 ) -> Result<Value, McError> {
     match v {
+        // CAS-0: اندیس‌گذاری عبارت سمبولیک پشتیبانی نمی‌شود — صادقانه
+        Value::Sym(_) => Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "Indexing a symbolic expression arrives in CAS-1.",
+            "اندیس‌گذاری عبارت سمبولیک در CAS-1 می‌آید.",
+        )),
         Value::Double(m) => {
             let resolved = resolve_subs(m, args, env, depth)?;
             index_double(m, &resolved, line, col)
@@ -1946,10 +2010,20 @@ fn eval_expr_end(
                 }
             }
         },
-        Expr::Unary { op, operand, .. } => {
+        Expr::Unary {
+            op,
+            operand,
+            line,
+            col,
+            ..
+        } => {
             let v = eval_expr_end(operand, env, depth, target, sub_i)?;
             match op {
                 UnOp::Pos => Ok(v),
+                // سمبولیک: درخت منفی می‌شود (CAS-0)
+                UnOp::Neg if matches!(v, Value::Sym(_)) => {
+                    crate::sym_ops::negate_sym(&v, *line, *col)
+                }
                 UnOp::Neg => negate(&v),
                 UnOp::Not => match v.as_scalar() {
                     Some(x) => Ok(Value::Double(Matrix::scalar((x == 0.0) as i32 as f64))),
@@ -2015,6 +2089,14 @@ fn eval_expr_end(
         } => {
             let v = eval_expr_end(operand, env, depth, target, sub_i)?;
             match v {
+                // سمبولیک: ترانهاده‌اش همین است (اسکالر) —CAS-0 صادقانه رد
+                Value::Sym(_) => Err(McError::new(
+                    ids::UNSUPPORTED,
+                    *line,
+                    *col,
+                    "Transpose of symbolic values arrives in CAS-1.",
+                    "ترانهادهٔ مقادیر سمبولیک در CAS-1 می‌آید.",
+                )),
                 Value::Double(m) => {
                     let mut out = Matrix::full(m.cols(), m.rows(), 0.0);
                     for c in 0..m.cols() {
@@ -2633,6 +2715,14 @@ fn build_matrix(
                 "Cannot put a function handle inside a matrix.",
                 "function_handle داخل ماتریس قرار نمی‌گیرد.",
             )),
+            // CAS-0: ماتریس سمبولیک نیست — y را با subs/double عددی کنید
+            Value::Sym(_) => Err(McError::new(
+                ids::TYPE_ERROR,
+                line,
+                col,
+                "Cannot put a symbolic value inside a matrix (symbolic matrices arrive in CAS-1).",
+                "مقدار سمبولیک داخل ماتریس قرار نمی‌گیرد (ماتریس سمبولیک در CAS-1).",
+            )),
             // ساختار در ماتریس لفظی = آرایهٔ ساختاری → انبساط E4 (ROADMAP 2.9)
             Value::Struct(_) => Err(McError::new(
                 ids::UNSUPPORTED,
@@ -2951,6 +3041,14 @@ fn apply_compare(op: CmpOp, l: &Value, r: &Value, line: u32, col: u32) -> Result
 
 fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
     match v {
+        // سمبولیک در زمینهٔ عددی: راهنمای روشن (نه حدس عددی)
+        Value::Sym(_) => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "Symbolic value in a numeric context; use double(subs(y, x, value)) to evaluate it.",
+            "مقدار سمبولیک در زمینهٔ عددی؛ برای ارزیابی از double(subs(y, x, مقدار)) استفاده کنید.",
+        )),
         Value::Double(m) => Ok(m.clone()),
         Value::Complex(z) if z.is_all_real() => Ok(z.real_part()),
         Value::Complex(_) => Err(McError::new(
@@ -2983,6 +3081,12 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
 }
 
 fn apply_binary(op: BinOp, l: &Value, r: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    // سمبولیک (گام 4.1/CAS-0): هر عملوندی Sym دارد → مسیر درخت (سند ۰۵ §۲)؛
+    // قبل از مسیرهای عددی/مختلط — عمل ناموجود خطای روشن می‌دهد.
+    let sym_involved = matches!(l, Value::Sym(_)) || matches!(r, Value::Sym(_));
+    if sym_involved {
+        return crate::sym_ops::apply_binary_sym(op, l, r, line, col);
+    }
     // مختلط: هر عملوندی که مختلط باشد کل مسیر مختلط می‌رود (رفتار متلب)
     let complex_involved = matches!(l, Value::Complex(_)) || matches!(r, Value::Complex(_));
     if complex_involved {
