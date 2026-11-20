@@ -1627,12 +1627,7 @@ fn bi_ticks(args: &[Value], line: u32, col: u32, is_x: bool) -> Result<(), McErr
 /// Z ماتریس است (سطر i = y ثابت، ستون j = x ثابت — قرارداد meshgrid).
 type Grid3 = (Vec<f64>, Vec<f64>, Vec<Vec<f64>>);
 
-fn grid_args(
-    args: &[Value],
-    name: &str,
-    line: u32,
-    col: u32,
-) -> Result<Grid3, McError> {
+fn grid_args(args: &[Value], name: &str, line: u32, col: u32) -> Result<Grid3, McError> {
     let bad = |why: &str, why_fa: &str| {
         perr(
             line,
@@ -1791,10 +1786,7 @@ fn bi_contour(args: &[Value], line: u32, col: u32, filled: bool) -> Result<(), M
 fn bi_colorbar(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
     let on = match args.first() {
         None => true,
-        Some(Value::Char(s)) => match s.as_str() {
-            "off" | "delete" => false,
-            _ => true,
-        },
+        Some(Value::Char(s)) => !matches!(s.as_str(), "off" | "delete"),
         Some(_) => {
             return Err(perr(
                 line,
@@ -1814,7 +1806,7 @@ fn bi_caxis(args: &[Value], line: u32, col: u32) -> Result<(), McError> {
         Some(Value::Char(s)) if s.eq_ignore_ascii_case("auto") => None,
         Some(v) if is_numeric(v) => {
             let lim = numeric_vec(v, "caxis", line, col)?;
-            if lim.len() != 2 || !(lim[0] < lim[1]) {
+            if lim.len() != 2 || lim[0] >= lim[1] {
                 return Err(perr(
                     line,
                     col,

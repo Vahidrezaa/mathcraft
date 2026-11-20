@@ -196,10 +196,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get plotsCrosshairHint => 'Tap a point to pin its value · hold to inspect · drag to pan · pinch to zoom · double-tap to reset.';
 
   @override
-  String get plotsNot3dTitle => '3D and vector plots arrive in the next update';
+  String get plotsNot3dTitle => 'Vector field (quiver) plots arrive in a future update';
 
   @override
-  String get plotsNot3dHint => 'surf/mesh/contour/plot3/quiver are already contract-ready (P3-b).';
+  String get plotsNot3dHint => 'surf/mesh/contour/contourf/plot3 render since v3 (step 3.8) — quiver remains.';
 
   @override
   String get plotsSubplotNote => 'Subplot — cells are read-only in this release.';

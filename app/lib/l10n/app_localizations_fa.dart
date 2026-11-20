@@ -196,10 +196,10 @@ class AppLocalizationsFa extends AppLocalizations {
   String get plotsCrosshairHint => 'تپ روی نقطه = پایش مقدار · نگه‌داشتن = crosshair · کشیدن = جابه‌جایی · دو انگشت = زوم · دو تپ = بازنشانی.';
 
   @override
-  String get plotsNot3dTitle => 'نمودارهای سه‌بعدی و برداری با به‌روزرسانی بعدی می‌آیند';
+  String get plotsNot3dTitle => 'نمودار میدانِ برداری (quiver) در به‌روزرسانی بعدی می‌آید';
 
   @override
-  String get plotsNot3dHint => 'surf/mesh/contour/plot3/quiver از حالا در قرارداد آماده‌اند (P3-b).';
+  String get plotsNot3dHint => 'surf/mesh/contour/contourf/plot3 از v3 (گام 3.8) رندر می‌شوند — فقط quiver مانده.';
 
   @override
   String get plotsSubplotNote => 'Subplot — سلول‌ها در این نسخه فقط‌نمایش‌اند.';

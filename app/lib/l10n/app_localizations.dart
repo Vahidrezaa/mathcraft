@@ -440,13 +440,13 @@ abstract class AppLocalizations {
   /// No description provided for @plotsNot3dTitle.
   ///
   /// In en, this message translates to:
-  /// **'3D and vector plots arrive in the next update'**
+  /// **'Vector field (quiver) plots arrive in a future update'**
   String get plotsNot3dTitle;
 
   /// No description provided for @plotsNot3dHint.
   ///
   /// In en, this message translates to:
-  /// **'surf/mesh/contour/plot3/quiver are already contract-ready (P3-b).'**
+  /// **'surf/mesh/contour/contourf/plot3 render since v3 (step 3.8) — quiver remains.'**
   String get plotsNot3dHint;
 
   /// No description provided for @plotsSubplotNote.

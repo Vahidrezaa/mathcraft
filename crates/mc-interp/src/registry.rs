@@ -476,9 +476,9 @@ fn bi_peaks(args: &[Value], _n: usize) -> Result<Value, McError> {
             }
             let (lo, hi) = (-3.0, 3.0);
             let step = (hi - lo) / (n as f64 - 1.0);
-            let mut m = Matrix::try_full(n as usize, n as usize, 0.0)?;
-            for i in 0..n as usize {
-                for j in 0..n as usize {
+            let mut m = Matrix::try_full(n, n, 0.0)?;
+            for i in 0..n {
+                for j in 0..n {
                     let x = lo + j as f64 * step;
                     let y = lo + i as f64 * step;
                     m.set(i, j, peaks_at(x, y));

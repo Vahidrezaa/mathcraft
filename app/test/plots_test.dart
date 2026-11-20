@@ -776,10 +776,42 @@ void main() {
       expect(state.viewport.yMax, 1.0);
     });
 
-    testWidgets('3d figure shows honest not-yet state', (tester) async {
+    testWidgets('surface figure renders the 3-D viewer (v3 — step 3.8)',
+        (tester) async {
       await tester.pumpWidget(_Harness([_surfaceFigure()]));
       await tester.pumpAndSettle();
-      expect(find.text('3D and vector plots arrive in the next update'),
+      // 3.8: سه‌بعدی واقعاً رندر می‌شود — نه جای‌نگه‌ین «هنوز نه»
+      expect(find.byType(PlotView), findsOneWidget);
+      expect(find.text('Vector field (quiver) plots arrive in a future update'),
+          findsNothing);
+    });
+
+    testWidgets('quiver stays an honest not-yet', (tester) async {
+      await tester.pumpWidget(_Harness([
+        api.PlotFigure(
+          figureId: BigInt.from(3),
+          spec: api.PlotSpec_Quiver(
+            x: Float64List.fromList([0, 1]),
+            y: Float64List.fromList([0, 1]),
+            u: Float64List.fromList([1, 1]),
+            v: Float64List.fromList([0, 1]),
+            axes: api.Axes2D(
+              grid: false,
+              equalAspect: false,
+              logX: false,
+              logY: false,
+              visible: true,
+              xLimits: const api.Limits(min: 0, max: 1),
+              yLimits: const api.Limits(min: 0, max: 1),
+              xTicks: const [],
+              yTicks: const [],
+            ),
+          ),
+        ),
+      ]));
+      await tester.pumpAndSettle();
+      expect(find.byType(PlotView), findsNothing);
+      expect(find.text('Vector field (quiver) plots arrive in a future update'),
           findsOneWidget);
     });
   });
