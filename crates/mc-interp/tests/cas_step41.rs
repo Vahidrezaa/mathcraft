@@ -161,10 +161,11 @@ fn negative_and_division_forms() {
 
 #[test]
 fn guard_zero_times_undefined() {
-    // 0*x = 0؛ ولی 0*(1/x) جمع نمی‌شود — گارد سند ۰۵ §۲ (x=0 تعریف‌نشده)
+    // 0*x = 0؛ ولی 0*(1/x) جمع نمی‌شود — گارد سند ۰۵ §۲ (x=0 تعریف‌نشده).
+    // CAS-1: نمایش شکل تقسیم صریح 0/x — دامنه را پیش‌چشم نگه می‌دارد
     let env = run("syms x; a = 0*x; b = 0*(1/x);");
     assert_eq!(sym_str(&env, "a"), "0");
-    assert_eq!(sym_str(&env, "b"), "0*x^-1");
+    assert_eq!(sym_str(&env, "b"), "0/x");
 }
 
 #[test]
@@ -188,9 +189,10 @@ fn error_division_by_zero_exact() {
 
 #[test]
 fn error_unsupported_ops_honest() {
-    // sin روی سمبولیک → CAS-0 خطای روشن (CAS-1 می‌آید)
-    let e = run_err("syms x; y = sin(x);");
-    assert!(format!("{e:?}").len() > 10);
+    // sin روی سمبولیک از CAS-1 (گام 4.2) درخت Fn می‌سازد — دیگر خطا نیست؛
+    // بقیهٔ مسیرهای ناموجود همچنان صادقانه خطا می‌دهند
+    let env = run("syms x; y = sin(x);");
+    assert_eq!(sym_str(&env, "y"), "sin(x)");
     // ماتریسِ سمبولیک → خطا
     let e2 = run_err("syms x; m = [x 1];");
     assert!(format!("{e2:?}").len() > 10);
@@ -225,10 +227,26 @@ fn num2str_and_whos_class() {
 }
 
 #[test]
-fn sym_save_rejected_honestly() {
-    // MCWS v1 هنوز kind سمبولیک ندارد — صادقانه رد می‌شود (CAS-1)
-    let e = run_err("syms x; save('ws.mcws', 'x');");
-    assert!(format!("{e:?}").len() > 10);
+fn sym_save_load_roundtrip_mcws() {
+    // CAS-1 (گام 4.2، سند ۰۵ §۱۲): KIND_SYM اضافه شد — در CAS-0 این مسیر
+    // صادقانه رد می‌شد؛ اکنون ذخیره/بازیابی بی‌اتلاف است. میزبان صف خروجی
+    // را برداشته و دوباره ثبت می‌کند (همان الگوی تست واحد io_builtins)
+    let env = run("syms x; y = x^2 + 3*x; save('ws42-cas1.mcws', 'x', 'y');");
+    drop(env);
+    let outs = mc_io::vfs::take_outputs();
+    assert_eq!(outs.len(), 1, "save باید یک خروجی می‌زد");
+    mc_io::vfs::register("ws42-cas1.mcws", outs[0].1.clone());
+    let mut fresh = Environment::new();
+    let prog = parse("load('ws42-cas1.mcws');").expect("parse");
+    let out = eval_program(&prog, &mut fresh);
+    assert!(out.error.is_none(), "load خطا داد: {:?}", out.error);
+    assert_eq!(sym_str(&fresh, "y"), "x^2 + 3*x");
+    mc_io::vfs::clear_all();
+    // syms دوباره لازم نیست — کلاس پس از بارگذاری همان sym است
+    match value(&fresh, "x") {
+        Value::Sym(_) => {}
+        other => panic!("x پس از load سمبولیک نیست: {other:?}"),
+    }
 }
 
 #[test]

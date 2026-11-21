@@ -125,9 +125,15 @@ static REGISTRY: &[(&str, Builtin)] = &[
     // ---- char/رشته (ROADMAP 2.8 — بند ۶/۱۲ ممیزی خارجی) ----
     ("char", bi_char),
     ("double", bi_double),
-    // ---- سمبولیک CAS-0 (گام 4.1 — سند ۰۵ §۲؛ syms گزاره است در eval.rs) ----
+    // ---- سمبولیک CAS-0→CAS-1 (گام 4.1/4.2 — سند ۰۵؛ syms گزاره است در eval.rs) ----
     ("sym", bi_sym),
     ("subs", bi_subs),
+    // CAS-1: diff دو-چهره است — آرگومان اول Sym → مسیر نمادین (sym_ops)،
+    // وگرنه تفاضل عددی همان پایین؛ simplify/expand/collect/latex نمادین‌اند
+    ("simplify", bi_simplify),
+    ("expand", bi_expand),
+    ("collect", bi_collect),
+    ("latex", bi_latex),
     ("ischar", bi_ischar),
     ("blanks", bi_blanks),
     ("str2double", bi_str2double),
@@ -1217,33 +1223,82 @@ fn bi_cumprod(args: &[Value], _n: usize) -> Result<Value, McError> {
 }
 
 fn bi_diff(args: &[Value], _n: usize) -> Result<Value, McError> {
-    let m = need_matrix(args, 0)?;
-    // قانون اولین بعدِ غیرتک‌عضوی: بردار سطری → خروجی سطری (رفتار متلب)
-    if m.rows() == 1 {
+    // CAS-1 (گام 4.2): آرگومان اول سمبولیک → مشتق نمادین (پاریت متلب:
+    // diff عددی/نمادین زیر یک نام، دیسپچ با نوع آرگومان اول)
+    if let Some(Value::Sym(_)) = args.first() {
+        return crate::sym_ops::diff_sym(args, 0, 0);
+    }
+    // چهرهٔ عددی — پاریت متلب: diff(X)، diff(X,k)، diff(X,k,dim).
+    // درس این گام: آرگومان k قبلاً بی‌صدا نادیده گرفته می‌شد (جواب غلطِ
+    // مطمئن‌نما) — حالا مرتبهٔ تکرار و dim صریح صادقانه اعمال می‌شوند.
+    let (order, dim) = match args.len() {
+        1 => (1u64, None),
+        2 => (diff_order_arg(args, 1)?, None),
+        3 => (diff_order_arg(args, 1)?, Some(diff_dim_arg(args, 2)?)),
+        n => return Err(arity_err("diff", "1..3", n)),
+    };
+    let mut m = need_matrix(args, 0)?;
+    for _ in 0..order {
+        m = diff_once(&m, dim);
+    }
+    Ok(Value::Double(m))
+}
+
+/// آرگومان مرتبهٔ عددی — صحیح نامنفی.
+fn diff_order_arg(args: &[Value], i: usize) -> Result<u64, McError> {
+    match args.get(i) {
+        Some(Value::Double(m))
+            if m.is_scalar() && m.get(0, 0) >= 0.0 && m.get(0, 0).fract() == 0.0 =>
+        {
+            Ok(m.get(0, 0) as u64)
+        }
+        _ => Err(McError::new(
+            ids::TYPE_ERROR,
+            0,
+            0,
+            "diff: the order must be a non-negative integer.",
+            "diff: مرتبه باید عدد صحیح نامنفی باشد.",
+        )),
+    }
+}
+
+/// آرگومان بُعد صریح — ۱ یا ۲.
+fn diff_dim_arg(args: &[Value], i: usize) -> Result<usize, McError> {
+    match args.get(i) {
+        Some(Value::Double(m)) if m.is_scalar() && (m.get(0, 0) == 1.0 || m.get(0, 0) == 2.0) => {
+            Ok(m.get(0, 0) as usize)
+        }
+        _ => Err(McError::new(
+            ids::TYPE_ERROR,
+            0,
+            0,
+            "diff: dim must be 1 or 2.",
+            "diff: dim باید ۱ یا ۲ باشد.",
+        )),
+    }
+}
+
+/// یک گام تفاضل — پیش‌فرض متلب: اولین بُعد غیرتک‌عضوی؛ dim صریح معتبر است.
+fn diff_once(m: &Matrix, dim: Option<usize>) -> Matrix {
+    let along_cols = match dim {
+        Some(d) => d == 2,
+        None => m.rows() == 1, // بردار سطری → ستونی؛ وگرنه سطری (مثل متلب)
+    };
+    if along_cols {
         let n = m.cols();
         if n < 2 {
-            return Ok(Value::Double(Matrix::full(1, 0, 0.0)));
+            return Matrix::full(m.rows(), 0, 0.0);
         }
-        let mut out = Matrix::full(1, n - 1, 0.0);
-        for i in 0..n - 1 {
-            out.set(0, i, m.get(0, i + 1) - m.get(0, i));
+        let mut out = Matrix::full(m.rows(), n - 1, 0.0);
+        for c in 0..n - 1 {
+            for r in 0..m.rows() {
+                out.set(r, c, m.get(r, c + 1) - m.get(r, c));
+            }
         }
-        return Ok(Value::Double(out));
+        return out;
     }
-    if m.cols() == 1 {
-        let n = m.rows();
-        if n < 2 {
-            return Ok(Value::Double(Matrix::full(0, 1, 0.0)));
-        }
-        let mut out = Matrix::full(n - 1, 1, 0.0);
-        for i in 0..n - 1 {
-            out.set(i, 0, m.get_linear(i + 1) - m.get_linear(i));
-        }
-        return Ok(Value::Double(out));
-    }
-    // ماتریس: تفاوت سطری در هر ستون (dim 1 — سمانتیک متلب)
     if m.rows() < 2 {
-        return Ok(Value::Double(Matrix::full(0, m.cols(), 0.0)));
+        return Matrix::full(0, m.cols(), 0.0);
     }
     let mut out = Matrix::full(m.rows() - 1, m.cols(), 0.0);
     for c in 0..m.cols() {
@@ -1251,7 +1306,7 @@ fn bi_diff(args: &[Value], _n: usize) -> Result<Value, McError> {
             out.set(r, c, m.get(r + 1, c) - m.get(r, c));
         }
     }
-    Ok(Value::Double(out))
+    out
 }
 
 fn bi_all(args: &[Value], _n: usize) -> Result<Value, McError> {
@@ -1507,8 +1562,8 @@ fn bi_sym(args: &[Value], _n: usize) -> Result<Value, McError> {
             mc_core::error::ids::UNSUPPORTED,
             0,
             0,
-            "sym: complex symbolic values arrive in CAS-1.",
-            "sym: مقادیر سمبولیک مختلط در CAS-1 می‌آیند.",
+            "sym: complex symbolic values are not supported yet — a later CAS phase.",
+            "sym: مقادیر سمبولیک مختلط هنوز پشتیبانی نمی‌شود — فاز بعدی CAS.",
         )),
         _ => Err(McError::new(
             mc_core::error::ids::TYPE_ERROR,
@@ -1527,6 +1582,39 @@ fn bi_subs(args: &[Value], _n: usize) -> Result<Value, McError> {
         return Err(arity_err("subs", "3", args.len()));
     }
     crate::sym_ops::subs_core(&args[0], &args[1], &args[2], 0, 0)
+}
+
+/// `simplify(S)` (گام 4.2/CAS-1) — فرم نرمال گویا + قواعد کل-دامنه.
+fn bi_simplify(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("simplify", "1", args.len()));
+    }
+    crate::sym_ops::simplify_core(&args[0], 0, 0)
+}
+
+/// `expand(S)` — توزیع کامل بدون حذف gcd (پاریت متلب).
+fn bi_expand(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("expand", "1", args.len()));
+    }
+    crate::sym_ops::expand_core(&args[0], 0, 0)
+}
+
+/// `collect(S)` / `collect(S, x)` — گروه‌بندی بر حسب توان متغیر.
+fn bi_collect(args: &[Value], _n: usize) -> Result<Value, McError> {
+    match args.len() {
+        1 => crate::sym_ops::collect_core(&args[0], None, 0, 0),
+        2 => crate::sym_ops::collect_core(&args[0], Some(&args[1]), 0, 0),
+        n => Err(arity_err("collect", "1..2", n)),
+    }
+}
+
+/// `latex(S)` — رشتهٔ TeX خام (سند ۰۵ §۱۰).
+fn bi_latex(args: &[Value], _n: usize) -> Result<Value, McError> {
+    if args.len() != 1 {
+        return Err(arity_err("latex", "1", args.len()));
+    }
+    crate::sym_ops::latex_core(&args[0], 0, 0)
 }
 
 fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {

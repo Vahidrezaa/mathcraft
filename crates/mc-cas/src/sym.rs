@@ -33,6 +33,8 @@ pub enum CasError {
     F64Overflow,
     /// عملی که در CAS-0 نمادین نمی‌شود (مسیر صادقانه — هرگز جواب غلط نه).
     Unsupported(&'static str),
+    /// قالب سری‌شده خراب است (S-اجر / KIND_SYM) — هرگز حدس نمی‌زنیم.
+    Serde(&'static str),
 }
 
 /// درخت عبارت سمبولیک (سند ۰۵ §۲).
@@ -118,7 +120,7 @@ impl Sym {
     }
 
     /// گره «عدد دقیق» است؟ (صحیح یا گویا — نه Real تقریبی)
-    fn as_exact(&self) -> Option<BigRational> {
+    pub(crate) fn as_exact(&self) -> Option<BigRational> {
         match self {
             Sym::Integer(i) => Some(BigRational::from(i.clone())),
             Sym::Rational(r) => Some(r.clone()),
@@ -260,6 +262,67 @@ impl Sym {
                     // ادغام ناممکن/ناامن → هر دو عامل می‌مانند (صادقانه)
                 }
             }
+            // حذف جفت وارون (پاریت متلب x/x = 1): عاملِ b همراه عاملِ b^-1
+            // → هر دو حذف. فقط وقتی ضریب صفر نیست — گارد صفرِ سند ۰۵ §۲
+            // مقدم است: 0*x/x سنجیده نمی‌چیند (در x=0 تعریف‌نشده است، متلبِ
+            // عددی هم 0*NaN=NaN می‌دهد). با ضریب ناصفر، دامنهٔ خودِ عبارتِ
+            // اصلی (b≠0) درونی است و حذف جفت هرگز جوابِ غلطِ در-دامنه نمی‌دهد.
+            if !coeff.is_zero() {
+                if let Sym::Pow(base, e) = &f {
+                    if as_small_int(e) == Some(-1) {
+                        if let Some(i) = factors.iter().position(|g| *g == **base) {
+                            factors.remove(i);
+                            continue;
+                        }
+                    }
+                }
+                // ترتیب معکوس: عامل b رسید در حالی که b^-1 حاضر است
+                if let Some(i) = factors.iter().position(
+                    |g| matches!(g, Sym::Pow(b2, e2) if **b2 == f && as_small_int(e2) == Some(-1)),
+                ) {
+                    factors.remove(i);
+                    continue;
+                }
+            }
+            // ادغام پایهٔ توان‌دار با پایهٔ لختِ هم‌شکل (پاریت متلب x*x^2=x^3،
+            // x*x^-2=x^-1): دامنهٔ حاصل دقیقاً دامنهٔ حاصل‌ضرب است — توانِ
+            // منفی هم فقط جایی تعریف است که خودِ حاصل‌ضرب هم تعریف شده.
+            if let Sym::Pow(base, e) = &f {
+                if let Some(n) = as_small_int(e) {
+                    if let Some(i) = factors.iter().position(|g| *g == **base) {
+                        if let Some(sum) = n.checked_add(1) {
+                            if sum != 0 {
+                                factors.remove(i);
+                                let merged = Sym::pow((**base).clone(), Sym::int(sum)).unwrap_or(f);
+                                factors.push(merged);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+            // قرینهٔ آن: عامل لخت b رسید در حالی که b^m حاضر است → b^(m+1)
+            if let Some(i) = factors.iter().position(|g| {
+                matches!(
+                    g,
+                    Sym::Pow(b2, e2)
+                        if **b2 == f && as_small_int(e2).is_some_and(|m| m != -1)
+                )
+            }) {
+                let m = match &factors[i] {
+                    Sym::Pow(_, e2) => as_small_int(e2),
+                    _ => None,
+                };
+                if let Some(m) = m {
+                    if let Some(sum) = m.checked_add(1) {
+                        if sum != 0 {
+                            factors[i] =
+                                Sym::pow(f.clone(), Sym::int(sum)).unwrap_or_else(|_| f.clone());
+                            continue;
+                        }
+                    }
+                }
+            }
             factors.push(f);
         }
         // گارد ضرب در صفر: فقط با عامل‌های قطعاً کل-دامنه (سند ۰۵ §۲)
@@ -385,6 +448,35 @@ impl Sym {
 
     // ---------- subs و تبدیل به double ----------
 
+    /// سازندهٔ کانونی تابع نام‌دار (گام 4.2/CAS-1) — نمای عمومی به
+    /// جدول مرکزی `fntable` (نام معتبر، همانی‌های دقیق مثل sin(0)=0).
+    pub fn fn_of(name: &str, args: Vec<Sym>) -> Result<Sym, CasError> {
+        crate::fntable::fn_of(name, args)
+    }
+
+    /// نمادهای آزاد درخت — برای انتخاب متغیر پیش‌فرض (symvar متلب‌گونه)
+    /// و چک‌های صداقت. مرتب و بدون تکرار.
+    pub fn free_symbols(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        self.collect_symbols(&mut out);
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    fn collect_symbols(&self, out: &mut Vec<String>) {
+        match self {
+            Sym::Integer(_) | Sym::Rational(_) | Sym::Real(_) => {}
+            Sym::Symbol(s) => out.push(s.to_string()),
+            Sym::Add(v) | Sym::Mul(v) => v.iter().for_each(|t| t.collect_symbols(out)),
+            Sym::Pow(b, e) => {
+                b.collect_symbols(out);
+                e.collect_symbols(out);
+            }
+            Sym::Fn(_, args) => args.iter().for_each(|a| a.collect_symbols(out)),
+        }
+    }
+
     /// جای‌گذاری نام نماد با عبارت — بازساخت از سازنده‌های کانونی، پس
     /// ساده‌سازی سطح-۰ دوباره اعمال می‌شود (subs(x^2+3*x, x, 5/2) → 55/4).
     pub fn substitute(&self, name: &str, with: &Sym) -> Sym {
@@ -463,9 +555,22 @@ impl Sym {
                 }
                 Ok(b.to_f64()?.powf(e.to_f64()?))
             }
-            Sym::Fn(..) => Err(CasError::Unsupported(
-                "numeric evaluation of symbolic functions arrives in CAS-1",
-            )),
+            Sym::Fn(name, args) => {
+                // CAS-1: ارزیابی عددی از جدول مرکزی — نام ناشناخته هرگز
+                // حدس نمی‌شود (خطا)؛ بیرون از دامنهٔ حقیقی NaN صادقانه است.
+                let [a] = &args[..] else {
+                    return Err(CasError::Unsupported(
+                        "symbolic functions take exactly one argument in CAS-1",
+                    ));
+                };
+                let x = a.to_f64()?;
+                match crate::fntable::eval_f64(name, x) {
+                    Some(v) => Ok(v),
+                    None => Err(CasError::Unsupported(
+                        "unknown symbolic function (not in the CAS-1 table)",
+                    )),
+                }
+            }
         }
     }
 
@@ -503,8 +608,8 @@ fn sym_sort(a: &Sym, b: &Sym) -> Ordering {
     }
 }
 
-/// توان صحیح کوچک؟ (i64)
-fn as_small_int(s: &Sym) -> Option<i64> {
+/// توان صحیح کوچک؟ (i64) — عمومی برای ماژول‌های CAS-1.
+pub(crate) fn as_small_int(s: &Sym) -> Option<i64> {
     if let Sym::Integer(i) = s {
         return i.to_i64();
     }
@@ -804,27 +909,60 @@ fn write_mul(out: &mut String, factors: &[Sym]) {
             }
         }
     }
-    // شکل تقسیم؟ y*x^-1 → y/x (بدون ضریب عددی در عامل‌های قبل)
-    if let (Some(Sym::Pow(b, e)), rest) = (factors.last(), &factors[start..factors.len() - 1]) {
-        if as_small_int(e) == Some(-1)
-            && !rest.is_empty()
-            && rest
-                .iter()
-                .all(|f| !matches!(f, Sym::Integer(_) | Sym::Rational(_) | Sym::Real(_)))
-        {
-            for (i, f) in rest.iter().enumerate() {
+    // شکل تقسیم: یک عامل Pow(b,-1) در هر جای ضرب (مرتب‌سازی کانونی توانِ
+    // رتبه-۲ را می‌تواند جلو بیندازد — مثل (x^2-1)*(x-1)^-1) و صورت =
+    // بقیهٔ عامل‌ها با جای‌گذاری مجاز یک ضریب عددیِ آغازین (2*x/y متلب‌گونه).
+    if let Some(rel) = factors[start..]
+        .iter()
+        .rposition(|f| matches!(f, Sym::Pow(_, e) if as_small_int(e) == Some(-1)))
+    {
+        let abs = start + rel;
+        let num: Vec<&Sym> = factors[start..]
+            .iter()
+            .enumerate()
+            .filter(|(j, _)| start + *j != abs)
+            .map(|(_, f)| f)
+            .collect();
+        let numeric = num
+            .iter()
+            .filter(|f| matches!(f, Sym::Integer(_) | Sym::Rational(_) | Sym::Real(_)))
+            .count();
+        let numeric_ok = numeric == 0
+            || (numeric == 1
+                && matches!(
+                    num.first(),
+                    Some(f) if matches!(f, Sym::Integer(_) | Sym::Rational(_) | Sym::Real(_))
+                ));
+        if numeric_ok {
+            if num.is_empty() {
+                // فقط -1 و مخرج (خارج‌شدن -1/x از مسیر over(-1, x))
+                out.push_str("1/");
+                if let Sym::Pow(b, _) = &factors[abs] {
+                    if matches!(&**b, Sym::Symbol(_)) {
+                        write_sym(out, b, Prec::Mul);
+                    } else {
+                        out.push('(');
+                        write_sym(out, b, Prec::Top);
+                        out.push(')');
+                    }
+                }
+                return;
+            }
+            for (i, f) in num.iter().enumerate() {
                 if i > 0 {
                     out.push('*');
                 }
                 write_sym(out, f, Prec::Mul);
             }
             out.push('/');
-            if matches!(&**b, Sym::Symbol(_)) {
-                write_sym(out, b, Prec::Mul);
-            } else {
-                out.push('(');
-                write_sym(out, b, Prec::Top);
-                out.push(')');
+            if let Sym::Pow(b, _) = &factors[abs] {
+                if matches!(&**b, Sym::Symbol(_)) {
+                    write_sym(out, b, Prec::Mul);
+                } else {
+                    out.push('(');
+                    write_sym(out, b, Prec::Top);
+                    out.push(')');
+                }
             }
             return;
         }
@@ -893,9 +1031,10 @@ mod tests {
     fn mul_zero_guard() {
         // 0*x = 0 (نماد کل-دامنه است)
         assert_eq!(Sym::times(Sym::int(0), x()).display(), "0");
-        // 0*x^-1 جمع نمی‌شود — در x=0 تعریف‌نشده (گارد سند ۰۵ §۲)
+        // 0*x^-1 جمع نمی‌شود — در x=0 تعریف‌نشده (گارد سند ۰۵ §۲)؛
+        // نمایش شکل تقسیم صریح: 0/x (دامنه را پیش‌چشم نگه می‌دارد)
         let xi = Sym::pow(x(), Sym::int(-1)).expect("test pow");
-        assert_eq!(Sym::times(Sym::int(0), xi).display(), "0*x^-1");
+        assert_eq!(Sym::times(Sym::int(0), xi).display(), "0/x");
     }
 
     #[test]

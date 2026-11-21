@@ -1401,13 +1401,13 @@ fn index_value(
     col: u32,
 ) -> Result<Value, McError> {
     match v {
-        // CAS-0: اندیس‌گذاری عبارت سمبولیک پشتیبانی نمی‌شود — صادقانه
+        // سمبولیک: اندیس‌گذاری عبارت سمبولیک (بدون ماتریس سمبولیک) پشتیبانی نمی‌شود — صادقانه
         Value::Sym(_) => Err(McError::new(
             ids::UNSUPPORTED,
             line,
             col,
-            "Indexing a symbolic expression arrives in CAS-1.",
-            "اندیس‌گذاری عبارت سمبولیک در CAS-1 می‌آید.",
+            "Indexing a symbolic expression needs symbolic matrices — a later CAS phase.",
+            "اندیس‌گذاری عبارت سمبولیک به ماتریس سمبولیک نیاز دارد — فاز بعدی CAS.",
         )),
         Value::Double(m) => {
             let resolved = resolve_subs(m, args, env, depth)?;
@@ -2089,13 +2089,13 @@ fn eval_expr_end(
         } => {
             let v = eval_expr_end(operand, env, depth, target, sub_i)?;
             match v {
-                // سمبولیک: ترانهاده‌اش همین است (اسکالر) —CAS-0 صادقانه رد
+                // سمبولیک: ترانهاده‌اش همین است (اسکالر) — بدون ماتریس سمبولیک، صادقانه رد
                 Value::Sym(_) => Err(McError::new(
                     ids::UNSUPPORTED,
                     *line,
                     *col,
-                    "Transpose of symbolic values arrives in CAS-1.",
-                    "ترانهادهٔ مقادیر سمبولیک در CAS-1 می‌آید.",
+                    "Transpose of symbolic values needs symbolic matrices — a later CAS phase.",
+                    "ترانهادهٔ مقادیر سمبولیک به ماتریس سمبولیک نیاز دارد — فاز بعدی CAS.",
                 )),
                 Value::Double(m) => {
                     let mut out = Matrix::full(m.cols(), m.rows(), 0.0);
@@ -2403,6 +2403,12 @@ fn call_named(
             .iter()
             .map(|a| eval_expr_end(a, env, depth, target, 0))
             .collect::<Result<_, _>>()?;
+        // CAS-1 (گام 4.2): تابع ریاضی روی آرگومان سمبولیک — sin(x) و
+        // exp(-x^2) درخت Sym::Fn می‌سازند؛ فقط وقتی عملوند Sym دارد،
+        // وگرنه مسیر عددی همان‌طور می‌ماند (پاریت متلب)
+        if let Some(res) = crate::sym_ops::try_symbolic_fn(name, &vals, line, col) {
+            return res.map_err(|e| with_pos(e, line, col));
+        }
         // پشتیبان موقعیت (ROADMAP 2.11): خطاهای builtin بدون موقعیت (0,0)
         // موقعیت فراخوانی را می‌گیرند
         return f(&vals, 1).map_err(|e| with_pos(e, line, col));
@@ -2715,13 +2721,13 @@ fn build_matrix(
                 "Cannot put a function handle inside a matrix.",
                 "function_handle داخل ماتریس قرار نمی‌گیرد.",
             )),
-            // CAS-0: ماتریس سمبولیک نیست — y را با subs/double عددی کنید
+            // ماتریس سمبولیک نیست — y را با subs/double عددی کنید
             Value::Sym(_) => Err(McError::new(
                 ids::TYPE_ERROR,
                 line,
                 col,
-                "Cannot put a symbolic value inside a matrix (symbolic matrices arrive in CAS-1).",
-                "مقدار سمبولیک داخل ماتریس قرار نمی‌گیرد (ماتریس سمبولیک در CAS-1).",
+                "Cannot put a symbolic value inside a matrix; evaluate it first with subs/double (symbolic matrices are a later CAS phase).",
+                "مقدار سمبولیک داخل ماتریس قرار نمی‌گیرد؛ ابتدا با subs/double عددی‌اش کنید (ماتریس سمبولیک فاز بعدی CAS است).",
             )),
             // ساختار در ماتریس لفظی = آرایهٔ ساختاری → انبساط E4 (ROADMAP 2.9)
             Value::Struct(_) => Err(McError::new(

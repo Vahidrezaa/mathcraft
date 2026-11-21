@@ -18,6 +18,7 @@
 //!   kind 1 Complex: u32 rows u32 cols (r*c) × u64 (re) (r*c) × u64 (im)
 //!   kind 2 Char   : u32 byte_len + utf8
 //!   kind 3 Struct : u32 field_count + به‌ازای هر فیلد: record کامل (نامی‌دار)
+//!   kind 4 Sym    : u32 byte_len + utf8 (S-اجر کانونی — CAS-1، سند ۰۵ §۱۲)
 //! ```
 //!
 //! بیت‌به‌بیت یعنی `to_bits/from_bits` خام — payload های NaN، `-0` و Inf
@@ -38,6 +39,8 @@ const KIND_DOUBLE: u8 = 0;
 const KIND_COMPLEX: u8 = 1;
 const KIND_CHAR: u8 = 2;
 const KIND_STRUCT: u8 = 3;
+/// CAS-1 (گام 4.2 — سند ۰۵ §۱۲): درخت سمبولیک به‌صورت S-اجر کانونی.
+const KIND_SYM: u8 = 4;
 
 /// سقف ایمن تخصیص — رکورد خراب نباید اَبَر-ماتریس بسازد (بند بودجه سند ۰۲ §8:
 /// هر بیت ورودی حداکثر ۸ بایت خروجی می‌تواند بخواهد؛ سقف کل ۲۵۶MiB داده).
@@ -100,13 +103,14 @@ fn write_value(out: &mut Vec<u8>, value: &Value) -> Result<(), IoError> {
                 "توابع بی‌نام قابل ذخیره نیستند (با interop گام 5.5)",
             ));
         }
-        // CAS-0: قالب v1 هنوز kind سمبولیک ندارد — صادقانه رد می‌شود؛
-        // افزودن KIND_SYM با CAS-1 (وقتی diff/simplify هم معنا دارد).
-        Value::Sym(_) => {
-            return Err(err_unsupported(
-                "symbolic values cannot be saved in MCWS v1 yet (arrives with CAS-1)",
-                "مقادیر سمبولیک در MCWS v1 قابل ذخیره نیستند (با CAS-1 می‌آید)",
-            ));
+        // CAS-1 (گام 4.2): درخت سمبولیک — S-اجر کانونیِ بی‌ابهام (سند ۰۵
+        // §۱۲: «با CAS-1 که diff/simplify هم معنا پیدا می‌کند، KIND_SYM
+        // اضافه می‌شود» — رفت‌وبرگشت بی‌اتلاف با تست پین‌شده)
+        Value::Sym(s) => {
+            out.push(KIND_SYM);
+            let payload = mc_cas::to_sexp(s);
+            out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+            out.extend_from_slice(payload.as_bytes());
         }
     }
     Ok(())
@@ -255,6 +259,18 @@ fn read_value(r: &mut Reader) -> Result<Value, IoError> {
                 s.set(&name, v);
             }
             Value::Struct(s)
+        }
+        KIND_SYM => {
+            let n = r.u32()? as usize;
+            if n > MAX_ALLOC {
+                return Err(corrupt("record larger than safety limit"));
+            }
+            let b = r.take(n)?;
+            let payload = String::from_utf8(b.to_vec())
+                .map_err(|_| corrupt("symbolic payload is not valid UTF-8"))?;
+            let tree = mc_cas::from_sexp(&payload)
+                .map_err(|_| corrupt("symbolic payload is not a valid canonical expression"))?;
+            Value::Sym(std::sync::Arc::new(tree))
         }
         _ => return Err(corrupt("unknown record kind")),
     };

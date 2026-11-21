@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use mc_cas::{sym_display, CasError, Sym};
+use mc_cas::{sym_display, to_sexp, CasError, Sym};
 use mc_core::error::ids;
 use mc_core::error::McError;
 use mc_core::Value;
@@ -46,8 +46,15 @@ pub fn cas_err(e: CasError, line: u32, col: u32) -> McError {
             ids::UNSUPPORTED,
             line,
             col,
-            format!("Symbolic operation not available in CAS-0: {why}."),
-            format!("عمل سمبولیک در CAS-0 در دسترس نیست: {why}."),
+            format!("Symbolic operation not available in this CAS phase: {why}."),
+            format!("عمل سمبولیک در این فاز CAS در دسترس نیست: {why}."),
+        ),
+        CasError::Serde(why) => McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            format!("Malformed serialized symbolic data: {why}."),
+            format!("دادهٔ سمبولیک سری‌شده خراب است: {why}."),
         ),
     }
 }
@@ -62,12 +69,12 @@ fn operand_sym(v: &Value, line: u32, col: u32) -> Result<Sym, McError> {
             line,
             col,
             format!(
-                "Symbolic arithmetic with matrices arrives in CAS-1 (got {}x{}).",
+                "Symbolic matrices are not supported yet — a later CAS phase (got {}x{}).",
                 m.rows(),
                 m.cols()
             ),
             format!(
-                "حساب سمبولیک با ماتریس در CAS-1 می‌آید (دریافت شد {}×{}).",
+                "ماتریس سمبولیک هنوز پشتیبانی نمی‌شود — فاز بعدی CAS (دریافت شد {}×{}).",
                 m.rows(),
                 m.cols()
             ),
@@ -81,8 +88,8 @@ fn operand_sym(v: &Value, line: u32, col: u32) -> Result<Sym, McError> {
             ids::UNSUPPORTED,
             line,
             col,
-            "Complex symbolic values arrive in CAS-1.",
-            "مقادیر سمبولیک مختلط در CAS-1 می‌آیند.",
+            "Complex symbolic values are not supported yet — a later CAS phase.",
+            "مقادیر سمبولیک مختلط هنوز پشتیبانی نمی‌شود — فاز بعدی CAS.",
         )),
         Value::Char(_) => Err(McError::new(
             ids::TYPE_ERROR,
@@ -195,6 +202,202 @@ pub fn double_sym(v: &Value, line: u32, col: u32) -> Result<Value, McError> {
     let e = operand_sym(v, line, col)?;
     match e.to_f64() {
         Ok(x) => Ok(Value::Double(mc_core::Matrix::scalar(x))),
+        Err(err) => Err(cas_err(err, line, col)),
+    }
+}
+
+// ---------- گام 4.2/CAS-1: توابع روی آرگومان سمبولیک + diff/simplify/expand/collect/latex ----------
+
+/// تابع عنصری روی آرگومان سمبولیک (sin(x)، exp(x)، …) — فقط وقتی فعال
+/// می‌شود که دست‌کم یک عملوند Sym دارد؛ وگرنه مسیر عددی مفسر می‌ماند
+/// (پاریت متلب: sin(0.5) عددی، sin(sym) نمادین). None = نام/شکل نامربوط.
+pub fn try_symbolic_fn(
+    name: &str,
+    vals: &[Value],
+    line: u32,
+    col: u32,
+) -> Option<Result<Value, McError>> {
+    if !mc_cas::is_symbolic_fn(name) {
+        return None;
+    }
+    if !vals.iter().any(|v| matches!(v, Value::Sym(_))) {
+        return None;
+    }
+    let mut args = Vec::with_capacity(vals.len());
+    for v in vals {
+        match operand_sym(v, line, col) {
+            Ok(s) => args.push(s),
+            Err(e) => return Some(Err(e)),
+        }
+    }
+    Some(match Sym::fn_of(name, args) {
+        Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
+        Err(e) => Err(cas_err(e, line, col)),
+    })
+}
+
+/// `diff` سمبولیک — پاریت متلب: diff(S)، diff(S,n)، diff(S,x)، diff(S,x,n).
+/// دیسپچ از bi_diff با آرگومان اول Sym.
+pub fn diff_sym(args: &[Value], line: u32, col: u32) -> Result<Value, McError> {
+    if args.is_empty() || args.len() > 3 {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "diff: symbolic form takes 1 to 3 arguments: diff(S), diff(S,n), diff(S,x) or diff(S,x,n).",
+            "diff: شکل سمبولیک ۱ تا ۳ آرگومان می‌گیرد: diff(S)، diff(S,n)، diff(S,x) یا diff(S,x,n).",
+        ));
+    }
+    let e = operand_sym(&args[0], line, col)?;
+    // آرگومان دوم: متغیر (Sym نماد / char) یا مرتبهٔ عددی
+    let (var, n) = match args.len() {
+        1 => (None, 1),
+        2 => match var_or_order(&args[1], line, col)? {
+            VarOrOrder::Var(v) => (Some(v), 1),
+            VarOrOrder::Order(n) => (None, n),
+        },
+        _ => match var_or_order(&args[1], line, col)? {
+            VarOrOrder::Var(v) => {
+                let n = numeric_order(&args[2], line, col)?;
+                (Some(v), n)
+            }
+            VarOrOrder::Order(_) => {
+                return Err(McError::new(
+                    ids::TYPE_ERROR,
+                    line,
+                    col,
+                    "diff: second argument must be the variable when a third argument (order) is given.",
+                    "diff: وقتی آرگومان سوم (مرتبه) داده شده، آرگومان دوم باید متغیر باشد.",
+                ))
+            }
+        },
+    };
+    let var = match var {
+        Some(v) => v,
+        None => mc_cas::diff::default_var(&e).map_err(|err| cas_err(err, line, col))?,
+    };
+    let d = mc_cas::diff::diff_n(&e, &var, n).map_err(|err| cas_err(err, line, col))?;
+    Ok(Value::Sym(Arc::new(d)))
+}
+
+enum VarOrOrder {
+    Var(String),
+    Order(i64),
+}
+
+fn var_or_order(v: &Value, line: u32, col: u32) -> Result<VarOrOrder, McError> {
+    match v {
+        Value::Sym(s) => match &**s {
+            Sym::Symbol(n) => Ok(VarOrOrder::Var(n.to_string())),
+            _ => Err(McError::new(
+                ids::TYPE_ERROR,
+                line,
+                col,
+                "diff: the variable argument must be a symbolic variable.",
+                "diff: آرگومان متغیر باید متغیر سمبولیک باشد.",
+            )),
+        },
+        Value::Char(s) => Ok(VarOrOrder::Var(s.clone())),
+        other => {
+            if let Ok(n) = numeric_order(other, line, col) {
+                return Ok(VarOrOrder::Order(n));
+            }
+            Err(McError::new(
+                ids::TYPE_ERROR,
+                line,
+                col,
+                "diff: expected a variable (sym/char) or a non-negative integer order.",
+                "diff: متغیر (sym/char) یا مرتبهٔ صحیح نامنفی لازم است.",
+            ))
+        }
+    }
+}
+
+fn numeric_order(v: &Value, line: u32, col: u32) -> Result<i64, McError> {
+    match v {
+        Value::Double(m) if m.is_scalar() && m.get(0, 0).fract() == 0.0 && m.get(0, 0) >= 0.0 => {
+            Ok(m.get(0, 0) as i64)
+        }
+        _ => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "diff: the derivative order must be a non-negative integer.",
+            "diff: مرتبهٔ مشتق باید عدد صحیح نامنفی باشد.",
+        )),
+    }
+}
+
+/// `simplify(S)` — فرم نرمال گویا + قواعد کل-دامنه (سند ۰۵ §۳).
+pub fn simplify_core(v: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    let e = operand_sym(v, line, col)?;
+    match mc_cas::simplify::simplify(&e) {
+        Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
+        Err(err) => Err(cas_err(err, line, col)),
+    }
+}
+
+/// `expand(S)` — توزیع کامل (بدون حذف gcd — پاریت متلب).
+pub fn expand_core(v: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    let e = operand_sym(v, line, col)?;
+    match mc_cas::simplify::expand(&e) {
+        Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
+        Err(err) => Err(cas_err(err, line, col)),
+    }
+}
+
+/// `collect(S)` / `collect(S, x)` — گروه‌بندی بر حسب توان متغیر.
+pub fn collect_core(v: &Value, var: Option<&Value>, line: u32, col: u32) -> Result<Value, McError> {
+    let e = operand_sym(v, line, col)?;
+    let var_name = match var {
+        None => mc_cas::diff::default_var(&e).map_err(|err| cas_err(err, line, col))?,
+        Some(w) => match w {
+            Value::Sym(s) => match &**s {
+                Sym::Symbol(n) => n.to_string(),
+                _ => {
+                    return Err(McError::new(
+                        ids::TYPE_ERROR,
+                        line,
+                        col,
+                        "collect: second argument must be a symbolic variable.",
+                        "collect: آرگومان دوم باید متغیر سمبولیک باشد.",
+                    ))
+                }
+            },
+            Value::Char(s) => s.clone(),
+            _ => {
+                return Err(McError::new(
+                    ids::TYPE_ERROR,
+                    line,
+                    col,
+                    "collect: second argument must be a variable (sym/char).",
+                    "collect: آرگومان دوم باید متغیر باشد (sym/char).",
+                ))
+            }
+        },
+    };
+    match mc_cas::simplify::collect(&e, &var_name) {
+        Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
+        Err(err) => Err(cas_err(err, line, col)),
+    }
+}
+
+/// `latex(S)` — رشتهٔ TeX خام (سند ۰۵ §۱۰) برای گزارش‌های درس و رندر
+/// سمت Dart (flutter_math_fork — سند ۰۶).
+pub fn latex_core(v: &Value, line: u32, col: u32) -> Result<Value, McError> {
+    let e = operand_sym(v, line, col)?;
+    Ok(Value::Char(mc_cas::latex::to_latex(&e)))
+}
+
+/// سری‌سازی برای KIND_SYM (سند ۰۵ §۱۲) — برای mc-io.
+pub fn sym_to_mcws_payload(s: &mc_cas::Sym) -> String {
+    to_sexp(s)
+}
+
+/// بارگذاری از KIND_SYM — قالب خراب هرگز حدس نمی‌شود.
+pub fn sym_from_mcws_payload(payload: &str, line: u32, col: u32) -> Result<Value, McError> {
+    match mc_cas::from_sexp(payload) {
+        Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
         Err(err) => Err(cas_err(err, line, col)),
     }
 }
