@@ -255,3 +255,36 @@ fn power_identities_in_interp() {
     let env2 = run("syms x; d = double(sym(4)^(1/2));");
     assert_eq!(scalar(&env2, "d"), 2.0);
 }
+
+// ---------- ممیزی کیفیت ۲۰۲۶-۱۱-۲۱ (تسک ۴۹) ----------
+
+#[test]
+fn approx_terms_mixed_arithmetic_terminates() {
+    // قبلاً سرریز پشته می‌داد: جمعِ ترم تقریبی (حاوی Real) با ترم نمادین
+    // در Sym::plus دچار بازگشت بی‌پایان می‌شد — مسیر واقعی کاربر
+    let env = run("syms x; y = x + 0.1*x; z = x + 0.1;");
+    assert_eq!(sym_str(&env, "y"), "x + 0.1*x");
+    assert_eq!(sym_str(&env, "z"), "x + 0.1");
+    // ارزیابی صادقانه: x=10 → 10 + 0.1*10 = 11
+    let env2 = run("syms x; y = x + 0.1*x; d = double(subs(y, x, 10));");
+    assert_eq!(scalar(&env2, "d"), 11.0);
+    // دو ترم تقریبی مجزا ادغام نمی‌شوند (جمع f64 ضرایب ضریب‌پذیر نیست)
+    let env3 = run("syms x; w = 0.1*x + 0.2*x;");
+    assert_eq!(sym_str(&env3, "w"), "0.1*x + 0.2*x");
+}
+
+#[test]
+fn zero_times_infinite_honest_matlab() {
+    // متلب: 0*Inf = NaN — فروختن 0*(inf*x) به 0 غلط بود؛ درخت می‌ماند و
+    // ارزیابی صادقانه NaN می‌دهد
+    let env = run("syms x; y = 0*inf*x; d = double(subs(y, x, 1));");
+    assert!(scalar(&env, "d").is_nan());
+}
+
+#[test]
+fn negative_terms_display_matlab_style() {
+    // قبلاً «x + -3*y» — اکنون متلب‌گونه (ممیزی ۲۰۲۶-۱۱-۲۱)
+    let env = run("syms x y; a = x - 3*y; b = x - 0.1*y;");
+    assert_eq!(sym_str(&env, "a"), "x - 3*y");
+    assert_eq!(sym_str(&env, "b"), "x - 0.1*y");
+}

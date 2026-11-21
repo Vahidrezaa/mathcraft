@@ -139,16 +139,17 @@ impl Sym {
     }
 
     /// آیا گره به‌طور قطعی روی همهٔ دامنه تعریف شده است؟ (گارد ضرب در صفر —
-    /// سند ۰۵ §۲): عدد، نماد، یا توانِ نماد با اسکالر صحیح نامنفی.
-    /// `x^-1` و توانِ عبارت ترکیبی (ممکن است پایه صفر شود) تعریف‌نشده‌اند.
+    /// سند ۰۵ §۲): عدد، نماد، جمع/ضربِ عامل‌های total، و توانِ صحیح نامنفی
+    /// از پایهٔ total. `x^-1` (توان منفی) تعریف‌نشده می‌ماند.
+    /// `Real` فقط در حالت متناهی total است: `0*Inf`/`0*NaN` در متلب NaN اند،
+    /// پس فروختنِ `0*(…inf…)` به 0 صادقانه نیست (ممیزی ۲۰۲۶-۱۱-۲۱).
     fn is_total(&self) -> bool {
         match self {
-            Sym::Integer(_) | Sym::Rational(_) | Sym::Real(_) | Sym::Symbol(_) => true,
-            Sym::Pow(b, e) => {
-                matches!(&**e, Sym::Integer(i) if !i.is_negative())
-                    && matches!(&**b, Sym::Symbol(_))
-            }
-            _ => false,
+            Sym::Integer(_) | Sym::Rational(_) | Sym::Symbol(_) => true,
+            Sym::Real(x) => x.is_finite(),
+            Sym::Pow(b, e) => matches!(&**e, Sym::Integer(i) if !i.is_negative()) && b.is_total(),
+            Sym::Add(v) | Sym::Mul(v) => v.iter().all(Self::is_total),
+            Sym::Fn(..) => false, // محافظه‌کار: sin کل-دامنه است، log نه — جدول در CAS-1
         }
     }
 
@@ -195,15 +196,11 @@ impl Sym {
                 terms.push((coeff, rest));
             }
         }
-        if approx.is_empty() {
-            return rebuild_add(terms);
-        }
-        // ترم تقریبی + بقیه: بازساخت با سازنده‌ها (ترتیب پایدار via add)
-        let mut acc = rebuild_add(terms);
-        for t in approx {
-            acc = Sym::plus(acc, t);
-        }
-        acc
+        // ترم‌های تقریبی (حاوی Real) بدون بازگشت، مستقیم در جمع کانونی
+        // می‌نشینند — درس ممیزی کیفیت ۲۰۲۶-۱۱-۲۱: حلقهٔ بازگشتی قبلی
+        // `plus(acc, t)` با ورودیِ هم‌شکل دوباره وارد همان شاخه می‌شد و
+        // عبارت‌هایی مثل `x + 0.1*x` سرریز پشته می‌داد (مسیر تست‌نشده).
+        rebuild_add(terms, approx)
     }
 
     /// تفریق — via جمع با منفی‌کردن.
@@ -364,13 +361,15 @@ impl Sym {
             }
             return Ok(Sym::Pow(Box::new(base), Box::new(exp)));
         }
-        // توان غیرصحیح/نمادین روی پایهٔ عددی → تقریب صادقانهٔ f64
+        // توان غیرصحیح/نمادین روی پایهٔ عددی → تقریب صادقانهٔ f64.
+        // صفرِ «واقعی» را از زیرریزِ تبدیل جدا می‌کنیم: (۱۰^-۴۰۰)^(-۱/۲)
+        // جوابش ۱۰^۲۰۰ است، نه خطای تقسیم بر صفر (ممیزی ۲۰۲۶-۱۱-۲۱).
         if let (Some(b), Some(e)) = (base.as_exact(), exp.as_exact()) {
-            let (bf, ef) = (ratio_f64(&b), ratio_f64(&e));
-            if bf == 0.0 && ef < 0.0 {
+            let ef = ratio_f64(&e);
+            if b.numer().is_zero() && ef < 0.0 {
                 return Err(CasError::DivByZero);
             }
-            return Ok(Sym::Real(bf.powf(ef)));
+            return Ok(Sym::Real(pow_exact_approx(&b, &e)));
         }
         if let Sym::Real(bf) = &base {
             if let Some(e) = exp.as_exact() {
@@ -457,7 +456,10 @@ impl Sym {
                     if bb.is_zero() && n < 0 {
                         return Err(CasError::DivByZero);
                     }
-                    return pow_ratio(&bb, n)?.to_f64().ok_or(CasError::F64Overflow);
+                    return pow_ratio(&bb, n)?
+                        .to_f64()
+                        .filter(|f| f.is_finite())
+                        .ok_or(CasError::F64Overflow);
                 }
                 Ok(b.to_f64()?.powf(e.to_f64()?))
             }
@@ -522,10 +524,62 @@ fn rat_is_one(r: &BigRational) -> bool {
     r.numer() == &BigInt::from(1) && r.denom() == &BigInt::from(1)
 }
 
-/// گویا → f64 (مسیر تقریبی Real) — سرریز منطقاً رخ نمی‌دهد چون فقط روی
-/// ورودی‌های برگشته از f64 صدا می‌شود؛ None → 0 برای امنیت.
+/// گویا → f64 (مسیر تقریبی Real). تبدیل num-rational در مقیاس بزرگ هم
+/// درست است (۱۰^۴۰۰/۱۰^۴۰۰ → 1.0، سرریز → ±inf — با تست پین‌شده)، اما
+/// fallback هرگز 0 غلط نمی‌دهد: اگر روزی None بیاید، NAN «نامشخص» می‌ماند
+/// (ممیزی ۲۰۲۶-۱۱-۲۱ — قبلاً unwrap_or(0.0) بود).
 fn ratio_f64(r: &BigRational) -> f64 {
-    r.to_f64().unwrap_or(0.0)
+    r.to_f64().unwrap_or(f64::NAN)
+}
+
+/// توانِ گویای دقیق با توان گویا — تقریب صادقانهٔ f64 بدون قربانی‌کردن
+/// دامنه (ممیزی ۲۰۲۶-۱۱-۲۱): اگر پایه در بازهٔ f64 جا شود powf خودِ IEEE
+/// کافی است؛ برای پایه‌های غول/ریز (۱۰^۴۰۰، ۱۰^-۴۰۰) که در تبدیل مستقیم
+/// inf/0 می‌شوند در دامنهٔ لگاریتمی حساب می‌کنیم: (۱۰^۴۰۰)^(۱/۲) → ~1e200
+/// (نه inf)، (۱۰^-۴۰۰)^(۱/۲) → ~1e-200 (نه 0). خطای نسبی ~۱e-14 است (سقفِ
+/// کوانتیزه‌شدنِ خودِ ln|b| در f64) — برای `Real`ِ تقریبی صادقانه است.
+/// سرریز/زیرریزِ «واقعی» همچنان ±inf/0 می‌ماند؛ پایهٔ منفی با توان غیرصحیح → NaN (مختلط، CAS-1+)
+/// و با توان صحیح بزرگ‌تر از i64 علامت از زوج/فردِ توان می‌آید.
+fn pow_exact_approx(b: &BigRational, e: &BigRational) -> f64 {
+    let bf = ratio_f64(b);
+    let ef = ratio_f64(e);
+    let e_int = *e.denom() == BigInt::from(1);
+    let b_neg = b.numer().sign() == num_bigint::Sign::Minus;
+    if b_neg && !e_int {
+        // پایهٔ منفی با توان غیرصحیح → مختلط؛ در CAS-0 NaN صادقانه (سند ۰۵ §۱۲)
+        return f64::NAN;
+    }
+    // توان صحیح بزرگ‌تر از i64 از مسیر as_small_int جا می‌ماند و اینجاست؛
+    // علامتش به زوج/فردِ توان بستگی دارد (پاریتهٔ متلب، مستقل از powf کتابخانه)
+    let sign = if b_neg && e.numer().bit(0) { -1.0 } else { 1.0 };
+    let mag = if bf.is_finite() && (bf != 0.0 || b.numer().is_zero()) {
+        bf.abs().powf(ef)
+    } else if b.numer().is_zero() {
+        0.0 // 0^مثبت (توان منفی قبلاً DivByZero شد)
+    } else {
+        (ef * ln_abs_rational(b)).exp()
+    };
+    sign * mag
+}
+
+/// ln|گویا| برای اعداد خارج از بازهٔ f64 — از ۵۴ بیت بالای صورت و مخرج.
+/// ln2 دو-جزئی fdlibm تا خطای `shift×ln2` حذف شود (~۱e-13 → حذف)؛ خطای
+/// نسبی نهایی ~۱e-14 است که سقفِ کوانتیزه‌شدنِ خودِ ln|b| (~۹۲۱) در f64
+/// است — برای مسیر تقریبیِ `Real` صادقانه کافی است.
+fn ln_abs_rational(r: &BigRational) -> f64 {
+    // ثابت‌های fdlibm — با پروب راستی‌آزمایی شدند: hi+lo == LN_2 دقیقاً
+    // و فرم کوتاه همان بیتهای فرم بلند را دارد (تسک ۴۹)
+    const LN_2_HI: f64 = 6.931_471_803_691_238e-1; // bits 0x3FE62E42FEE00000
+    const LN_2_LO: f64 = 1.908_214_929_270_587_7e-10; // bits 0x3DEA39EF35793C76
+    let n = r.numer().abs();
+    let d = r.denom();
+    let (nb, db) = (n.bits() as i64, d.bits() as i64);
+    let sn = (nb - 54).max(0) as u64;
+    let sd = (db - 54).max(0) as u64;
+    let n_hi = (&n >> sn).to_f64().unwrap_or(f64::INFINITY);
+    let d_hi = (d >> sd).to_f64().unwrap_or(1.0);
+    let shift = (sn as i64 - sd as i64) as f64;
+    (n_hi.ln() - d_hi.ln()) + shift.mul_add(LN_2_HI, shift * LN_2_LO)
 }
 
 /// ترم‌های جمع (تخت‌سازی) — برگ یا اعضای Add.
@@ -575,9 +629,12 @@ fn rebuild_rational(r: BigRational) -> Sym {
     }
 }
 
-/// بازساخت جمع از (ضریب، ترم)ها — ترم‌های عددی به یک ثابتِ انتهایی جمع
-/// می‌شوند، ضرایبِ صحیحِ ۱ حذف و ۱- به علامت منفی ترم تبدیل، مرتب‌سازی پایدار.
-fn rebuild_add(terms: Vec<(BigRational, Sym)>) -> Sym {
+/// بازساخت جمع از (ضریب، ترم)ها + ترم‌های تقریبی (حاوی `Real` — هرگز با
+/// هیچ ترمی ادغام نمی‌شوند؛ جمعِ f64 دو ترم تقریبی با ضریب‌های دیگر
+/// ضریب‌پذیر نیست و صادقانه جدا می‌مانند). ترم‌های عددی به یک ثابتِ
+/// انتهایی جمع می‌شوند، ضرایبِ صحیحِ ۱ حذف می‌شوند و ترتیب پایدار است
+/// (متلب: x^2 + 3*x + 5 — ترم عددی، دقیق یا Real تقریبی، آخر).
+fn rebuild_add(terms: Vec<(BigRational, Sym)>, approx: Vec<Sym>) -> Sym {
     let mut parts: Vec<Sym> = Vec::new();
     let mut num = BigRational::from(BigInt::from(0));
     for (c, rest) in terms {
@@ -591,20 +648,22 @@ fn rebuild_add(terms: Vec<(BigRational, Sym)>) -> Sym {
             parts.push(Sym::times(rebuild_rational(c), rest));
         }
     }
+    parts.extend(approx);
     if !num.is_zero() {
         parts.push(rebuild_rational(num));
     }
-    // مرتب‌سازی پایدار: ترم‌های عددی آخر (متلب: x^2 + 3*x + 5)
+    // مرتب‌سازی پایدار: ترم‌های عددی (دقیق یا Real تقریبی) آخر (متلب‌گونه)
     let mut syms: Vec<Sym> = Vec::new();
     let mut consts: Vec<Sym> = Vec::new();
     for p in parts {
-        if p.as_exact().is_some() {
+        if p.as_exact().is_some() || matches!(p, Sym::Real(_)) {
             consts.push(p);
         } else {
             syms.push(p);
         }
     }
     syms.sort_by(sym_sort);
+    consts.sort_by(sym_sort);
     syms.append(&mut consts);
     match syms.len() {
         0 => Sym::int(0),
@@ -651,10 +710,21 @@ fn write_sym(out: &mut String, s: &Sym, ctx: Prec) {
                 out.push('(');
             }
             for (i, t) in terms.iter().enumerate() {
-                if i > 0 {
-                    out.push_str(" + ");
+                if i == 0 {
+                    write_sym(out, t, Prec::Add);
+                    continue;
                 }
-                write_sym(out, t, Prec::Add);
+                // ترم منفی با « - » می‌چسبد (متلب‌گونه: x - 3*y) — علامت از
+                // نمایش ترم خوانده می‌شود (ممیزی ۲۰۲۶-۱۱-۲۱؛ قبلاً «x + -3*y»)
+                let mut buf = String::new();
+                write_sym(&mut buf, t, Prec::Add);
+                if let Some(stripped) = buf.strip_prefix('-') {
+                    out.push_str(" - ");
+                    out.push_str(stripped);
+                } else {
+                    out.push_str(" + ");
+                    out.push_str(&buf);
+                }
             }
             if ctx > Prec::Add {
                 out.push(')');
@@ -974,5 +1044,118 @@ mod tests {
                                                                  // (x+1)^2
         let p = Sym::pow(Sym::plus(x(), Sym::int(1)), Sym::int(2)).expect("t");
         assert_eq!(p.display(), "(x + 1)^2");
+    }
+
+    // ---------- ممیزی کیفیت ۲۰۲۶-۱۱-۲۱ (تسک ۴۹) ----------
+
+    #[test]
+    fn plus_approx_terms_terminate() {
+        // قبلاً سرریز پشته: plus(acc, t) با ترم تقریبی دوباره وارد همان
+        // شاخه می‌شد (بازگشت بی‌پایان) — مسیر تست‌نشدهٔ CAS-0
+        let t = Sym::times(Sym::from_f64(0.1), x());
+        assert_eq!(Sym::plus(x(), t).display(), "x + 0.1*x");
+        // همان شاخه از سمت دیگر: x + 0.1
+        assert_eq!(Sym::plus(x(), Sym::from_f64(0.1)).display(), "x + 0.1");
+        // دو ترم تقریبی مجزا ادغام نمی‌شوند (جمع f64 ضرایب ضریب‌پذیر نیست)
+        let a = Sym::times(Sym::from_f64(0.1), x());
+        let b = Sym::times(Sym::from_f64(0.2), x());
+        assert_eq!(Sym::plus(a, b).display(), "0.1*x + 0.2*x");
+        // با ثابت دقیق: ترم عددی آخر (متلب‌گونه)
+        let y = Sym::plus(
+            Sym::plus(x(), Sym::int(5)),
+            Sym::times(Sym::from_f64(0.1), x()),
+        );
+        assert_eq!(y.display(), "x + 0.1*x + 5");
+    }
+
+    #[test]
+    fn zero_times_infinite_symbolic_stays_honest() {
+        // 0*(inf*x): جمع‌شدن به 0 غلط است — متلب 0*Inf = NaN می‌دهد
+        let inf_x = Sym::times(Sym::from_f64(f64::INFINITY), x());
+        let z = Sym::times(Sym::int(0), inf_x);
+        assert_ne!(z, Sym::int(0));
+        // پس از جایگذاری x، ارزیابی صادقانه NaN است نه 0
+        let zz = z.substitute("x", &Sym::int(1));
+        assert!(matches!(zz.to_f64(), Ok(v) if v.is_nan()));
+    }
+
+    #[test]
+    fn zero_times_total_expression_folds() {
+        // (x+1)^2 روی همهٔ دامنه تعریف است → 0*(x+1)^2 = 0
+        // (قبلاً فقط پایهٔ نمادِ خالص total شمرده می‌شد — محافظه‌کاری بی‌دلیل)
+        let p = Sym::pow(Sym::plus(x(), Sym::int(1)), Sym::int(2)).expect("t");
+        assert_eq!(Sym::times(Sym::int(0), p).display(), "0");
+        // توان منفی → کل-دامنه نیست → نمی‌چیند
+        let q = Sym::pow(Sym::plus(x(), Sym::int(1)), Sym::int(-1)).expect("t");
+        assert_ne!(Sym::times(Sym::int(0), q), Sym::int(0));
+    }
+
+    #[test]
+    fn huge_rational_conversions_pinned() {
+        // پینِ درستیِ num-rational 0.4.2 در مقیاس بزرگ — رگرسیون وابستگی
+        // باید اینجا قرمز شود، نه در دست کاربر (ممیزی ۲۰۲۶-۱۱-۲۱)
+        let p = |n: u32| BigInt::from(10).pow(n);
+        let one = BigRational::new(p(400), p(400));
+        assert_eq!(Sym::Rational(one).to_f64(), Ok(1.0));
+        let ten = BigRational::new(p(400), p(399));
+        assert_eq!(Sym::Rational(ten).to_f64(), Ok(10.0));
+        let slightly = BigRational::new(p(400) + BigInt::from(1), p(400));
+        assert_eq!(Sym::Rational(slightly).to_f64(), Ok(1.0));
+        // Real + گویای غول → جمع صادقانهٔ IEEE (inf) — نه 0ِ fallback قدیمی
+        // (۱٫۰ نه — از خودش Integer دقیق می‌سازد و مسیر exact+exact می‌رود؛
+        //  ۰٫۱ می‌ماند Real و همین مسیر تقریبی را می‌آزماید)
+        let huge = Sym::Rational(BigRational::from(p(400)));
+        assert_eq!(
+            Sym::plus(Sym::from_f64(0.1), huge),
+            Sym::Real(f64::INFINITY)
+        );
+    }
+
+    #[test]
+    fn pow_out_of_range_base_honest() {
+        // (۱۰^۴۰۰)^(۱/۲): قبلاً inf غلط (تبدیل زودهنگامِ پایه به f64)؛ ~1e200
+        let base = Sym::Integer(BigInt::from(10).pow(400));
+        let half = Sym::rat(1, 2).expect("t");
+        let r = Sym::pow(base.clone(), half.clone()).expect("t");
+        assert!(matches!(r, Sym::Real(v) if (v - 1e200).abs() < 1e187));
+        // (۱۰^-۴۰۰)^(۱/۲): قبلاً 0 غلط (زیرریز تبدیل)؛ ~1e-200
+        let tiny = Sym::Rational(BigRational::new(BigInt::from(1), BigInt::from(10).pow(400)));
+        let r2 = Sym::pow(tiny.clone(), half).expect("t");
+        assert!(matches!(r2, Sym::Real(v) if (v - 1e-200).abs() < 1e-187));
+        // سرریزِ واقعی همچنان inf صادقانه: (۱۰^۴۰۰)^(۳/۲) = ۱۰^۶۰۰
+        let three_half = Sym::rat(3, 2).expect("t");
+        let r3 = Sym::pow(base, three_half).expect("t");
+        assert!(matches!(r3, Sym::Real(v) if v == f64::INFINITY));
+        // (۱۰^-۴۰۰)^(-۱/۲) = ۱۰^۲۰۰ — قبلاً DivByZero غلط (صفرِ زیرریز!)
+        let neg_half = Sym::rat(-1, 2).expect("t");
+        let r4 = Sym::pow(tiny, neg_half).expect("t");
+        assert!(matches!(r4, Sym::Real(v) if (v - 1e200).abs() < 1e187));
+    }
+
+    #[test]
+    fn pow_negative_base_parity_honest() {
+        // (-۸)^(۱/۳) مختلط است → NaN صادقانه در CAS-0 (سند ۰۵ §۱۲)
+        let cbrt = Sym::pow(Sym::int(-8), Sym::rat(1, 3).expect("t")).expect("t");
+        assert!(matches!(cbrt, Sym::Real(v) if v.is_nan()));
+        // توان صحیحِ بزرگ‌تر از i64: (-۲)^(۱۰^۲۰) زوج → +inf؛ +۱ (فرد) → -inf
+        let even = Sym::Integer(BigInt::from(10).pow(20));
+        let odd = Sym::Integer(BigInt::from(10).pow(20) + BigInt::from(1));
+        let re = Sym::pow(Sym::int(-2), even).expect("t");
+        assert!(matches!(re, Sym::Real(v) if v == f64::INFINITY));
+        let ro = Sym::pow(Sym::int(-2), odd).expect("t");
+        assert!(matches!(ro, Sym::Real(v) if v == f64::NEG_INFINITY));
+    }
+
+    #[test]
+    fn add_negative_terms_display_matlab_style() {
+        // ممیزی ۲۰۲۶-۱۱-۲۱: قبلاً «x + -3*y» — اکنون متلب‌گونه
+        let y3 = Sym::times(Sym::int(-3), Sym::symbol("y"));
+        assert_eq!(Sym::plus(x(), y3).display(), "x - 3*y");
+        // ثابت منفیِ انتهایی
+        let z = Sym::plus(Sym::plus(x(), Sym::int(2)), Sym::int(-5));
+        assert_eq!(z.display(), "x - 3");
+        // ترم تقریبی منفی هم همین‌طور
+        let a = Sym::times(Sym::from_f64(-0.1), x());
+        assert_eq!(Sym::plus(x(), a).display(), "x - 0.1*x");
     }
 }

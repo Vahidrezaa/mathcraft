@@ -11,7 +11,9 @@ name = "mc"
 path = "src/main.rs"
 
 # Doc 02 §2 rule: mc-cli depends on mc-ffi only, and on NO external crates
-# (std alone) — keeps native Termux/desktop builds instant and dependency-free.
+# (std alone) — architectural: a thin front-end over the same public contract
+# as the app (single source of truth). Running anywhere with zero setup is a
+# consequence, not the driver (quality-first ruling 2026-11-21).
 # NOTE: mc-ffi's *library* is named `mathcraft` (→ libmathcraft.so for FRB,
 # doc 02 §8), so the dependency is renamed to `mc_ffi` in code.
 [dependencies]

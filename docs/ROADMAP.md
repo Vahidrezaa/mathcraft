@@ -418,11 +418,13 @@ shipping a plotter on top of a half-language would force rework.
 - **DoD:** [x] `syms x; y = x^2 + 3*x; double(subs(y, x, 2.5))` round-trips exactly
   (= 55/4 → 13.75 — `subs` دقیق گویا می‌ماند؛ تست dod_roundtrip_exact);
   [x] ≥ 15 tests (۴۰: ۲۱ واحدی mc-cas + ۱۹ یکپارچه tests/cas_step41.rs).
-- **Risks:** rug/GMP build weight on Android — **حل‌شده با تصمیم پیاده‌سازی**:
-  حساب دقیق روی `num-bigint`/`num-rational` خالصِ Rust به‌جای rug/GMP
-  (GMP مجوز LGPL + کراس‌کامپایل NDK/Termux سنگین؛ خود سند ۰۵ §۲ سرعت GMP را
-  برای اعداد ≤۲۰۰ رقم «بسیار فراتر از نیاز» می‌داند؛ مستند در سند ۰۵ §۲ و
-  سرآیند mc-cas). Value-variant sweep — انجام شد (۱۶ نقطهٔ match، همه با
+- **Risks:** rug/GMP build weight on Android — **بسته با تصمیم کیفی‌محور (بازبینی ۲۰۲۶-۱۱-۲۱)**:
+  حساب دقیق روی `num-bigint`/`num-rational` خالصِ Rust؛ مبنای تصمیم کیفیت است
+  نه سادگی بیلد (حکم کاربر ۲۰۲۶-۱۱-۲۱: همهٔ بیلدهای رسمی در GitHub Actions،
+  سادگی Termux هرگز معیار نیست، pure Rust به شرط «دقیق و حرفه‌ای» مجاز) —
+  شواهد: تست پینِ تبدیل بزرگ‌مقیاس + اندازه‌گیری بارهای کلاس‌درس (subs درجه-۳۰
+  ≈ ۰٫۱۵ms ریلیز؛ H_1000 دقیق ≈ ۲۹ms؛ مستند کامل در سند ۰۵ §۲ و سرآیند
+  mc-cas). Value-variant sweep — انجام شد (۱۶ نقطهٔ match، همه با
   خطای صادقانه یا رفتار درست؛ panic-audit پاک).
 - **Deliverable:** commits + package. **Stop/rollback:** mc-cas is additive; revert per commit.
 
@@ -668,3 +670,4 @@ rendering / marker table completion.
 | 1.0 | 2026-11-19 | Step 3.8/P3-b executed (3D): 12 new statement builtins (plot3/surf/mesh/contour/contourf/colorbar/caxis/view/zlabel/colormap/shading/exportgraphics) + meshgrid/peaks; plot contract **v3** frozen (Axes3D+view+vertex_normals+levels/filled+DisplayName auto-legend gap#4+MarkerSize — doc04 §8.5); vector PDF in-engine + viewer PDF button; Dart 3D painter (painter's algorithm, flat shading, touch rotation) + contour/colorbar; 5 goldens + 50k-tri budget test + parity tests; Phase 3 code-complete (device demo pending user). Sandbox disk crisis mid-turn (full twice) — target rebuilt from clean | User (chat: چند گام هم با هم — به شرط عدم افت کیفیت) |
 | 1.0 | 2026-11-20 | CI#35 ریشه‌یابی و رفع (سه جاب قرمز، دو علت مستقل): drift فرمت `cargo fmt --check` در اولین گیت (امضای grid_args بعد از type Grid3 یک‌خطی نشده بود؛ آخرین fmt نوبت قبل با خروجی ماسک‌شده اجرا شده بود) + تست ویجت کهنهٔ placeholder سه‌بعدی (انتظار «هنوز نه» برای surf که از v3 رندر می‌شود) → جفت تست صادقانه + متن placeholder en/fa به‌روز (فقط quiver مانده) + ۳ لینت باقی‌ماندهٔ clippy پاک + scripts/verify_ci_sequence.sh (تمرین ۱:۱ با ci.yml، خروجی نمایان، fail-fast). CI#36/Android#36 سبز (۱۴m57s — همهٔ گیت‌ها واقعاً ران شد) | User (chat: چندین جاب قرمز شد — ریشه‌ای رفع کن + لاگ‌های سه جاب) |
 | 1.0 | 2026-11-20 | Step 4.1/CAS-0 executed per plan: mc-cas زنده شد — درخت `Sym` (Integer/Rational دقیق، Real تقریبیِ صادق، Symbol، Add/Mul تختِ مرتب، Pow، Fn آمادهٔ CAS-1) با کانونی‌سازی سطح-۰ در سازنده‌ها (جمع ضرایب، ادغام توان مثبت، گارد ضرب در صفرِ بالقوه-تعریف‌نشده، ترتیب کلیدی پایدار)؛ حساب دقیق num-bigint/num-rational (تصمیم مستند §۲ — نه rug/GMP: LGPL+NDK/Termux)؛ `Value::Sym(Arc)` + جارب ۱۶ نقطه؛ گزارهٔ `syms` (سینتکس فرمانی 3.5.1 + تقدم override)؛ پل‌های `sym`/`double` (sym(0.1)→Real تقریبی، sym(0.25)→1/4)؛ `subs` با بازساخت کانونی ⇒ DoD رفت‌وبرگشت دقیق 55/4→13.75؛ D-12: 1/3+1/6=1/2؛ خطاهای صادقانهٔ دوزبانه در همهٔ مسیرهای ناموجود (sin(x)، [x 1]، x(1)، for=x، x'، x\1، مقایسه، ذخیرهٔ MCWS)؛ ۴۰ تست جدید (۲۱+۱۹)؛ گیت‌ها: fmt پاک · clippy-D صفر · ۷۷۴/۰ · panic-audit پاک · analyze پاک · Flutter 89/89 | User (chat: ادامه طبق برنامه) |
+| 1.0 | 2026-11-21 | ممیزی کیفیت/ساده‌سازی طبق حکم کاربر (کیفیت کاملاً مقدم بر سادگی؛ همهٔ بیلدهای رسمی در GitHub Actions — سادگی Termux هرگز معیار نیست؛ pure Rust به شرط «دقیق و حرفه‌ای» مجاز): هستهٔ عددی CAS-0 بازرسی شد — num-bigint/num-rational با شواهد پابرجا ماند (تست پین تبدیل بزرگ‌مقیاس: 10^400/10^400→1.0؛ بارهای کلاس‌درس: subs درجه-۳۰ ≈۰٫۱۵ms ریلیز، H_1000 دقیق ≈۲۹ms، 2^100000 ≈۲۰µs)؛ روایت تصمیم کیفی‌محور بازنویسی شد (Termux حذف؛ ادعای LGPL برای پروژهٔ GPL-3.0 تصحیح)؛ ممیزی سه نقص صداقتی واقعی یافت و رفع کرد: (۱) سرریز پشته در `x + 0.1*x` (بازگشت بی‌پایان Sym::plus با ترم تقریبی — بازتولید و تست‌شده؛ rebuild_add اکنون غیر بازگشتی)، (۲) `0*(inf*x)` به 0 جمع می‌شد در حالی که متلب 0*Inf=NaN می‌دهد (is_total بازگشتی + Real فقط متناهی) + پاریتهٔ توان صحیح بزرگ‌تر از i64 روی پایهٔ منفی، (۳) توان پایهٔ خارج از بازهٔ f64 ناصادق بود ((10^400)^(1/2)→inf غلط اکنون ~1e200؛ (10^-400)^(-1/2)→DivByZero غلط؛ اکنون مسیر لگاریتمی با ln2 دو-جزئی fdlibm، خطای نسبی ~۱e-14)؛ نمایش ترم‌های منفی متلب‌گونه (x - 3*y)؛ +۷ تست واحدی +۳ یکپارچه (۷۷۴→۷۸۴) | User (chat: حکم کیفیت ۲۰۲۶-۱۱-۲۱) |

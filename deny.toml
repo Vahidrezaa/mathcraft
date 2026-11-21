@@ -13,7 +13,8 @@ allow = [
   "Unicode-3.0",
   "Zlib",
   "Unlicense",
-  # The project itself + GPL-compatible deps (LGPL-3.0 for rug/GMP lands in P4)
+  # The project itself + GPL-compatible deps (exact CAS arithmetic uses
+  # pure-Rust num-bigint/num-rational — doc 05 §2; no LGPL dependency today)
   "GPL-3.0-or-later",
 ]
 confidence-threshold = 0.93
