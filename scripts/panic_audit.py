@@ -7,6 +7,14 @@ aware), the following are forbidden in hand-written product code:
 
     panic!(  .unwrap(  .expect(  todo!(  unimplemented!(
 
+Test-only code is exempt in both shapes it takes:
+  * inline `#[cfg(test)] mod X { ... }` — blanked out below, and
+  * file modules declared `#[cfg(test)] (pub...)? mod X;` in the parent —
+    the whole file is skipped. CI#39 lesson (step 4.2): the file shape was
+    not recognized and test-only testkit.rs was audited as product code.
+    Double-lock: a file is skipped only if it is cfg(test)-declared in a
+    parent AND itself starts with the inner attribute `#![cfg(test)]`.
+
 frb_generated*.rs is FRB-generated output and is exempt (doc 08 §1).
 mc-cli is product code too (its `mc -e` runs on the device) — audited.
 
@@ -18,6 +26,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PATTERN = re.compile(r"panic!\(|\.unwrap\(|\.expect\(|todo!\(|unimplemented!\(")
+# `#[cfg(test)]` followed (possibly through more attributes) by mod NAME;
+FILE_MOD_DECL = re.compile(
+    r"#\[cfg\(test\)\](?:\s*#\[[^\]]*\]|\s*//[^\n]*)*\s*(?:pub(?:\(crate\))?\s+)?mod\s+([A-Za-z0-9_]+)\s*;"
+)
 
 
 def strip_cfg_test_modules(src: str) -> str:
@@ -112,18 +124,45 @@ def count_braces(line: str) -> int:
     return depth
 
 
+def cfg_test_file_modules(all_rs):
+    """Paths of files declared as `#[cfg(test)] ... mod name;` in a parent.
+
+    Double-lock (docstring): the target file is collected only if it also
+    begins with the inner attribute `#![cfg(test)]` — a cfg(test) mod decl
+    pointing at a file without the inner guard would be a REAL bug and stays
+    in the audit.
+    """
+    exempt = set()
+    for rs in all_rs:
+        src = rs.read_text(encoding="utf-8")
+        for m in FILE_MOD_DECL.finditer(src):
+            name = m.group(1)
+            for cand in (rs.parent / f"{name}.rs", rs.parent / name / "mod.rs"):
+                if cand.is_file():
+                    try:
+                        head = cand.read_text(encoding="utf-8")
+                    except OSError:
+                        continue
+                    if "#![cfg(test)]" in head.split("mod ")[0][:400]:
+                        exempt.add(cand.resolve())
+    return exempt
+
+
 def main() -> int:
     violations = []
     crate_srcs = sorted((ROOT / "crates").glob("*/src"))
-    for src_dir in crate_srcs:
-        for rs in sorted(src_dir.rglob("*.rs")):
-            if rs.name.startswith("frb_generated"):
-                continue
-            rel = rs.relative_to(ROOT)
-            stripped = strip_cfg_test_modules(rs.read_text(encoding="utf-8"))
-            for lineno, line in enumerate(stripped.splitlines(), start=1):
-                if PATTERN.search(line):
-                    violations.append(f"{rel}:{lineno}: {line.strip()[:110]}")
+    all_rs = [rs for src_dir in crate_srcs for rs in sorted(src_dir.rglob("*.rs"))]
+    exempt = cfg_test_file_modules(all_rs)
+    for rs in all_rs:
+        if rs.name.startswith("frb_generated"):
+            continue
+        if rs.resolve() in exempt:
+            continue
+        rel = rs.relative_to(ROOT)
+        stripped = strip_cfg_test_modules(rs.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(stripped.splitlines(), start=1):
+            if PATTERN.search(line):
+                violations.append(f"{rel}:{lineno}: {line.strip()[:110]}")
     if violations:
         print("::error::panic audit failed — panic!/unwrap/expect found in non-test product code (ROADMAP 2.5):")
         for v in violations:
@@ -131,7 +170,8 @@ def main() -> int:
         print(f"\n{len(violations)} violation(s). Fix by returning Result, matching on Option,")
         print("or using checked arithmetic; every reachable panic is a device crash.")
         return 1
-    print("panic audit: clean (non-test product paths contain no panic!/unwrap/expect/todo!/unimplemented!)")
+    print(f"panic audit: clean (non-test product paths contain no panic!/unwrap/expect/todo!/unimplemented!; "
+          f"{len(exempt)} cfg(test) file module(s) exempt)")
     return 0
 
 

@@ -37,6 +37,9 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+      - name: Tests (mc-cas egraph feature — doc 05 §3 level 1)
+        run: cargo test -p mc-cas --features egraph
+
       - name: Panic audit — no todo!/unimplemented!/panic!/unwrap/expect in non-test product code (doc 08 §1, ROADMAP 2.5)
         run: |
           # frb_generated.rs is FRB-generated output and is exempt (doc 08 §1);

@@ -47,9 +47,11 @@
 | `i`، `j` | exact | ✅ P2 — سایه‌پذیر مثل pi؛ اعداد موهومی `4i`/`2.5j` |
 | `realmax/realmin`، `intmax` | exact | ✅ گام 2.4 (مقدار double — نوع صحیح نداریم، مستند) |
 
-## ۳. رجیستری توابع (۹۱ builtin فعلی + ۳ افزودهٔ ROADMAP 2.6: interp2/histcounts/histogram)
+## ۳. رجیستری توابع (۹۱ builtin فعلی + ۳ افزودهٔ ROADMAP 2.6: interp2/histcounts/histogram + ۵ افزودهٔ گام 4.2/CAS-1: simplify/expand/collect/latex + diff نمادین)
 
 **exact / tol (تست‌شده در کورپوس):** zeros ones eye diag tril triu size length numel isempty isvector isscalar repmat reshape linspace logspace · sum prod max min mean cumsum cumprod diff all any find sort('descend') · mod rem round fix floor ceil sign abs sqrt exp log log2 log10 sin cos tan asin acos atan atan2 sinh cosh tanh real imag conj angle · dot cross kron · inv det rank trace rref norm(1/2/inf/fro) cond chol qr svd eig(متقارن) · true false isnan isinf isfinite isequal isreal
+
+**سمبولیک (گام 4.1/4.2 — تست‌شده در cas_step41/42):** `syms` (گزاره) · `sym` · `subs` · `double` (روی سمبولیک) · `diff` دو-چهره (آرگومان اول Sym → مشتق نمادین `diff(S)`/`diff(S,n)`/`diff(S,x)`/`diff(S,x,n)`؛ عددی: `diff(X)`/`diff(X,k)`/`diff(X,k,dim)`) · `simplify` (فرم نرمال گویا + gcd + قواعد کل-دامنه؛ مجموعهٔ مرجع ۵۰ عبارت) · `expand` (توزیع بدون حذف gcd — پاریت متلب) · `collect(S[,x])` · `latex(S)` (رشتهٔ TeX خام) · توابع ریاضی روی آرگومان سمبولیک: sin cos tan asin acos atan sinh cosh tanh exp log log10 log2 sqrt abs sign → درخت `Sym::Fn`
 
 **انحراف/محدودیت مستندشده:**
 | مورد | توضیح |
