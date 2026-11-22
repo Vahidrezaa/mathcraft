@@ -726,7 +726,7 @@ fn rat_deg_x(f: &Sym, x: &str) -> i64 {
 // ---------------------------------------------------------------------------
 
 /// ضریب درجهٔ k از x — چندجمله‌ای در بقیهٔ متغیرها.
-fn coeff_of(p: &Poly, x: &str, k: i64) -> Poly {
+pub(crate) fn coeff_of(p: &Poly, x: &str, k: i64) -> Poly {
     let vk = vkey(x);
     let mut out = Poly::zero();
     for (m, c) in &p.terms {
@@ -1108,7 +1108,7 @@ pub(crate) fn sqrt_sym(r: &BigRational) -> Result<Sym, CasError> {
     }
 }
 
-fn is_sym_zero(s: &Sym) -> bool {
+pub(crate) fn is_sym_zero(s: &Sym) -> bool {
     match s {
         Sym::Integer(i) => i.is_zero(),
         Sym::Rational(r) => r.is_zero(),

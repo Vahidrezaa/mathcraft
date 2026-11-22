@@ -72,7 +72,7 @@ pub fn accepted(r: &DiffCheck) -> bool {
     r.valid_points >= MIN_VALID && r.worst_rel_err <= TOL
 }
 
-fn eval_at(e: &Sym, var: &str, x: f64) -> Result<f64, CasError> {
+pub(crate) fn eval_at(e: &Sym, var: &str, x: f64) -> Result<f64, CasError> {
     e.substitute(var, &Sym::Real(x)).to_f64()
 }
 

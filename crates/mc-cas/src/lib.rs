@@ -41,11 +41,13 @@ pub mod egraph;
 pub mod fntable;
 pub mod int;
 pub mod latex;
+pub mod limit;
 pub mod poly;
 pub mod sexpr;
 pub mod simplify;
 pub mod solve;
 pub mod sym;
+pub mod taylor;
 #[cfg(test)]
 pub(crate) mod testkit;
 pub mod verify;
