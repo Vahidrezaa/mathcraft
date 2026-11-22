@@ -191,6 +191,84 @@ pub fn integrate(f: &Sym, x: &str) -> Result<Option<Sym>, CasError> {
     }
 }
 
+/// بازنویسی توان‌های فرد مثلثاتی/هذلولی — اتحادهای کل-دامنهٔ درست برای هر u:
+/// sin^{2k+1} → sin·(1−cos²)^k، cos^{2k+1} → cos·(1−sin²)^k،
+/// sinh^{2k+1} → sinh·(cosh²−1)^k، cosh^{2k+1} → cosh·(1+sinh²)^k.
+/// درس مجموعهٔ مرجع: بدون این، u-sub روی sin³ هرگز u-تمیز نمی‌شد.
+fn rewrite_odd_powers(h: &Sym) -> Sym {
+    if let Sym::Pow(b, ex) = h {
+        if let (Sym::Fn(name, args), Some(n)) = (b.as_ref(), as_small_int(ex)) {
+            if args.len() == 1 && n > 1 && n % 2 == 1 {
+                let (f, g, g_minus_one) = match &**name {
+                    "sin" => ("sin", "cos", false),
+                    "cos" => ("cos", "sin", false),
+                    "sinh" => ("sinh", "cosh", true),
+                    "cosh" => ("cosh", "sinh", true),
+                    _ => ("", "", false),
+                };
+                if !f.is_empty() {
+                    let u = args[0].clone();
+                    let k = (n - 1) / 2;
+                    let built: Option<Sym> = (|| {
+                        // sin² = 1 − cos²؛ sinh² = cosh² − 1 (اتحاد کل-دامنه)
+                        let fu = Sym::fn_of(f, vec![u.clone()]).ok()?;
+                        let gu = Sym::fn_of(g, vec![u.clone()]).ok()?;
+                        let g2 = Sym::pow(gu, Sym::int(2)).ok()?;
+                        let base = if g_minus_one {
+                            Sym::minus(g2, Sym::int(1))
+                        } else {
+                            Sym::minus(Sym::int(1), g2)
+                        };
+                        let powed = Sym::pow(base, Sym::int(k)).ok()?;
+                        Some(Sym::times(fu, powed))
+                    })();
+                    if let Some(res) = built {
+                        return res;
+                    }
+                }
+            }
+        }
+        return Sym::pow(rewrite_odd_powers(b), rewrite_odd_powers(ex))
+            .unwrap_or_else(|_| h.clone());
+    }
+    match h {
+        Sym::Add(ts) => fold_add(ts.iter().map(rewrite_odd_powers)),
+        Sym::Mul(fs) => fold_mul(fs.iter().map(rewrite_odd_powers)),
+        Sym::Fn(name, args) => Sym::Fn(name.clone(), args.iter().map(rewrite_odd_powers).collect()),
+        other => other.clone(),
+    }
+}
+
+/// توزیع ضرب روی جمع — فقط وقتی عضوی Add است؛ بودجهٔ ۸ جمله (درس مرجع:
+/// exp(x)·(sin(x)+cos(x))) — پس از توزیع، مسیر جمع جمله‌ها را مستقل می‌گیرد.
+fn distribute_mul_over_add(factors: &[Sym]) -> Option<Sym> {
+    let (i, add) = factors
+        .iter()
+        .enumerate()
+        .find(|(_, f)| matches!(f, Sym::Add(_)))?;
+    let terms = match add {
+        Sym::Add(v) => v,
+        _ => return None,
+    };
+    if terms.len() > 8 {
+        return None; // بودجه — انفجار توزیع صادقانه رد می‌شود
+    }
+    let mut out: Option<Sym> = None;
+    for t in terms {
+        let mut prod = t.clone();
+        for (k, f) in factors.iter().enumerate() {
+            if k != i {
+                prod = Sym::times(prod, f.clone());
+            }
+        }
+        out = Some(match out {
+            None => prod,
+            Some(a) => Sym::plus(a, prod),
+        });
+    }
+    out
+}
+
 fn verified(f_res: &Sym, f: &Sym, x: &str) -> bool {
     // ۱) نمادین خام: simplify(diff(F) − f) = 0
     if let Ok(d) = diff(f_res, x) {
@@ -315,6 +393,17 @@ impl Eng {
             let inner = self.run(&h, x, depth)?;
             return Ok(inner.map(|fi| Sym::times(c.clone(), fi)));
         }
+        // ۲٫۵. بازنویسی توان‌های فرد مثلثاتی/هذلولی (درس مرجع: sin³/cos³):
+        // sin^{2k+1} → sin·(1−cos²)^k — اتحاد کل-دامنه — تا u-sub با
+        // u=cos تمیز شود. نتیجه با h اصلی ورفای می‌شود.
+        let h_rw = rewrite_odd_powers(&h);
+        if h_rw != h {
+            if let Some(fr) = self.run(&h_rw, x, depth)? {
+                if verified(&fr, &h, x) {
+                    return Ok(Some(fr));
+                }
+            }
+        }
         // ۳–۶. هر مرحله نتیجه‌اش همان‌جا ورفای می‌شود؛ ردِ تأیید یعنی
         // «این مرحله موفق نشد» و مرحلهٔ بعد فرصت می‌گیرد — درس sin²(x):
         // مسیر گویا آن را به‌شکل غلط «موفق» می‌پنداشت و جدول را می‌بست.
@@ -335,6 +424,19 @@ impl Eng {
                 return Ok(Some(ft));
             }
         }
+        // ۵٫۵. توزیع ضرب روی جمع (درس مرجع: exp(x)·(sin+cos)) — با بودجهٔ
+        // تعداد جمله؛ پس از آن مسیر جمع، هر جمله را مستقل می‌گیرد
+        if let Sym::Mul(factors) = &h {
+            if factors.iter().any(|f| matches!(f, Sym::Add(_))) {
+                if let Some(dist) = distribute_mul_over_add(factors) {
+                    if let Some(fr) = self.run(&dist, x, depth)? {
+                        if verified(&fr, &h, x) {
+                            return Ok(Some(fr));
+                        }
+                    }
+                }
+            }
+        }
         if let Some(fb) = self.int_by_parts(&h, x, depth)? {
             if verified(&fb, &h, x) {
                 return Ok(Some(fb));
@@ -344,7 +446,6 @@ impl Eng {
     }
 
     // ---------------------- مسیر گویا ----------------------
-
     fn int_rational(&mut self, h: &Sym, x: &str, depth: u8) -> Result<Option<Sym>, CasError> {
         let rf = RatFun::from_sym(h)?;
         if rf.is_zero() {
@@ -363,7 +464,12 @@ impl Eng {
         }
         // تقسیم طولانی در میدان کسرهای پارامتری
         let (q_sym, rem) = pdiv_x_fraction(&rf.num, &rf.den, x)?;
-        let mut out = q_sym;
+        // درس مجموعهٔ مرجع ۱۲۰ (مورد ۲۹): خارج‌قسمت باید انتگرال بگیرد
+        // نه خام بماند — ∫(q + r/d) = ∫q + ∫r/d. نسخهٔ اولیه q را خام
+        // می‌گذاشت؛ ورفای درستِ آن را رد می‌کرد و موتور به مسیرهای معلق
+        // (by-parts → abs تودرتو → gcd ژنراتورهای اُپک) می‌افتاد.
+        let qp = RatFun::from_sym(&q_sym)?.to_poly()?;
+        let mut out = int_poly_x(&qp, x)?;
         if !rem.is_zero() {
             let Some(rest) = self.int_proper(&rem.num, &rem.den, x, depth)? else {
                 return Ok(None);
@@ -477,6 +583,24 @@ impl Eng {
 
     /// مخرج عددی یک‌متغیره: RRT + دنبالهٔ درجه ۲ + PF با دستگاه خطی.
     fn pf_numeric(&mut self, r: &Poly, den: &Poly, x: &str) -> Result<Option<Sym>, CasError> {
+        // مونیک‌سازی مخرج عددی (درس مورد ۳۰): ضریب رأس → بیرون —
+        // 1/(4x²+4x+1) = (1/4)·1/(x+1/2)²؛ بدون آن PF با فاکتور مونیک
+        // ناسازگار می‌شد و ورفای ۴ برابر خطا را رد می‌کرد
+        let vk = vkey(x);
+        let lead = coeff_of(den, x, den.degree_in(&vk))
+            .constant_value()
+            .filter(|l| !l.is_zero());
+        if let Some(l) = lead {
+            if l != BigRational::from_integer(BigInt::from(1)) {
+                let r_monic = Poly {
+                    terms: r.terms.iter().map(|(m, c)| (m.clone(), c / &l)).collect(),
+                };
+                let den_monic = Poly {
+                    terms: den.terms.iter().map(|(m, c)| (m.clone(), c / &l)).collect(),
+                };
+                return self.pf_numeric(&r_monic, &den_monic, x);
+            }
+        }
         let Some(factors) = factor_univariate(den, x)? else {
             return Ok(None);
         };
@@ -1529,6 +1653,17 @@ fn table_form(h: &Sym, x: &str) -> Option<Sym> {
                 return match &**f {
                     "sin" => Some(Sym::minus(Sym::times(half, u), Sym::times(quarter, sin2))),
                     "cos" => Some(Sym::plus(Sym::times(half, u), Sym::times(quarter, sin2))),
+                    // اتحادهای هذلولی (درس مرجع ۸۶/۸۷): پادمشتق sinh² =
+                    // sinh(2u)/4 − u/2 و cosh² = sinh(2u)/4 + u/2
+                    // (cosh 2u = 1 + 2·sinh²u → ∫sinh² = ∫(cosh 2u − 1)/2)
+                    "sinh" => {
+                        let sinh2 = Sym::fn_of("sinh", vec![two_u]).ok()?;
+                        Some(Sym::minus(Sym::times(quarter, sinh2), Sym::times(half, u)))
+                    }
+                    "cosh" => {
+                        let sinh2 = Sym::fn_of("sinh", vec![two_u]).ok()?;
+                        Some(Sym::plus(Sym::times(quarter, sinh2), Sym::times(half, u)))
+                    }
                     _ => None,
                 };
             }

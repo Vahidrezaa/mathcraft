@@ -134,6 +134,11 @@ static REGISTRY: &[(&str, Builtin)] = &[
     ("expand", bi_expand),
     ("collect", bi_collect),
     ("latex", bi_latex),
+    // CAS-2 (گام 4.3 — سند ۰۵ §۵/§۸): int/solve فقط نمادین‌اند — چهرهٔ
+    // عددی انتگرال/ریشه: integral / roots / fzero (registry_p2). int
+    // شکست نامعین → گرهٔ unevaluated؛ solve همیشه list (cell) می‌دهد
+    ("int", bi_int),
+    ("solve", bi_solve),
     ("ischar", bi_ischar),
     ("blanks", bi_blanks),
     ("str2double", bi_str2double),
@@ -1451,6 +1456,7 @@ fn bi_class(args: &[Value], _n: usize) -> Result<Value, McError> {
         Value::Anon(_) => "function_handle",
         Value::Struct(_) => "struct",
         Value::Sym(_) => "sym",
+        Value::List(_) => "cell",
     };
     Ok(Value::Char(name.to_owned()))
 }
@@ -1617,6 +1623,17 @@ fn bi_latex(args: &[Value], _n: usize) -> Result<Value, McError> {
     crate::sym_ops::latex_core(&args[0], 0, 0)
 }
 
+/// `int(S[, x][, x, a, b])` (گام 4.3/CAS-2) — فقط نمادین؛ عددیش integral است.
+fn bi_int(args: &[Value], _n: usize) -> Result<Value, McError> {
+    crate::sym_ops::int_sym(args, 0, 0)
+}
+
+/// `solve(S[, var])` / `solve([S…], [var…])` (گام 4.3/CAS-2) — فقط
+/// نمادین؛ خروجی همیشه لیست (سند ۰۵ §۸).
+fn bi_solve(args: &[Value], _n: usize) -> Result<Value, McError> {
+    crate::sym_ops::solve_sym(args, 0, 0)
+}
+
 fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
     if args.len() != 1 {
         return Err(arity_err("double", "1", args.len()));
@@ -1640,6 +1657,13 @@ fn bi_double(args: &[Value], _n: usize) -> Result<Value, McError> {
             0,
             "double: structs have no numeric form; extract fields with s.f first.",
             "double: ساختار شکل عددی ندارد؛ ابتدا فیلد را با s.f بیرون بکشید.",
+        )),
+        Value::List(_) => Err(McError::new(
+            ids::TYPE_ERROR,
+            0,
+            0,
+            "double: cell (list) has no numeric form; extract elements first (planned).",
+            "double: cell (لیست) شکل عددی ندارد؛ ابتدا اعضا را جدا کنید (در برنامه).",
         )),
     }
 }
@@ -1722,6 +1746,13 @@ fn bi_num2str(args: &[Value], _n: usize) -> Result<Value, McError> {
     match &args[0] {
         // سمبولیک → رشتهٔ نمایش خطی
         Value::Sym(_) => Ok(Value::Char(crate::sym_ops::sym_value_to_string(&args[0]))),
+        Value::List(_) => Err(McError::new(
+            ids::TYPE_ERROR,
+            0,
+            0,
+            "num2str: cell (list) has no string form.",
+            "num2str: cell (لیست) شکل رشته‌ای ندارد.",
+        )),
         Value::Char(s) => Ok(Value::Char(s.clone())),
         Value::Double(m) if m.is_scalar() => {
             Ok(Value::Char(crate::format::format_num2str_elem(m.get(0, 0))))

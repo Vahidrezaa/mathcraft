@@ -112,6 +112,15 @@ fn write_value(out: &mut Vec<u8>, value: &Value) -> Result<(), IoError> {
             out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
             out.extend_from_slice(payload.as_bytes());
         }
+        // CAS-2 (گام 4.3): لیست/cell — هنوز KIND ندارد (KIND_CELL با
+        // تکمیل cell در سند ۰۳ می‌آید)؛ خطای صادقانه مثل Anon، هرگز
+        // خراب‌نویسی فرمت نه (اصل ۵ سند ۰۰).
+        Value::List(_) => {
+            return Err(err_unsupported(
+                "cell (list) values cannot be saved yet — planned KIND_CELL",
+                "مقادیر cell (لیست) هنوز قابل ذخیره نیستند — KIND_CELL در برنامه است",
+            ));
+        }
     }
     Ok(())
 }

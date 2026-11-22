@@ -435,6 +435,12 @@ shipping a plotter on top of a half-language would force rework.
   §3); egg e-graphs optional behind a feature flag — if it slips, ship normal-form only.
 
 ### Step 4.3 — CAS-2: `int` pipeline (Risch-lite 8 stages, docs/05 §5–6), `solve` (polynomial + transcendental subset), symbolic linear systems
+- **وضعیت ✅ تحویل ۲۰۲۶-۱۱-۲۲ (دو نوبت: هستهٔ mc-cas در تسک ۵۲، سیم‌کشی مفسر در تسک ۵۳):**
+  `int(S)`/`int(S,x)`/`int(S,x,a,b)` + `solve(...)` کامل در رجیستری؛ `Value::List` (cell)
+  با اندیس آکولادی `r{i}`؛ مجموعهٔ مرجع ۱۲۰ انتگرال **۱۰۹/۱۲۰** diff-verified (DoD ≥ ۱۰۸ ✓؛
+  بقیه fallback صادقانه مستند §۱۲ سند ۰۵). درس‌های موتور این گام: انتگرال خارج‌قسمتِ
+  تقسیم طولانی، گارد عمق gcd، مونیک‌سازی PF، بازنویسی توان فرد، توزیع ضرب-روی-جمع،
+  جدول sinh²/cosh² (جزئیات: docs/05 §11 وضعیت اجرا).
 - **DoD:** docs/05 §11 CAS-2 table green; **release-worthy standalone gate** ("usable
   product even without CAS-3"); demo: `int(exp(-x^2)*x^3)` rendered in LaTeX.
 - **Risks:** R1 again — the int pipeline stops at the documented stage list; every

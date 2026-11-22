@@ -110,6 +110,12 @@ pub enum Value {
     /// آن "sym" است. حساب روی آن درخت را بزرگ می‌کند؛ عمل ناموجود = خطای
     /// صادقانه، هرگز جواب غلطِ عددی نه.
     Sym(Arc<mc_cas::Sym>),
+    /// لیست مقادیر (گام 4.3/CAS-2 — قرارداد سند ۰۵ §۸: «solve همیشه list
+    /// برمی‌گرداند»؛ ستون ریشه‌های سمبولیک). کلاس متلب‌گونه: `cell`
+    /// (انحراف مستند COMPATIBILITY — متلب آرایهٔ sym برمی‌گرداند؛ ماتریس
+    /// سمبولیک هنوز نداریم). سازندهٔ فعلی فقط solve است؛ حساب و
+    /// اندیس‌گذاری روی cell هنوز خطای صادقانه می‌دهد (سند ۰۳ — Cell کامل بعداً).
+    List(Vec<Value>),
 }
 
 impl PartialEq for Value {
@@ -126,6 +132,8 @@ impl PartialEq for Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             // سمبولیک: برابری ساختاری درخت (تست‌ها)؛ Rc ارزان clone می‌شود
             (Value::Sym(a), Value::Sym(b)) => a == b,
+            // لیست: برابری عنصری (بازگشتی از طریق Value::eq)
+            (Value::List(a), Value::List(b)) => a == b,
             // ساختارها: مجموعهٔ فیلد یکسان (ترتیب بی‌اثر — اوراکل Octave 10.3:
             // isequal(struct('a',1,'b',2), struct('b',2,'a',1)) = 1؛ رفتار متلب)
             (Value::Struct(a), Value::Struct(b)) => {
@@ -149,6 +157,7 @@ impl Value {
             Value::Anon(_) => "function_handle",
             Value::Struct(_) => "struct",
             Value::Sym(_) => "sym",
+            Value::List(_) => "cell",
         }
     }
 
@@ -170,6 +179,9 @@ impl Value {
             Value::Struct(_) => (1, 1),
             // عبارت سمبولیک همیشه اسکالر است (CAS-0؛ ماتریس سمبولیک CAS-1+)
             Value::Sym(_) => (1, 1),
+            // لیست = آرایهٔ ستونی N×1 (پاریت solve متلب: ستون ریشه‌ها)؛
+            // خالی: 0×1 سمانتیک []
+            Value::List(v) => (v.len(), 1),
         }
     }
 

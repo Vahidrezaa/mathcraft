@@ -377,6 +377,34 @@ pub fn pdiv_exact(n: &Poly, d: &Poly) -> Result<Poly, CasError> {
 
 /// GCD چندمتغیره — PRS بدوی + بازگشت لم گاوس (بالای فایل).
 pub fn poly_gcd(a: &Poly, b: &Poly) -> Result<Poly, CasError> {
+    // گارد عمق بازگشت متقابل — درس CAS-2: باقیمانده‌های دارای abs/sign
+    // تودرتو (از back-substitution جایگذاری) ژنراتورهای اُپک می‌سازند و
+    // چرخهٔ pdiv_exact ↔ cancel ↔ poly_gcd می‌تواند بی‌کران شود (سرریز
+    // پشته — مجموعهٔ مرجع ۱۲۰، مورد (x²+1)/(x−1)). فراتر از بودجه =
+    // خطای صادقانه، هرگز فروریختن نه (اصل ۵ سند ۰۰).
+    thread_local! {
+        static GCD_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    }
+    const GCD_MAX_DEPTH: u32 = 64;
+    let depth = GCD_DEPTH.with(|d| {
+        let cur = d.get();
+        d.set(cur + 1);
+        cur
+    });
+    let _guard = DepthGuardReset;
+    struct DepthGuardReset;
+    impl Drop for DepthGuardReset {
+        fn drop(&mut self) {
+            GCD_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        }
+    }
+    if depth > GCD_MAX_DEPTH {
+        return Err(CasError::Unsupported("gcd recursion budget exceeded"));
+    }
+    poly_gcd_inner(a, b)
+}
+
+fn poly_gcd_inner(a: &Poly, b: &Poly) -> Result<Poly, CasError> {
     if a.is_zero() {
         return Ok(normalize(b));
     }

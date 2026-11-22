@@ -262,8 +262,35 @@ pub fn format_value_spec(v: &Value, spec: &DisplaySpec) -> String {
         Value::Struct(s) => format_struct(s, spec),
         // نمایش خطی درخت سمبولیک (CAS-0) — قطعی؛ LaTeX در CAS-1 (سند ۰۵ §۱۰)
         Value::Sym(_) => crate::sym_ops::sym_value_to_string(v),
+        // CAS-2: cell (لیست solve) — عناصر با «;» داخل { } (سبک ساختمالی
+        // متلب)؛ هر عنصر درون‌خطی — عناصر چندخطی با کلاس خلاصه می‌شوند
+        Value::List(vs) => format_cell(vs),
     };
     format!("{body}\n")
+}
+
+/// نمای درون‌خطی یک عضو cell — sym/عدد اسکالر/char کامل می‌شوند؛ بقیه
+/// با کلاس خلاصه می‌شوند (جلوگیری از نمایش چندخطی — الگوی field_preview).
+fn cell_inline(v: &Value) -> String {
+    match v {
+        Value::Sym(_) => crate::sym_ops::sym_value_to_string(v),
+        Value::Double(m) if m.is_scalar() => format_num2str_elem(m.get(0, 0)),
+        Value::Double(m) => format!("[{}x{} double]", m.rows(), m.cols()),
+        Value::Complex(z) => format!("[{}x{} double]", z.rows(), z.cols()),
+        Value::Char(s) => format!("'{s}'"),
+        Value::Anon(_) => "function_handle".to_owned(),
+        Value::Struct(_) => "[1x1 struct]".to_owned(),
+        Value::List(_) => "{...}".to_owned(),
+    }
+}
+
+/// نمایش cell به سبک ساختمالی متلب: `{ 1/2; -1/2 }` — عناصر با «; » جدا.
+fn format_cell(vs: &[Value]) -> String {
+    if vs.is_empty() {
+        return "{}".to_owned();
+    }
+    let items: Vec<String> = vs.iter().map(cell_inline).collect();
+    format!("{{ {} }}", items.join("; "))
 }
 
 /// حداکثر نویسهٔ پیش‌نمایش خطی یک فیلد — آستانهٔ قرارداد موتور با پرچم پین
@@ -335,6 +362,12 @@ fn field_preview(v: &Value, spec: &DisplaySpec) -> String {
         // مستند — COMPATIBILITY §1)
         Value::Anon(_) => "[function_handle]".to_owned(),
         Value::Struct(_) => "[1x1 struct]".to_owned(),
+        // cell: تک‌عضوی با محتوای کامل، چندعضوی با کلاس خلاصه (الگوی متلب)
+        Value::List(vs) => match vs.len() {
+            0 => "{}".to_owned(),
+            1 => format!("{{ {} }}", cell_inline(&vs[0])),
+            n => format!("{{{}x1 cell}}", n),
+        },
     }
 }
 

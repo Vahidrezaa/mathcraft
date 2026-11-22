@@ -845,10 +845,46 @@ impl Parser {
                     // هر پایهٔ دیگر (لفظ، فراخوانی، فیلد، پرانتز، …) → Expr::Index
                     expr = self.parse_paren_postfix(expr)?;
                 }
+                Tok::LBrace => {
+                    // اندیس آکولادی cell `base{i}` — گام 4.3/CAS-2 (محتوا می‌دهد)
+                    expr = self.parse_brace_postfix(expr)?;
+                }
                 _ => break,
             }
         }
         Ok(expr)
+    }
+
+    /// اندیس آکولادی پسوندی `base{i}` — گام 4.3/CAS-2: همیشه `BraceIndex`
+    /// (فراخوانی با آکولاد معنا ندارد)؛ خالی → خطا مثل `expr(2)`.
+    fn parse_brace_postfix(&mut self, expr: Expr) -> Result<Expr, McError> {
+        let t = self.bump(); // {
+        let mut subs = Vec::new();
+        if !self.at(&Tok::RBrace) {
+            loop {
+                let sub = self.parse_expr()?;
+                subs.push(sub);
+                if self.at(&Tok::Comma) {
+                    self.bump();
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect_tok(&Tok::RBrace, "'}'", "«}»")?;
+        if subs.is_empty() {
+            return Err(self.err(
+                &t,
+                "Brace indexing needs at least one subscript, like cell{2}.",
+                "اندیس آکولادی دست‌کم یک زیرنویس می‌خواهد، مثل cell{2}.",
+            ));
+        }
+        Ok(Expr::BraceIndex {
+            base: Box::new(expr),
+            subs,
+            line: t.line,
+            col: t.col,
+        })
     }
 
     /// پرانتز پسوندی — بدنهٔ مشترک دو حلقهٔ پسوندی (گزاره + عنصر ماتریس) —

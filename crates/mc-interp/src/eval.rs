@@ -174,7 +174,8 @@ fn expr_pos(e: &Expr) -> (u32, u32) {
         | Expr::AnonFn { line, col, .. }
         | Expr::FnHandle { line, col, .. }
         | Expr::Field { line, col, .. }
-        | Expr::Index { line, col, .. } => (*line, *col),
+        | Expr::Index { line, col, .. }
+        | Expr::BraceIndex { line, col, .. } => (*line, *col),
         Expr::Unary { line, col, .. } | Expr::Range { line, col, .. } => (*line, *col),
         Expr::Num(_) | Expr::Imag(_) | Expr::Str(_) => (0, 0),
     }
@@ -713,6 +714,16 @@ fn exec_stmt_inner(
                         0,
                         "Cannot iterate over a symbolic value.",
                         "روی مقدار سمبولیک نمی‌توان تکرار کرد.",
+                    ))
+                }
+                // CAS-2: حلقهٔ for روی cell هنوز نه (Cell کامل بعداً)
+                Value::List(_) => {
+                    return Err(McError::new(
+                        ids::TYPE_ERROR,
+                        0,
+                        0,
+                        "Cannot iterate over a cell (list) value yet.",
+                        "روی مقدار cell (لیست) هنوز نمی‌توان تکرار کرد.",
                     ))
                 }
                 Value::Double(m) => {
@@ -1409,6 +1420,20 @@ fn index_value(
             "Indexing a symbolic expression needs symbolic matrices — a later CAS phase.",
             "اندیس‌گذاری عبارت سمبولیک به ماتریس سمبولیک نیاز دارد — فاز بعدی CAS.",
         )),
+        // CAS-2: cell با پرانتز — تک‌زیرنویس صحیح → ۱×۱ cell (پاریت متلب c(2))
+        Value::List(vs) => {
+            let i = single_cell_index(args, env, depth, line, col)?;
+            if i > vs.len() {
+                return Err(McError::new(
+                    ids::INDEX_OUT_OF_BOUNDS,
+                    line,
+                    col,
+                    format!("Cell index {i} is out of bounds 1..={}.", vs.len()),
+                    format!("اندیس cell برابر {i} بیرون از بازهٔ 1..={} است.", vs.len()),
+                ));
+            }
+            Ok(Value::List(vec![vs[i - 1].clone()]))
+        }
         Value::Double(m) => {
             let resolved = resolve_subs(m, args, env, depth)?;
             index_double(m, &resolved, line, col)
@@ -1457,6 +1482,86 @@ fn index_value(
             col,
             "Paren indexing on a struct is struct-array indexing; struct arrays are expansion E4.",
             "اندیس‌گذاری پرانتزی روی ساختار = اندیس آرایهٔ ساختاری؛ آرایهٔ ساختاری انبساط E4 است.",
+        )),
+    }
+}
+
+/// زیرنویس واحد صحیح مثبت برای اندیس‌گذاری cell — برش/بردار/end در v1
+/// نیست (سند ۰۵ §۱۲؛ کلاس‌درس با تک‌اندیس کافی است).
+fn single_cell_index(
+    subs: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<usize, McError> {
+    if subs.len() != 1 {
+        return Err(McError::new(
+            ids::UNSUPPORTED,
+            line,
+            col,
+            "Cell indexing takes exactly one scalar subscript in v1 (slicing comes later).",
+            "اندیس‌گذاری cell در v1 دقیقاً یک زیرنویس اسکالر می‌گیرد (برش بعداً).",
+        ));
+    }
+    let v = eval_expr_depth(&subs[0], env, depth)?;
+    let x = v.as_scalar().ok_or_else(|| {
+        McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "Cell index must be a scalar.",
+            "اندیس cell باید اسکالر باشد.",
+        )
+    })?;
+    if !(x.is_finite() && x.fract() == 0.0 && x >= 1.0) {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "Cell index must be a positive integer.",
+            "اندیس cell باید صحیح مثبت باشد.",
+        ));
+    }
+    Ok(x as usize)
+}
+
+/// اندیس‌گذاری آکولادی cell — `base{i}` → محتوای عضو (پاریت متلب؛ برخلاف
+/// `()` که ۱×۱ cell می‌دهد). روی کلاس غیر cell خطای صادقانهٔ نوع.
+fn brace_index_value(
+    v: &Value,
+    subs: &[Expr],
+    env: &mut Environment,
+    depth: usize,
+    line: u32,
+    col: u32,
+) -> Result<Value, McError> {
+    let i = single_cell_index(subs, env, depth, line, col)?;
+    match v {
+        Value::List(vs) => {
+            if i > vs.len() {
+                return Err(McError::new(
+                    ids::INDEX_OUT_OF_BOUNDS,
+                    line,
+                    col,
+                    format!("Cell index {i} is out of bounds 1..={}.", vs.len()),
+                    format!("اندیس cell برابر {i} بیرون از بازهٔ 1..={} است.", vs.len()),
+                ));
+            }
+            Ok(vs[i - 1].clone())
+        }
+        other => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            format!(
+                "Brace indexing {{}} is not supported for class {}; only cell (list) values.",
+                other.class_name()
+            ),
+            format!(
+                "اندیس آکولادی {{}} روی کلاس {} پشتیبانی نمی‌شود؛ فقط cell (لیست).",
+                other.class_name()
+            ),
         )),
     }
 }
@@ -2097,6 +2202,14 @@ fn eval_expr_end(
                     "Transpose of symbolic values needs symbolic matrices — a later CAS phase.",
                     "ترانهادهٔ مقادیر سمبولیک به ماتریس سمبولیک نیاز دارد — فاز بعدی CAS.",
                 )),
+                // CAS-2: ترانهادهٔ cell — صادقانه رد
+                Value::List(_) => Err(McError::new(
+                    ids::UNSUPPORTED,
+                    *line,
+                    *col,
+                    "Transpose of a cell (list) value is not supported yet.",
+                    "ترانهادهٔ مقدار cell (لیست) هنوز پشتیبانی نمی‌شود.",
+                )),
                 Value::Double(m) => {
                     let mut out = Matrix::full(m.cols(), m.rows(), 0.0);
                     for c in 0..m.cols() {
@@ -2319,6 +2432,16 @@ fn eval_expr_end(
             let base_val = eval_expr_end(base, env, depth, target, sub_i)?;
             index_value(&base_val, subs, env, depth, *line, *col)
         }
+        // اندیس آکولادی cell — `base{i}` محتوای عضو را می‌دهد (گام 4.3/CAS-2)
+        Expr::BraceIndex {
+            base,
+            subs,
+            line,
+            col,
+        } => {
+            let base_val = eval_expr_end(base, env, depth, target, sub_i)?;
+            brace_index_value(&base_val, subs, env, depth, *line, *col)
+        }
     }
 }
 
@@ -2352,6 +2475,11 @@ fn call_named(
         // اندیس‌گذاری خواندنی روی char (ROADMAP 2.8): s(2) → 'e'
         Some(Value::Char(_)) if !args.is_empty() => {
             return index_read_char(name, args, env, depth, line, col);
+        }
+        // CAS-2: cell با پرانتز — ۱×۱ cell (پاریت متلب c(2))؛ {i} مسیر
+        // BraceIndex جدا دارد
+        Some(v @ Value::List(_)) if !args.is_empty() => {
+            return index_value(&v, args, env, depth, line, col);
         }
         Some(_) if !args.is_empty() => {
             return Err(McError::new(
@@ -2714,6 +2842,14 @@ fn build_matrix(
             // رشته = سلول char؛ تلفیق مخلوط با عددی → char مثل متلب
             // ([65 'a'] → 'Aa' — ROADMAP 2.8 بند ۶/۱۲ ممیزی)
             Value::Char(s) => Ok(Cell::Char(s.chars().collect())),
+            // CAS-2: cell (لیست) عضو ماتریس لفظی نمی‌شود — صادقانه
+            Value::List(_) => Err(McError::new(
+                ids::TYPE_ERROR,
+                line,
+                col,
+                "A cell (list) value cannot be an element of a matrix literal.",
+                "مقدار cell (لیست) نمی‌تواند عضو ماتریس لفظی باشد.",
+            )),
             Value::Anon(_) => Err(McError::new(
                 ids::TYPE_ERROR,
                 line,
@@ -3054,6 +3190,14 @@ fn as_num(v: &Value, line: u32, col: u32) -> Result<Matrix, McError> {
             col,
             "Symbolic value in a numeric context; use double(subs(y, x, value)) to evaluate it.",
             "مقدار سمبولیک در زمینهٔ عددی؛ برای ارزیابی از double(subs(y, x, مقدار)) استفاده کنید.",
+        )),
+        // CAS-2: cell در زمینهٔ عددی — صادقانه (اعضای سمبولیک هم‌چنان با subs/double)
+        Value::List(_) => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "Cell (list) value in a numeric context.",
+            "مقدار cell (لیست) در زمینهٔ عددی.",
         )),
         Value::Double(m) => Ok(m.clone()),
         Value::Complex(z) if z.is_all_real() => Ok(z.real_part()),

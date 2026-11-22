@@ -47,11 +47,18 @@
 | `i`، `j` | exact | ✅ P2 — سایه‌پذیر مثل pi؛ اعداد موهومی `4i`/`2.5j` |
 | `realmax/realmin`، `intmax` | exact | ✅ گام 2.4 (مقدار double — نوع صحیح نداریم، مستند) |
 
-## ۳. رجیستری توابع (۹۱ builtin فعلی + ۳ افزودهٔ ROADMAP 2.6: interp2/histcounts/histogram + ۵ افزودهٔ گام 4.2/CAS-1: simplify/expand/collect/latex + diff نمادین)
+## ۳. رجیستری توابع (۹۱ builtin فعلی + ۳ افزودهٔ ROADMAP 2.6: interp2/histcounts/histogram + ۵ افزودهٔ گام 4.2/CAS-1: simplify/expand/collect/latex + diff نمادین + ۲ افزودهٔ گام 4.3/CAS-2: int/solve)
 
 **exact / tol (تست‌شده در کورپوس):** zeros ones eye diag tril triu size length numel isempty isvector isscalar repmat reshape linspace logspace · sum prod max min mean cumsum cumprod diff all any find sort('descend') · mod rem round fix floor ceil sign abs sqrt exp log log2 log10 sin cos tan asin acos atan atan2 sinh cosh tanh real imag conj angle · dot cross kron · inv det rank trace rref norm(1/2/inf/fro) cond chol qr svd eig(متقارن) · true false isnan isinf isfinite isequal isreal
 
-**سمبولیک (گام 4.1/4.2 — تست‌شده در cas_step41/42):** `syms` (گزاره) · `sym` · `subs` · `double` (روی سمبولیک) · `diff` دو-چهره (آرگومان اول Sym → مشتق نمادین `diff(S)`/`diff(S,n)`/`diff(S,x)`/`diff(S,x,n)`؛ عددی: `diff(X)`/`diff(X,k)`/`diff(X,k,dim)`) · `simplify` (فرم نرمال گویا + gcd + قواعد کل-دامنه؛ مجموعهٔ مرجع ۵۰ عبارت) · `expand` (توزیع بدون حذف gcd — پاریت متلب) · `collect(S[,x])` · `latex(S)` (رشتهٔ TeX خام) · توابع ریاضی روی آرگومان سمبولیک: sin cos tan asin acos atan sinh cosh tanh exp log log10 log2 sqrt abs sign → درخت `Sym::Fn`
+**سمبولیک (گام 4.1/4.2/4.3 — تست‌شده در cas_step41/42/43):** `syms` (گزاره) · `sym` · `subs` · `double` (روی سمبولیک) · `diff` دو-چهره (آرگومان اول Sym → مشتق نمادین `diff(S)`/`diff(S,n)`/`diff(S,x)`/`diff(S,x,n)`؛ عددی: `diff(X)`/`diff(X,k)`/`diff(X,k,dim)`) · `simplify` (فرم نرمال گویا + gcd + قواعد کل-دامنه؛ مجموعهٔ مرجع ۵۰ عبارت) · `expand` (توزیع بدون حذف gcd — پاریت متلب) · `collect(S[,x])` · `latex(S)` (رشتهٔ TeX خام) · توابع ریاضی روی آرگومان سمبولیک: sin cos tan asin acos atan sinh cosh tanh exp log log10 log2 sqrt abs sign → درخت `Sym::Fn`
+
+**گام 4.3/CAS-2 (cas_step43):** `int(S)`/`int(S,x)`/`int(S,x,a,b)` — فقط نمادین
+(عددیش `integral` در registry_p2)؛ شکست نامعین → گرهٔ unevaluated `int(f,x)` با
+FTC در diff؛ شکست معین → خطای صادقانه با اشارهٔ integral(). `solve(...)` —
+همیشه `Value::List` (کلاس `cell`، ستون N×1)؛ بارگذاری MATLAB-گونه: Symbol/char =
+متغیر، بقیه = معادله eq=0؛ دستگاه با آرگومان‌های چندگانه؛ زیرمقرر خطی → پارامتری
+`_t`؛ استخراج عضو: `r{i}` (محتوا) و `r(1)` (۱×۱ cell — پاریت متلب).
 
 **انحراف/محدودیت مستندشده:**
 | مورد | توضیح |
@@ -59,6 +66,11 @@
 | `eig` نامتقارن | خطای صادقانه «با P2 مختلط می‌آید» — مقدار غلط نمی‌دهد |
 | `max/min` ستونِ همه‌NaN | +Inf/−Inf به‌جای NaN (لبه؛ در اصلاح) |
 | `sort` رشته کاراکتری | خطای صادقانه (E4 — کتابخانهٔ کامل رشته؛ گام 2.8 مجموعهٔ حداقلی را آورد) |
+| خروجی `solve` | **cell نه آرایهٔ sym** — متلب ستون sym می‌دهد؛ ماتریس سمبولیک نداریم (CAS-3+) — cell صادقانه‌ترین ظرف؛ استخراج با `r{i}`/`r(1)` |
+| cell (لیست) — مسیرهای بسته | حساب/انتساب/for/ذخیرهٔ MCWS (KIND_CELL در برنامه)/برش → خطای صادقانه؛ فقط تک‌زیرنویس صحیح در v1 |
+| `solve` چندجفتی | فقط جواب یکتا؛ چندجفتی → خطای صادقانه با راهنمای حل جداگانه (درس exp·sin: لیست ناقص = دروغ) |
+| مخرج درجه۲ پارامتری با δ نامعلوم / لوگ‌اسپلیت دو-خطی پارامتری | رد صادقانه در v1 (1/(ax²+bx+c)، 1/((x−a)(x−b))) — سند ۰۵ §۱۲ |
+| sec/csc/cot/coth/sech/csch | در جدول نیستند (خارج SYMBOLIC_F99) — `1/cos(x)` → unevaluated صادقانه |
 | `tril/triu` قطر k-اُم | ✅ **فیکس در ROADMAP 2.6:** قرارداد متلب «k>0 بالای قطر اصلی» — قبلاً علامت k برعکس بود (کشف هنگام تست‌های [Q,R]=qr؛ رگرسیون دائمی p2_18 + tri_diag_k_regression) |
 | `meshgrid/ndgrid` | هنوز builtin نیستند (docs/03 §12 پیش‌بینی) — interp2 ماتریس plaid معادل را می‌پذیرد |
 

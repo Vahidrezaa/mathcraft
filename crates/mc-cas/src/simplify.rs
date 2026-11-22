@@ -79,11 +79,18 @@ pub fn simplify(e: &Sym) -> Result<Sym, CasError> {
     let mut cur = rebuild_children(e);
     for _ in 0..3 {
         // ۱) فرم نرمال گویا + حذف gcd (Real → صادقانه همین‌قدر که ممکن است)
+        //    بودجهٔ gcd/فرم-گویا = بهترین‌تلاش: عبور ناموفق → همان را نگه
+        //    دار و برو قواعد ساختاری (قرارداد §۳ — هرگز کل simplify خطا نه)
         let mut next = match RatFun::from_sym(&cur) {
-            Ok(mut rf) => {
-                rf.cancel()?;
-                rf.to_sym()?
-            }
+            Ok(mut rf) => match rf.cancel() {
+                Ok(()) => match rf.to_sym() {
+                    Ok(s) => s,
+                    Err(CasError::Unsupported(_)) => cur.clone(),
+                    Err(other) => return Err(other),
+                },
+                Err(CasError::Unsupported(_)) => cur.clone(),
+                Err(other) => return Err(other),
+            },
             Err(CasError::Unsupported(_)) => cur.clone(),
             Err(other) => return Err(other),
         };
@@ -147,6 +154,32 @@ fn apply_rules(e: &Sym) -> Sym {
         Sym::Pow(b, ex) => Sym::pow(apply_rules(b), apply_rules(ex)).unwrap_or_else(|_| e.clone()),
         Sym::Fn(name, args) => {
             let new_args: Vec<Sym> = args.iter().map(apply_rules).collect();
+            // قواعد کل-دامنهٔ تودرتوی abs/sign (درس مجموعهٔ مرجع ۱۲۰):
+            // | |u| | = |u| و sign(|u|) = sign(u) — برای هر u (شامل u=0)
+            // برقرارند. بدون این‌ها back-substitution جایگذاریِ log(|g|)
+            // با g = |x−a| باقیماندهٔ abs-تودرتو می‌سازد که مسیر گویای
+            // simplify را به gcd ژنراتورهای اُپک می‌کشد.
+            if new_args.len() == 1 {
+                // قواعد کل-دامنهٔ تودرتوی abs/sign (درس مجموعهٔ مرجع ۱۲۰):
+                // | |u| | = |u| و sign(|u|) = sign(u) — برای هر u (شامل u=0)
+                // برقرارند. بدون این‌ها back-substitution جایگذاریِ log(|g|)
+                // با g = |x−a| باقیماندهٔ abs-تودرتو می‌سازد که مسیر گویای
+                // simplify را به gcd ژنراتورهای اُپک می‌کشد.
+                let inner_abs: Option<Sym> = match &new_args[0] {
+                    Sym::Fn(in_name, in_args) => {
+                        (in_args.len() == 1 && &**in_name == "abs").then(|| in_args[0].clone())
+                    }
+                    _ => None,
+                };
+                if let Some(in_u) = inner_abs {
+                    if &**name == "abs" || &**name == "sign" {
+                        let in_u2 = in_u.clone();
+                        let built = Sym::fn_of(name, vec![in_u2])
+                            .unwrap_or_else(|_| Sym::Fn(name.clone(), vec![in_u.clone()]));
+                        return apply_rules(&built);
+                    }
+                }
+            }
             rule_log_exp(name, &new_args).unwrap_or_else(|| e.clone())
         }
         _ => e.clone(),

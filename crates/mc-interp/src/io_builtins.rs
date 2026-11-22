@@ -84,6 +84,8 @@ pub fn value_bytes(v: &Value) -> usize {
         Value::Anon(_) => 0,
         // سمبولیک: نمایش خطی به‌عنوان تخمین اندازه (whos متلب هم نمایش محور است)
         Value::Sym(s) => mc_cas::sym_display(s).len() + 8,
+        // cell (لیست): جمع بازگشتی اعضا + سربار ثابت ۱۶ بایت/عضو
+        Value::List(vs) => vs.iter().map(value_bytes).sum::<usize>() + vs.len() * 16,
     }
 }
 
@@ -100,6 +102,7 @@ pub fn whos_text(env: &Environment) -> String {
                 Value::Char(_) => "char",
                 Value::Anon(_) => "function_handle",
                 Value::Sym(_) => "sym",
+                Value::List(_) => "cell",
                 Value::Double(_) | Value::Complex(_) => "double",
             };
             let attr: &'static str = match v {
@@ -174,6 +177,8 @@ fn v_rows(v: &Value) -> usize {
         Value::Double(m) => m.rows(),
         Value::Complex(m) => m.rows(),
         Value::Char(_) | Value::Struct(_) | Value::Anon(_) | Value::Sym(_) => 1,
+        // cell ستونی N×1 (سمانتیک shape سند ۰۲ — خالی: 0×1)
+        Value::List(vs) => vs.len(),
     }
 }
 
@@ -186,6 +191,7 @@ fn v_cols(v: &Value) -> usize {
         // برای سازگاری جدول)
         Value::Char(s) => s.chars().count().max(1),
         Value::Struct(_) | Value::Anon(_) => 1,
+        Value::List(_) => 1,
     }
 }
 

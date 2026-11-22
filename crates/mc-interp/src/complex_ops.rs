@@ -46,6 +46,13 @@ pub fn to_complex(v: &Value, line: u32, col: u32) -> Result<ComplexMatrix, McErr
             "Struct in numeric expression; extract fields with s.f first.",
             "ساختار در عبارت عددی؛ ابتدا فیلد را با s.f بیرون بکشید.",
         )),
+        // CAS-2: cell (لیست solve) در حساب عددی/مختلط — صادقانه
+        Value::List(_) => Err(cerr(
+            line,
+            col,
+            "Cell (list) value in numeric expression.",
+            "مقدار cell (لیست) در عبارت عددی.",
+        )),
     }
 }
 

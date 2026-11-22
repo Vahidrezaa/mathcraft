@@ -112,6 +112,13 @@ fn operand_sym(v: &Value, line: u32, col: u32) -> Result<Sym, McError> {
             "struct in symbolic expression.",
             "struct در عبارت سمبولیک.",
         )),
+        Value::List(_) => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "Cell (list) in symbolic expression.",
+            "cell (لیست) در عبارت سمبولیک.",
+        )),
     }
 }
 
@@ -400,4 +407,175 @@ pub fn sym_from_mcws_payload(payload: &str, line: u32, col: u32) -> Result<Value
         Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
         Err(err) => Err(cas_err(err, line, col)),
     }
+}
+
+// ---------- گام 4.3/CAS-2: int / solve (سند ۰۵ §۵ و §۸) ----------
+
+/// آرگومان متغیر (نماد سمبولیک یا char) — برای int/solve. عدد و عبارت
+/// دیگر خطای صادقانه است (برخلاف diff که مرتبهٔ عددی هم می‌پذیرد).
+fn var_name_arg(v: &Value, fn_name: &str, line: u32, col: u32) -> Result<String, McError> {
+    match v {
+        Value::Sym(s) => match &**s {
+            Sym::Symbol(n) => Ok(n.to_string()),
+            _ => Err(McError::new(
+                ids::TYPE_ERROR,
+                line,
+                col,
+                format!("{fn_name}: the variable argument must be a symbolic variable."),
+                format!("{fn_name}: آرگومان متغیر باید متغیر سمبولیک باشد."),
+            )),
+        },
+        Value::Char(s) => Ok(s.clone()),
+        _ => Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            format!("{fn_name}: expected a variable (sym/char)."),
+            format!("{fn_name}: متغیر لازم است (sym/char)."),
+        )),
+    }
+}
+
+/// خطای int معین — پیام صادقانهٔ موتور با اشارهٔ مسیر عددی integral()
+/// (سند ۰۵ §۵: «معین = دقیق + cross-check عددی؛ شکست = خطا نه حدس»).
+fn int_definite_err(e: CasError, line: u32, col: u32) -> McError {
+    let why = match e {
+        CasError::Unsupported(why) => why.to_string(),
+        CasError::DivByZero => "division by zero while simplifying the antiderivative.".to_string(),
+        _ => "the antiderivative could not be simplified exactly.".to_string(),
+    };
+    McError::new(
+        ids::UNSUPPORTED,
+        line,
+        col,
+        format!("int: {why}"),
+        format!("int: {why} — برای پاس عددی از integral() استفاده کنید."),
+    )
+}
+
+/// `int` سمبولیک — سند ۰۵ §۵. پاریت متلب: int(S)، int(S, x) و
+/// int(S, x, a, b) معین. شکست نامعین → گرهٔ unevaluated `int(f, x)`
+/// (echo همان را می‌بیند؛ diff آن با قضیهٔ بنیادی حسابان کار می‌کند —
+/// CAS-2 هسته)؛ شکست معین → خطای صادقانه با اشارهٔ integral().
+/// هرگز جواب غلطِ مطمئن‌نما نه (اصل ۵ سند ۰۰).
+pub fn int_sym(args: &[Value], line: u32, col: u32) -> Result<Value, McError> {
+    if !matches!(args.len(), 1 | 2 | 4) {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "int: symbolic form takes 1, 2 or 4 arguments: int(S), int(S, x) or int(S, x, a, b).",
+            "int: شکل سمبولیک ۱، ۲ یا ۴ آرگومان می‌گیرد: int(S)، int(S, x) یا int(S, x, a, b).",
+        ));
+    }
+    let f = operand_sym(&args[0], line, col)?;
+    let x = match args.len() {
+        1 => mc_cas::diff::default_var(&f).map_err(|err| cas_err(err, line, col))?,
+        _ => var_name_arg(&args[1], "int", line, col)?,
+    };
+    if args.len() == 4 {
+        let a = operand_sym(&args[2], line, col)?;
+        let b = operand_sym(&args[3], line, col)?;
+        return match mc_cas::int::integrate_definite(&f, &x, &a, &b) {
+            Ok(tree) => Ok(Value::Sym(Arc::new(tree))),
+            Err(e) => Err(int_definite_err(e, line, col)),
+        };
+    }
+    match mc_cas::int::integrate(&f, &x) {
+        Ok(Some(tree)) => Ok(Value::Sym(Arc::new(tree))),
+        // شکست صادقانه → گرهٔ unevaluated؛ نمایش int(f, x) و diff آن FTC است
+        Ok(None) => Ok(Value::Sym(Arc::new(Sym::Fn(
+            Arc::from("int"),
+            vec![f, Sym::Symbol(Arc::from(x.as_str()))],
+        )))),
+        Err(e) => Err(cas_err(e, line, col)),
+    }
+}
+
+/// `solve` سمبولیک — سند ۰۵ §۸: «solve همیشه list برمی‌گرداند».
+/// بارگذاری MATLAB-گونه: هر آرگومان Symbol/char = متغیر، بقیه Sym =
+/// معادله در فرم eq = 0 (لیترال `[…]` ماتریس است و عضو Sym نمی‌پذیرد —
+/// CAS-0؛ پس دستگاه با آرگومان‌های چندگانه داده می‌شود):
+/// solve(S) / solve(S, x) — تک‌معادله → لیست ریشه‌های حقیقی؛
+/// solve(S1, S2) / solve(S1, S2, x, y) — دستگاه (خطی یکتا/پارامتریک با
+/// _t یا جفت غیرخطی ۲×۲) → لیست تخت به‌ازای هر متغیر در ترتیب vars.
+/// تک‌معادله با چند متغیر بدون نام → خطای ابهام صادقانه. فراتر از
+/// جدول/مختلط → خطای صادقانه، هرگز ریشهٔ کاذب از ژنراتورهای اُپک نه.
+pub fn solve_sym(args: &[Value], line: u32, col: u32) -> Result<Value, McError> {
+    if args.is_empty() {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "solve: needs at least one equation: solve(S), solve(S, x) or solve(S1, S2, x, y).",
+            "solve: دست‌کم یک معادله لازم است: solve(S)، solve(S, x) یا solve(S1, S2, x, y).",
+        ));
+    }
+    // جداسازی آرگومان‌ها: نماد/char = متغیر؛ بقیه = معادله؛ لیست = معادله‌ها
+    let mut eqs: Vec<Sym> = Vec::new();
+    let mut vars: Vec<String> = Vec::new();
+    for a in args {
+        match a {
+            Value::List(vs) => {
+                if vs.is_empty() {
+                    return Err(McError::new(
+                        ids::TYPE_ERROR,
+                        line,
+                        col,
+                        "solve: the equation list must not be empty.",
+                        "solve: فهرست معادلات نمی‌تواند خالی باشد.",
+                    ));
+                }
+                for v in vs {
+                    eqs.push(operand_sym(v, line, col)?);
+                }
+            }
+            Value::Char(_) => vars.push(var_name_arg(a, "solve", line, col)?),
+            Value::Sym(s) if matches!(&**s, Sym::Symbol(_)) => {
+                vars.push(var_name_arg(a, "solve", line, col)?)
+            }
+            v => eqs.push(operand_sym(v, line, col)?),
+        }
+    }
+    if eqs.is_empty() {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "solve: no equation found — symbolic expressions are equations in eq = 0 form.",
+            "solve: معادله‌ای پیدا نشد — عبارت‌های سمبولیک در فرم eq = 0 معادله‌اند.",
+        ));
+    }
+    // متغیر بدون نام → انتخاب خودکار = اجتماع نمادهای آزاد (symvar متلب‌گونه)
+    if vars.is_empty() {
+        for e in &eqs {
+            for s in e.free_symbols() {
+                if !vars.contains(&s) {
+                    vars.push(s);
+                }
+            }
+        }
+        vars.sort();
+    }
+    if eqs.len() == 1 && vars.len() == 1 {
+        let roots =
+            mc_cas::solve::solve_expr(&eqs[0], &vars[0]).map_err(|e| cas_err(e, line, col))?;
+        return Ok(Value::List(
+            roots.into_iter().map(|r| Value::Sym(Arc::new(r))).collect(),
+        ));
+    }
+    if vars.is_empty() {
+        return Err(McError::new(
+            ids::TYPE_ERROR,
+            line,
+            col,
+            "solve: the equations contain no symbolic variable.",
+            "solve: معادله‌ها هیچ متغیر سمبولیک ندارند.",
+        ));
+    }
+    // دستگاه (خطی یکتا/پارامتریک یا غیرخطی ۲×۲) — لیست تخت به‌ازای هر متغیر
+    let sols = mc_cas::solve::solve_system(&eqs, &vars).map_err(|e| cas_err(e, line, col))?;
+    Ok(Value::List(
+        sols.into_iter().map(|r| Value::Sym(Arc::new(r))).collect(),
+    ))
 }
