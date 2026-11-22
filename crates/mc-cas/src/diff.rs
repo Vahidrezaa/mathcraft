@@ -108,6 +108,19 @@ pub fn diff(expr: &Sym, var: &str) -> Result<Sym, CasError> {
         }
         Sym::Pow(b, e) => diff_pow(b, e, var),
         Sym::Fn(name, args) => {
+            // قضیهٔ بنیادی حسابان (گام 4.۳): d/dx از گرهٔ unevaluatedِ
+            // خودِ int برابر خودِ انتگران‌گیرنده است — مشتق هرگز صفرِ
+            // غلط نمی‌دهد؛ متغیر انتگرال غیر از var → خطای صادقانه.
+            if &**name == "int" && args.len() == 2 {
+                if let Sym::Symbol(v) = &args[1] {
+                    if &**v == var {
+                        return Ok(args[0].clone());
+                    }
+                }
+                return Err(CasError::Unsupported(
+                    "differentiating an integral with respect to another variable is not supported in v1",
+                ));
+            }
             let [a] = &args[..] else {
                 return Err(CasError::Unsupported(
                     "symbolic functions take exactly one argument in CAS-1",

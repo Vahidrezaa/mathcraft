@@ -39,10 +39,12 @@ pub mod diff;
 #[cfg(feature = "egraph")]
 pub mod egraph;
 pub mod fntable;
+pub mod int;
 pub mod latex;
 pub mod poly;
 pub mod sexpr;
 pub mod simplify;
+pub mod solve;
 pub mod sym;
 #[cfg(test)]
 pub(crate) mod testkit;
