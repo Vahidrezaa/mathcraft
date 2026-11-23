@@ -36,6 +36,7 @@
 )]
 
 pub mod diff;
+pub mod dsolve;
 #[cfg(feature = "egraph")]
 pub mod egraph;
 pub mod fntable;

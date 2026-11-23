@@ -134,6 +134,40 @@ fn gauss_rref(a: &mut [Vec<RatFun>], b: &mut [RatFun], n: usize) -> Result<Gauss
     }
 }
 
+/// گاوسی با پذیرش راه پارامتری — راهِ خاص برای ضرایب نامعین (گام 4.4/CAS-3).
+/// ناسازگار → None؛ یکتا/پارامتریک → راه خاص (بخش همگنِ باقی در حدسِ
+/// توسعه‌یافته به ثابت‌های C جواب همگن منتقل می‌شود و ورفای نهایی می‌گیرد).
+pub(crate) fn gaussian_particular(a: &[Vec<Sym>], b: &[Sym]) -> Result<Option<Vec<Sym>>, CasError> {
+    let m = a.len();
+    let n = a.first().map(|r| r.len()).unwrap_or(0);
+    if n == 0 || m == 0 || b.len() != m {
+        return Ok(None);
+    }
+    let mut ar: Vec<Vec<RatFun>> = vec![];
+    let mut br: Vec<RatFun> = vec![];
+    for (i, row) in a.iter().enumerate() {
+        let mut rrow = vec![];
+        for c in row {
+            rrow.push(RatFun::from_sym(c)?);
+        }
+        ar.push(rrow);
+        br.push(RatFun::from_sym(&b[i])?);
+    }
+    let g = gauss_rref(&mut ar, &mut br, n)?;
+    match g {
+        Gauss::Unique(sol) | Gauss::Parametric(sol, _) => {
+            let mut out = vec![];
+            for s in sol {
+                out.push(s.to_sym()?);
+            }
+            Ok(Some(out))
+        }
+        Gauss::Inconsistent => Ok(None),
+    }
+}
+
+/// گاوسی با پذیرش راه پارامتری — راهِ خاص برای ضرایب نامعین (گام 4.4/CAS-3).
+/// ناسازگار → None؛ یکتا/پارامتریک → راه خاص (بخش همگنِ باقی در حدسِ
 /// حل دستگاه مربعی با راه یکتا — زیرساخت PF در int.rs.
 pub(crate) fn gaussian_solve_symbolic(
     a: &[Vec<Sym>],
